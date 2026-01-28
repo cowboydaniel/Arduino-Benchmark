@@ -1109,8 +1109,13 @@ void benchmarkDigitalIO() {
     TimedLoopResult regResult = runTimedLoop(minDurationMs, 2000, [&]() {
       for (int i = 0; i < 1000; i++) {
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 0, 0)
-        gpio_set_level((gpio_num_t)testPin, 1);
-        gpio_set_level((gpio_num_t)testPin, 0);
+        if (testPin < 32) {
+          GPIO.out_w1ts = 1u << testPin;
+          GPIO.out_w1tc = 1u << testPin;
+        } else {
+          GPIO.out1_w1ts.data = 1u << (testPin - 32);
+          GPIO.out1_w1tc.data = 1u << (testPin - 32);
+        }
 #else
         digitalWrite(testPin, HIGH);
         digitalWrite(testPin, LOW);
@@ -1168,7 +1173,7 @@ void benchmarkDigitalIO() {
   Serial.print(kJitterTrials);
   Serial.println(F(" trials)"));
   Serial.print(F("Speedup: "));
-  Serial.print((float)writeTime / portElapsedMicros);
+  Serial.print(portOpsPerMs / writeOpsPerMs);
   Serial.println(F("x faster"));
 #endif
 
@@ -1183,7 +1188,7 @@ void benchmarkDigitalIO() {
   Serial.print(kJitterTrials);
   Serial.println(F(" trials)"));
   Serial.print(F("Speedup: "));
-  Serial.print((float)writeTime / regElapsedMicros);
+  Serial.print(regOpsPerMs / writeOpsPerMs);
   Serial.println(F("x faster"));
 #endif
 }

@@ -1093,9 +1093,9 @@ void benchmarkSerial() {
   Serial.print(expectedBytes * 1000.0 / enqueueTime);
   Serial.println(F(" bytes/ms CPU)"));
 
-  Serial.print(F("flush() Time: "));
+  Serial.print(F("flush() time (implementation-dependent): "));
   Serial.print(flushTime);
-  Serial.print(F(" μs (buffer→FIFO)"));
+  Serial.print(F(" μs"));
   Serial.println();
 
   Serial.print(F("Theoretical Wire Time: "));

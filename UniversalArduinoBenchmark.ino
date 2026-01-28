@@ -332,6 +332,7 @@
 // ==================== GLOBAL VARIABLES ====================
 uint8_t testBuffer[256];
 unsigned long gMinBenchUs = 20000;
+const uint8_t kJitterTrials = 5;
 
 // ==================== HELPER FUNCTIONS ====================
 
@@ -399,6 +400,42 @@ TimedLoopResult runTimedLoop(uint32_t minDurationMs, uint32_t opsPerIteration, F
   result.opsPerMs = (result.totalOps * 1000.0f) / result.elapsedMicros;
   return result;
 }
+
+template <typename T, size_t N>
+struct MedianCollector {
+  T values[N];
+  uint8_t count;
+
+  void add(T value) {
+    if (count < N) {
+      values[count++] = value;
+    }
+  }
+
+  T median() const {
+    if (count == 0) {
+      return T();
+    }
+    T sorted[N];
+    for (uint8_t i = 0; i < count; i++) {
+      sorted[i] = values[i];
+    }
+    for (uint8_t i = 1; i < count; i++) {
+      T key = sorted[i];
+      int8_t j = i - 1;
+      while (j >= 0 && sorted[j] > key) {
+        sorted[j + 1] = sorted[j];
+        j--;
+      }
+      sorted[j + 1] = key;
+    }
+    uint8_t mid = count / 2;
+    if (count % 2 == 1) {
+      return sorted[mid];
+    }
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+};
 
 void calibrateBenchmarkTime() {
   unsigned long start = micros();
@@ -774,13 +811,24 @@ void benchmarkSRAM() {
   Serial.println((uint32_t)checksum);
 
   // Random access - accumulate to prevent optimization
-  checksum = 0;
-  TimedLoopResult randomResult = runTimedLoop(minDurationMs, 256, [&]() {
-    for (uint16_t i = 0; i < 256; i++) {
-      uint8_t idx = (i * 7 + 13) % 256;  // Pseudo-random
-      checksum += testBuffer[idx];
-    }
-  });
+  MedianCollector<float, kJitterTrials> randomOpsMedian = {};
+  MedianCollector<unsigned long, kJitterTrials> randomElapsedMedian = {};
+  MedianCollector<uint32_t, kJitterTrials> randomTotalOpsMedian = {};
+  for (uint8_t trial = 0; trial < kJitterTrials; trial++) {
+    checksum = 0;
+    TimedLoopResult randomResult = runTimedLoop(minDurationMs, 256, [&]() {
+      for (uint16_t i = 0; i < 256; i++) {
+        uint8_t idx = (i * 7 + 13) % 256;  // Pseudo-random
+        checksum += testBuffer[idx];
+      }
+    });
+    randomOpsMedian.add(randomResult.opsPerMs);
+    randomElapsedMedian.add(randomResult.elapsedMicros);
+    randomTotalOpsMedian.add(randomResult.totalOps);
+  }
+  float randomOpsPerMs = randomOpsMedian.median();
+  unsigned long randomElapsedMicros = randomElapsedMedian.median();
+  uint32_t randomTotalOps = randomTotalOpsMedian.median();
   Serial.print(F("Random checksum: "));
   Serial.println((uint32_t)checksum);
 
@@ -801,12 +849,14 @@ void benchmarkSRAM() {
   Serial.println(F(" ops/ms)"));
 
   Serial.print(F("Random Access ("));
-  Serial.print(randomResult.totalOps);
+  Serial.print(randomTotalOps);
   Serial.print(F(" ops): "));
-  Serial.print(randomResult.elapsedMicros);
-  Serial.print(F(" μs ("));
-  Serial.print(randomResult.opsPerMs);
-  Serial.println(F(" ops/ms)"));
+  Serial.print(randomElapsedMicros);
+  Serial.print(F(" μs (median "));
+  Serial.print(randomOpsPerMs);
+  Serial.print(F(" ops/ms, "));
+  Serial.print(kJitterTrials);
+  Serial.println(F(" trials)"));
 }
 
 #if defined(EEPROM_h) || defined(ESP32) || defined(ESP8266)
@@ -1021,83 +1071,134 @@ void benchmarkDigitalIO() {
   pinMode(testPin, OUTPUT);
 
   // digitalWrite benchmark
-  volatile uint32_t dwOps = 0;
-  startBenchmark();
-  for (int i = 0; i < 1000; i++) {
-    digitalWrite(testPin, HIGH);
-    digitalWrite(testPin, LOW);
-    dwOps += 2;
+  MedianCollector<float, kJitterTrials> writeOpsMedian = {};
+  MedianCollector<unsigned long, kJitterTrials> writeElapsedMedian = {};
+  uint32_t dwOpsPerTrial = 0;
+  for (uint8_t trial = 0; trial < kJitterTrials; trial++) {
+    volatile uint32_t dwOps = 0;
+    startBenchmark();
+    for (int i = 0; i < 1000; i++) {
+      digitalWrite(testPin, HIGH);
+      digitalWrite(testPin, LOW);
+      dwOps += 2;
+    }
+    unsigned long writeTime = endBenchmark();
+    if (trial == 0) {
+      dwOpsPerTrial = dwOps;
+    }
+    writeElapsedMedian.add(writeTime);
+    writeOpsMedian.add(dwOps * 1000.0f / writeTime);
   }
-  unsigned long writeTime = endBenchmark();
+  unsigned long writeTime = writeElapsedMedian.median();
+  float writeOpsPerMs = writeOpsMedian.median();
 
 // Direct port manipulation (AVR only)
 #ifdef __AVR__
   volatile uint8_t *out = portOutputRegister(digitalPinToPort(testPin));
   uint8_t mask = digitalPinToBitMask(testPin);
-  TimedLoopResult portResult = runTimedLoop(minDurationMs, 2000, [&]() {
-    for (int i = 0; i < 1000; i++) {
-      *out |= mask;   // Set
-      *out &= ~mask;  // Clear
-    }
-  });
+  MedianCollector<float, kJitterTrials> portOpsMedian = {};
+  MedianCollector<unsigned long, kJitterTrials> portElapsedMedian = {};
+  MedianCollector<uint32_t, kJitterTrials> portTotalOpsMedian = {};
+  for (uint8_t trial = 0; trial < kJitterTrials; trial++) {
+    TimedLoopResult portResult = runTimedLoop(minDurationMs, 2000, [&]() {
+      for (int i = 0; i < 1000; i++) {
+        *out |= mask;   // Set
+        *out &= ~mask;  // Clear
+      }
+    });
+    portOpsMedian.add(portResult.opsPerMs);
+    portElapsedMedian.add(portResult.elapsedMicros);
+    portTotalOpsMedian.add(portResult.totalOps);
+  }
+  float portOpsPerMs = portOpsMedian.median();
+  unsigned long portElapsedMicros = portElapsedMedian.median();
+  uint32_t portTotalOps = portTotalOpsMedian.median();
 #endif
 
 // Direct register write (ESP32)
 #ifdef ESP32
-  TimedLoopResult regResult = runTimedLoop(minDurationMs, 2000, [&]() {
-    for (int i = 0; i < 1000; i++) {
+  MedianCollector<float, kJitterTrials> regOpsMedian = {};
+  MedianCollector<unsigned long, kJitterTrials> regElapsedMedian = {};
+  MedianCollector<uint32_t, kJitterTrials> regTotalOpsMedian = {};
+  for (uint8_t trial = 0; trial < kJitterTrials; trial++) {
+    TimedLoopResult regResult = runTimedLoop(minDurationMs, 2000, [&]() {
+      for (int i = 0; i < 1000; i++) {
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 0, 0)
-      gpio_set_level((gpio_num_t)testPin, 1);
-      gpio_set_level((gpio_num_t)testPin, 0);
+        gpio_set_level((gpio_num_t)testPin, 1);
+        gpio_set_level((gpio_num_t)testPin, 0);
 #else
-      digitalWrite(testPin, HIGH);
-      digitalWrite(testPin, LOW);
+        digitalWrite(testPin, HIGH);
+        digitalWrite(testPin, LOW);
 #endif
-    }
-  });
+      }
+    });
+    regOpsMedian.add(regResult.opsPerMs);
+    regElapsedMedian.add(regResult.elapsedMicros);
+    regTotalOpsMedian.add(regResult.totalOps);
+  }
+  float regOpsPerMs = regOpsMedian.median();
+  unsigned long regElapsedMicros = regElapsedMedian.median();
+  uint32_t regTotalOps = regTotalOpsMedian.median();
 #endif
 
 // Direct register write (RP2040)
 #ifdef ARDUINO_ARCH_RP2040
-  TimedLoopResult regResult = runTimedLoop(minDurationMs, 2000, [&]() {
-    for (int i = 0; i < 1000; i++) {
-      sio_hw->gpio_set = 1ul << testPin;  // Set
-      sio_hw->gpio_clr = 1ul << testPin;  // Clear
-    }
-  });
+  MedianCollector<float, kJitterTrials> regOpsMedian = {};
+  MedianCollector<unsigned long, kJitterTrials> regElapsedMedian = {};
+  MedianCollector<uint32_t, kJitterTrials> regTotalOpsMedian = {};
+  for (uint8_t trial = 0; trial < kJitterTrials; trial++) {
+    TimedLoopResult regResult = runTimedLoop(minDurationMs, 2000, [&]() {
+      for (int i = 0; i < 1000; i++) {
+        sio_hw->gpio_set = 1ul << testPin;  // Set
+        sio_hw->gpio_clr = 1ul << testPin;  // Clear
+      }
+    });
+    regOpsMedian.add(regResult.opsPerMs);
+    regElapsedMedian.add(regResult.elapsedMicros);
+    regTotalOpsMedian.add(regResult.totalOps);
+  }
+  float regOpsPerMs = regOpsMedian.median();
+  unsigned long regElapsedMicros = regElapsedMedian.median();
+  uint32_t regTotalOps = regTotalOpsMedian.median();
 #endif
 
   Serial.print(F("digitalWrite() ("));
-  Serial.print(dwOps);
+  Serial.print(dwOpsPerTrial);
   Serial.print(F(" ops): "));
   Serial.print(writeTime);
-  Serial.print(F(" μs ("));
-  Serial.print(dwOps * 1000.0 / writeTime);
-  Serial.println(F(" ops/ms)"));
+  Serial.print(F(" μs (median "));
+  Serial.print(writeOpsPerMs);
+  Serial.print(F(" ops/ms, "));
+  Serial.print(kJitterTrials);
+  Serial.println(F(" trials)"));
 
 #ifdef __AVR__
   Serial.print(F("Direct Port ("));
-  Serial.print(portResult.totalOps);
+  Serial.print(portTotalOps);
   Serial.print(F(" ops): "));
-  Serial.print(portResult.elapsedMicros);
-  Serial.print(F(" μs ("));
-  Serial.print(portResult.opsPerMs);
-  Serial.println(F(" ops/ms)"));
+  Serial.print(portElapsedMicros);
+  Serial.print(F(" μs (median "));
+  Serial.print(portOpsPerMs);
+  Serial.print(F(" ops/ms, "));
+  Serial.print(kJitterTrials);
+  Serial.println(F(" trials)"));
   Serial.print(F("Speedup: "));
-  Serial.print((float)writeTime / portResult.elapsedMicros);
+  Serial.print((float)writeTime / portElapsedMicros);
   Serial.println(F("x faster"));
 #endif
 
 #if defined(ESP32) || defined(ARDUINO_ARCH_RP2040)
   Serial.print(F("Direct Register ("));
-  Serial.print(regResult.totalOps);
+  Serial.print(regTotalOps);
   Serial.print(F(" ops): "));
-  Serial.print(regResult.elapsedMicros);
-  Serial.print(F(" μs ("));
-  Serial.print(regResult.opsPerMs);
-  Serial.println(F(" ops/ms)"));
+  Serial.print(regElapsedMicros);
+  Serial.print(F(" μs (median "));
+  Serial.print(regOpsPerMs);
+  Serial.print(F(" ops/ms, "));
+  Serial.print(kJitterTrials);
+  Serial.println(F(" trials)"));
   Serial.print(F("Speedup: "));
-  Serial.print((float)writeTime / regResult.elapsedMicros);
+  Serial.print((float)writeTime / regElapsedMicros);
   Serial.println(F("x faster"));
 #endif
 }
@@ -1230,11 +1331,20 @@ void benchmarkSerial() {
   }
 
   // Print benchmark - measure enqueue time (CPU overhead)
-  startBenchmark();
-  for (int i = 0; i < 100; i++) {
-    Serial.print(i);
+  MedianCollector<unsigned long, kJitterTrials> enqueueTimeMedian = {};
+  MedianCollector<float, kJitterTrials> enqueueRateMedian = {};
+  for (uint8_t trial = 0; trial < kJitterTrials; trial++) {
+    Serial.flush();
+    startBenchmark();
+    for (int i = 0; i < 100; i++) {
+      Serial.print(i);
+    }
+    unsigned long enqueueTime = endBenchmark();
+    enqueueTimeMedian.add(enqueueTime);
+    enqueueRateMedian.add(expectedBytes * 1000.0f / enqueueTime);
   }
-  unsigned long enqueueTime = endBenchmark();
+  unsigned long enqueueTime = enqueueTimeMedian.median();
+  float enqueueRate = enqueueRateMedian.median();
 
   // Measure what flush() actually does
   unsigned long flushStart = micros();
@@ -1251,9 +1361,11 @@ void benchmarkSerial() {
   Serial.print(expectedBytes);
   Serial.print(F(" bytes): "));
   Serial.print(enqueueTime);
-  Serial.print(F(" μs ("));
-  Serial.print(expectedBytes * 1000.0 / enqueueTime);
-  Serial.println(F(" bytes/ms CPU)"));
+  Serial.print(F(" μs (median "));
+  Serial.print(enqueueRate);
+  Serial.print(F(" bytes/ms CPU, "));
+  Serial.print(kJitterTrials);
+  Serial.println(F(" trials)"));
 
   Serial.print(F("flush() time (implementation-dependent): "));
   Serial.print(flushTime);

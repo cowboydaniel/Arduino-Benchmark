@@ -40,6 +40,9 @@ TimedLoopResult runTimedLoop(uint32_t minDurationMs, uint32_t opsPerIteration, F
     func();
     result.iterations++;
     result.totalOps += opsPerIteration;
+#if defined(ESP32) || defined(ESP8266) || defined(ARDUINO_ARCH_RP2040)
+    yield();
+#endif
     elapsed = micros() - start;
   } while (elapsed < (minDurationMs * 1000UL));
   result.elapsedMicros = elapsed;

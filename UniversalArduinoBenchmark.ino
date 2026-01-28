@@ -1620,20 +1620,24 @@ volatile unsigned long core1Count = 0;
 volatile bool testRunning = false;
 
 void core0Task(void* parameter) {
+  volatile uint32_t accumulator = 0;
   while (true) {
     if (testRunning) {
       core0Count++;
+      accumulator += 3;
+      accumulator ^= (accumulator << 1);
     }
-    delayMicroseconds(1);
   }
 }
 
 void core1Task(void* parameter) {
+  volatile uint32_t accumulator = 0;
   while (true) {
     if (testRunning) {
       core1Count++;
+      accumulator += 3;
+      accumulator ^= (accumulator << 1);
     }
-    delayMicroseconds(1);
   }
 }
 #endif

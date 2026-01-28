@@ -92,6 +92,10 @@
 #define HAS_TEMPERATURE
 // RP2040 hardware register access
 #include "hardware/gpio.h"
+#if defined(ARDUINO_ARCH_RP2040) && __has_include("pico/multicore.h")
+#include "pico/multicore.h"
+#define HAS_PICO_MULTICORE
+#endif
 
 // Renesas RA4M1 (Arduino Uno R4 WiFi & Minima)
 #elif defined(ARDUINO_UNOR4_WIFI)
@@ -1961,6 +1965,44 @@ void core1Task(void* parameter) {
 }
 #endif
 
+#if defined(ARDUINO_ARCH_RP2040)
+volatile unsigned long rp2040Core0Count = 0;
+volatile unsigned long rp2040Core1Count = 0;
+volatile bool rp2040TestRunning = false;
+volatile bool rp2040Core1Ready = false;
+
+#if defined(HAS_PICO_MULTICORE)
+void rp2040Core1Task() {
+  volatile uint32_t accumulator = 0;
+  rp2040Core1Ready = true;
+  while (true) {
+    if (rp2040TestRunning) {
+      rp2040Core1Count++;
+      accumulator += 3;
+      accumulator ^= (accumulator << 1);
+    }
+  }
+}
+#else
+void setup1() {
+  rp2040Core1Ready = true;
+}
+
+void loop1() {
+  volatile uint32_t accumulator = 0;
+  while (true) {
+    if (rp2040TestRunning) {
+      rp2040Core1Count++;
+      accumulator += 3;
+      accumulator ^= (accumulator << 1);
+    } else {
+      delay(1);
+    }
+  }
+}
+#endif
+#endif
+
 void benchmarkMultiCore() {
   printHeader("MULTI-CORE: Parallel Performance");
 
@@ -2012,6 +2054,54 @@ void benchmarkMultiCore() {
 
 #elif defined(ARDUINO_ARCH_RP2040)
   Serial.println(F("RP2040 Dual-Core Test"));
+#if defined(HAS_PICO_MULTICORE)
+  Serial.println(F("Running dual-core workload for 1 second..."));
+
+  rp2040Core0Count = 0;
+  rp2040Core1Count = 0;
+  rp2040TestRunning = false;
+  rp2040Core1Ready = false;
+
+  multicore_reset_core1();
+  multicore_launch_core1(rp2040Core1Task);
+#else
+  Serial.println(F("Running dual-core workload for 1 second (setup1/loop1)..."));
+
+  rp2040Core0Count = 0;
+  rp2040Core1Count = 0;
+  rp2040TestRunning = false;
+  rp2040Core1Ready = false;
+#endif
+
+  unsigned long readyStart = millis();
+  while (!rp2040Core1Ready && millis() - readyStart < 200) {
+    delay(1);
+  }
+
+  rp2040TestRunning = true;
+  unsigned long start = millis();
+  volatile uint32_t accumulator = 0;
+  while (millis() - start < 1000) {
+    rp2040Core0Count++;
+    accumulator += 3;
+    accumulator ^= (accumulator << 1);
+  }
+  rp2040TestRunning = false;
+
+  unsigned long total = rp2040Core0Count + rp2040Core1Count;
+  unsigned long dominant = max(rp2040Core0Count, rp2040Core1Count);
+  float scaling = dominant > 0 ? (float)total / (float)dominant : 0.0f;
+
+  Serial.print(F("Core 0 iterations: "));
+  Serial.println(rp2040Core0Count);
+  Serial.print(F("Core 1 iterations: "));
+  Serial.println(rp2040Core1Count);
+  Serial.print(F("Total iterations: "));
+  Serial.println(total);
+  Serial.print(F("Scaling efficiency: "));
+  Serial.print(scaling, 2);
+  Serial.println(F("x"));
+#else
   Serial.println(F("Single core performance:"));
 
   volatile unsigned long count = 0;
@@ -2022,7 +2112,7 @@ void benchmarkMultiCore() {
 
   Serial.print(F("Iterations in 1 second: "));
   Serial.println(count);
-  Serial.println(F("Note: Full dual-core requires multicore library"));
+#endif
 #endif
 }
 #endif

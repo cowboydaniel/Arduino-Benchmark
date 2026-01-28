@@ -466,6 +466,7 @@ void benchmarkCPUStress() {
 
   // CPU stress test - run all cores
   unsigned long stressStart = millis();
+  unsigned long lastService = millis();
   unsigned long iterations = 0;
   volatile float result = 1.0f;
   const float twoPi = 6.2831853f;
@@ -480,10 +481,14 @@ void benchmarkCPUStress() {
     }
 
     // Periodic yield to prevent watchdog timeout (but don't print)
-    if ((iterations % 10000) == 0) {
+    if (millis() - lastService >= 5) {
 #if defined(ARDUINO_ARCH_RP2040) || defined(ESP32) || defined(ESP8266)
       yield();
+#if defined(ESP32) || defined(ESP8266)
+      delay(0);
 #endif
+#endif
+      lastService = millis();
     }
   }
 

@@ -2072,6 +2072,8 @@ void benchmarkHardwareRNG() {
 
 #include <SoftwareATSE.h>
 
+constexpr int kAtseKeyId = 999; // Reserved for benchmark use to avoid clobbering other keys.
+
 void benchmarkSoftwareATSE() {
   printHeader("CRYPTO: SoftwareATSE (Uno R4 WiFi)");
   
@@ -2092,14 +2094,14 @@ void benchmarkSoftwareATSE() {
   Serial.println(F("--- Public Key Generation ---"));
   
   bool keyGenSupported = false;
-  const uint16_t keySlot = 0;
+  const uint16_t keySlot = kAtseKeyId;
   unsigned long keyGenStart = millis();
   byte publicKey[64];  // Buffer for public key
   byte privateKey[32]; // Buffer for private key
   
   if (SATSE.generatePrivateKey(keySlot, privateKey) == 1) {
     // Try to generate public key in the same slot
-    if (SATSE.generatePublicKey(keySlot, publicKey) == 1) {
+    if (SATSE.generatePublicKey(kAtseKeyId, publicKey) == 1) {
       unsigned long keyGenTime = millis() - keyGenStart;
       keyGenSupported = true;
       
@@ -2170,7 +2172,7 @@ void benchmarkSoftwareATSE() {
     int successfulSigns = 0;
     
     for (int i = 0; i < NUM_SIGN_OPS; i++) {
-      if (SATSE.ecSign(0, testData, signature)) {  // slot 0
+      if (SATSE.ecSign(kAtseKeyId, testData, signature)) {
         successfulSigns++;
       }
       yield();

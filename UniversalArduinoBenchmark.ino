@@ -55,6 +55,7 @@
 #include <driver/gpio.h>
 #include "soc/gpio_struct.h"
 #include "soc/gpio_reg.h"
+#include <sys/time.h>
 #define EEPROM_SIZE 512
 
 // ESP8266 Family
@@ -63,6 +64,7 @@
 #define HAS_WIFI
 #include <ESP8266WiFi.h>
 #include <EEPROM.h>
+#include <sys/time.h>
 #define EEPROM_SIZE 512
 
 // RP2040 Family (Pico, Pico W, Arduino Nano RP2040 Connect)
@@ -92,6 +94,7 @@
 #define HAS_TEMPERATURE
 // RP2040 hardware register access
 #include "hardware/gpio.h"
+#include "hardware/rtc.h"
 
 // Renesas RA4M1 (Arduino Uno R4 WiFi & Minima)
 #elif defined(ARDUINO_UNOR4_WIFI)
@@ -419,6 +422,28 @@ void calibrateBenchmarkTime() {
   } else {
     gMinBenchUs = 50000;
   }
+}
+
+bool readRtcMicros(uint64_t &ticksUs) {
+#if defined(ESP32) || defined(ESP8266)
+  timeval tv;
+  if (gettimeofday(&tv, nullptr) != 0) {
+    return false;
+  }
+  ticksUs = ((uint64_t)tv.tv_sec * 1000000ULL) + (uint64_t)tv.tv_usec;
+  return true;
+#elif defined(ARDUINO_ARCH_RP2040)
+  datetime_t now;
+  if (!rtc_get_datetime(&now)) {
+    return false;
+  }
+  uint64_t seconds = (uint64_t)now.hour * 3600ULL + (uint64_t)now.min * 60ULL + (uint64_t)now.sec;
+  ticksUs = seconds * 1000000ULL;
+  return true;
+#else
+  (void)ticksUs;
+  return false;
+#endif
 }
 
 // ==================== CPU BENCHMARKS ====================
@@ -1828,6 +1853,114 @@ void benchmarkTimingPrecision() {
   Serial.println(F("%"));
 }
 
+// ==================== RTC BENCHMARK ====================
+
+void benchmarkRTC() {
+  printHeader("RTC: Real-Time Clock");
+
+  const char* rtcApi = "None";
+  const char* rtcLfDomain = "Unknown";
+  const char* rtcNotes = "No RTC detected in this core.";
+  bool rtcAvailable = false;
+
+#if defined(ESP32)
+  rtcAvailable = true;
+  rtcApi = "gettimeofday()";
+  rtcLfDomain = "Yes (RTC slow clock domain)";
+  rtcNotes = "ESP32 time APIs map to the RTC slow clock when running.";
+#elif defined(ESP8266)
+  rtcAvailable = true;
+  rtcApi = "gettimeofday()";
+  rtcLfDomain = "Likely (RTC counter in RTC memory)";
+  rtcNotes = "ESP8266 timekeeping uses system RTC; SNTP sets the epoch.";
+#elif defined(ARDUINO_ARCH_RP2040)
+  rtcAvailable = true;
+  rtcApi = "rtc_get_datetime()";
+  rtcLfDomain = "Yes (1 Hz RTC tick)";
+  rtcNotes = "RP2040 RTC from pico-sdk; time must be set by sketch/user.";
+#elif defined(ARDUINO_ARCH_AVR) || defined(BOARD_AVR)
+  rtcNotes = "AVR core has no on-chip RTC peripheral.";
+#elif defined(ARDUINO_ARCH_SAMD)
+  rtcNotes = "SAMD has RTC hardware but no core RTC API wired here.";
+#elif defined(ARDUINO_ARCH_RENESAS)
+  rtcNotes = "RA4M1 has RTC hardware; not exposed in this benchmark.";
+#elif defined(BOARD_NRF52)
+  rtcNotes = "nRF52 has RTC peripherals; not exposed in this benchmark.";
+#else
+  rtcNotes = "RTC support not detected for this core.";
+#endif
+
+  Serial.print(F("RTC API: "));
+  Serial.println(rtcApi);
+  Serial.print(F("Low-frequency clock: "));
+  Serial.println(rtcLfDomain);
+  Serial.print(F("Notes: "));
+  Serial.println(rtcNotes);
+
+  if (!rtcAvailable) {
+    Serial.println(F("RTC Status: no RTC"));
+    return;
+  }
+
+#if defined(ARDUINO_ARCH_RP2040)
+  rtc_init();
+#endif
+
+  uint64_t currentTicks = 0;
+  if (!readRtcMicros(currentTicks)) {
+    Serial.println(F("RTC Status: API present but time not available"));
+    return;
+  }
+
+  uint64_t minDelta = UINT64_MAX;
+  uint64_t lastTicks = currentTicks;
+  const uint16_t kResolutionSamples = 2000;
+  for (uint16_t i = 0; i < kResolutionSamples; i++) {
+    if (!readRtcMicros(currentTicks)) {
+      break;
+    }
+    if (currentTicks > lastTicks) {
+      uint64_t delta = currentTicks - lastTicks;
+      if (delta != 0 && delta < minDelta) {
+        minDelta = delta;
+      }
+    }
+    lastTicks = currentTicks;
+  }
+
+  Serial.print(F("Tick resolution: "));
+  if (minDelta == UINT64_MAX) {
+    Serial.println(F("no non-zero delta observed"));
+  } else if (minDelta >= 1000000ULL) {
+    Serial.print(F("1 s (min delta "));
+    Serial.print(minDelta);
+    Serial.println(F(" μs)"));
+  } else if (minDelta >= 1000ULL) {
+    Serial.print(F("1 ms (min delta "));
+    Serial.print(minDelta);
+    Serial.println(F(" μs)"));
+  } else {
+    Serial.print(F("sub-ms (min delta "));
+    Serial.print(minDelta);
+    Serial.println(F(" μs)"));
+  }
+
+  const uint16_t kReadIterations = 1000;
+  volatile uint64_t sink = 0;
+  unsigned long readStart = micros();
+  for (uint16_t i = 0; i < kReadIterations; i++) {
+    if (readRtcMicros(currentTicks)) {
+      sink ^= currentTicks;
+    }
+  }
+  unsigned long readElapsed = micros() - readStart;
+  float readCost = (float)readElapsed / (float)kReadIterations;
+  Serial.print(F("RTC read cost: "));
+  Serial.print(readCost, 2);
+  Serial.println(F(" μs/call"));
+  (void)sink;
+}
+
 // ==================== STACK DEPTH BENCHMARK ====================
 
 volatile int recursionCounter = 0;
@@ -2258,6 +2391,7 @@ void setup() {
   // Advanced benchmarks
   benchmarkAdvancedMath();
   benchmarkTimingPrecision();
+  benchmarkRTC();
   benchmarkStackDepth();
 #if defined(ESP32) || defined(ARDUINO_ARCH_RP2040)
   benchmarkMultiCore();

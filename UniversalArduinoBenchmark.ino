@@ -1867,12 +1867,11 @@ void benchmarkESP32Crypto() {
 #endif
   };
   auto checkCryptoTimeout = [&]() -> bool {
-    if (millis() - cryptoStartMs > maxCryptoMs) {
+    if (!cryptoTimedOut && (millis() - cryptoStartMs > maxCryptoMs)) {
       Serial.println(F("Warning: crypto benchmark timed out."));
       cryptoTimedOut = true;
-      return true;
     }
-    return false;
+    return cryptoTimedOut;
   };
 
   auto toHex = [&](const uint8_t *data, size_t len, char *out) {
@@ -1936,10 +1935,6 @@ void benchmarkESP32Crypto() {
       }
     }
   });
-  if (cryptoTimedOut) {
-    return;
-  }
-
   Serial.println(F("...running MD5"));
   TimedLoopResult md5Result = runTimedLoop(minDurationMs, 10, [&]() {
     for (uint8_t i = 0; i < 10; i++) {
@@ -1953,10 +1948,6 @@ void benchmarkESP32Crypto() {
       }
     }
   });
-  if (cryptoTimedOut) {
-    return;
-  }
-
   Serial.println(F("...running SHA1"));
   TimedLoopResult sha1Result = runTimedLoop(minDurationMs, 10, [&]() {
     for (uint8_t i = 0; i < 10; i++) {
@@ -1970,10 +1961,6 @@ void benchmarkESP32Crypto() {
       }
     }
   });
-  if (cryptoTimedOut) {
-    return;
-  }
-
   Serial.println(F("...running SHA256"));
   TimedLoopResult sha256Result = runTimedLoop(minDurationMs, 10, [&]() {
     for (uint8_t i = 0; i < 10; i++) {
@@ -1987,10 +1974,6 @@ void benchmarkESP32Crypto() {
       }
     }
   });
-  if (cryptoTimedOut) {
-    return;
-  }
-
   Serial.println(F("...running SHA512"));
   TimedLoopResult sha512Result = runTimedLoop(minDurationMs, 10, [&]() {
     for (uint8_t i = 0; i < 10; i++) {
@@ -2004,10 +1987,6 @@ void benchmarkESP32Crypto() {
       }
     }
   });
-  if (cryptoTimedOut) {
-    return;
-  }
-
 #if defined(MBEDTLS_SHA3_C)
   Serial.println(F("...running SHA3-256"));
   TimedLoopResult sha3Result = runTimedLoop(minDurationMs, 5, [&]() {
@@ -2078,10 +2057,6 @@ void benchmarkESP32Crypto() {
     }
     benchYield();
   });
-  if (cryptoTimedOut) {
-    return;
-  }
-
   Serial.print(F("Checksum: "));
   Serial.println(checksum);
 

@@ -1587,10 +1587,17 @@ int testRecursion(int depth) {
 void benchmarkStackDepth() {
   printHeader("MEMORY: Stack Depth Test");
 
+#if defined(__AVR__)
+  Serial.println(F("Stack depth test skipped on low-SRAM AVR targets."));
+  Serial.println(F("Reason: recursion can exhaust limited SRAM quickly."));
+  return;
+#endif
+
   // Test safe recursion depth
   recursionCounter = 0;
   int testDepth = 100;
   int result = testRecursion(testDepth);
+  (void)result;
 
   Serial.print(F("Recursion test ("));
   Serial.print(testDepth);
@@ -1600,12 +1607,7 @@ void benchmarkStackDepth() {
   } else {
     Serial.println(F("FAIL"));
   }
-
-  Serial.print(F("Each call uses ~32 bytes"));
-  Serial.println();
-  Serial.print(F("Test consumed ~"));
-  Serial.print(testDepth * 32);
-  Serial.println(F(" bytes of stack"));
+  Serial.println(F("Per-call stack usage not measured on this platform."));
 }
 
 // ==================== MULTI-CORE BENCHMARKS ====================

@@ -271,12 +271,14 @@
 #define BOARD_AVR
 
 // Arduino Uno Q (STM32U585 MCU target)
-#elif defined(ARDUINO_UNO_Q_MCU) || defined(ARDUINO_UNO_Q) || defined(STM32U5xx) || defined(STM32U585xx)
+#elif defined(ARDUINO_UNO_Q)
 #define BOARD_NAME "Arduino Uno Q (MCU)"
 #define BOARD_STM32U5
+#define BOARD_SRAM_KB 786
 #if defined(__FPU_PRESENT) && (__FPU_PRESENT == 1)
 #define HAS_FPU
 #endif
+#define HAS_DSP
 #if defined(RNG) || defined(RNG_BASE)
 #define HAS_RNG
 #endif
@@ -2937,6 +2939,10 @@ void printSystemInfo() {
   Serial.println(F("~256 KB (nRF52840)"));
 #elif defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
   Serial.println(F("32 KB (RA4M1)"));
+#elif defined(BOARD_SRAM_KB)
+  Serial.print(F("Total RAM: "));
+  Serial.print(BOARD_SRAM_KB);
+  Serial.println(F(" KB"));
 #else
   Serial.println(F("Unknown"));
 #endif

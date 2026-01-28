@@ -481,7 +481,7 @@ void benchmarkIntegerOps() {
   // Multiplication - use LCG-style updates to prevent optimization
   acc = 1;
   startBenchmark();
-  for (uint32_t i = 1; i < BENCHMARK_ITERATIONS / 100; i++) {
+  for (uint32_t i = 1; i <= BENCHMARK_ITERATIONS / 100; i++) {
     acc = (acc * (i | 1)) & 0xFFFFFFFF;  // Ensure odd multiplier, prevent overflow
   }
   unsigned long mulTime = endBenchmark();
@@ -491,7 +491,7 @@ void benchmarkIntegerOps() {
   // Division - vary both dividend and divisor
   acc = 0xFFFFFFFFULL;
   startBenchmark();
-  for (uint32_t i = 1; i < BENCHMARK_ITERATIONS / 100; i++) {
+  for (uint32_t i = 1; i <= BENCHMARK_ITERATIONS / 100; i++) {
     uint32_t divisor = (i % 127) + 2;  // 2-128, avoid div-by-1
     acc = (acc / divisor) + i;         // Accumulate to prevent optimization
   }

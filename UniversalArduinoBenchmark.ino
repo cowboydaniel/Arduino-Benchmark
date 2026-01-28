@@ -2132,19 +2132,21 @@ void benchmarkSoftwareATSE() {
     testConfig[i] = i & 0xFF;
   }
   
-  unsigned long writeStart = millis();
+  unsigned long writeStart = micros();
   bool writeSuccess = false;
   
   if (SATSE.writeConfiguration(testConfig) == 1) {
-    unsigned long writeTime = millis() - writeStart;
+    unsigned long writeTime = micros() - writeStart;
     writeSuccess = true;
     
-    Serial.print(F("Config write (ms): "));
+    Serial.print(F("Config write (\xC2\xB5s): "));
     Serial.println(writeTime);
+    Serial.print(F("  (ms): "));
+    Serial.println(writeTime / 1000.0f, 3);
     
     Serial.print(F("  Write speed: "));
     if (writeTime > 0) {
-      Serial.print(256000.0f / writeTime, 2);
+      Serial.print(256.0f * 1000000.0f / writeTime, 2);
       Serial.println(F(" bytes/sec"));
     } else {
       Serial.println(F("N/A (too fast)"));

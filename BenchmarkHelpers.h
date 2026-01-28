@@ -2,6 +2,7 @@
 #define BENCHMARK_HELPERS_H
 
 #include <Arduino.h>
+#include <type_traits>
 
 struct MinDurationResult {
   uint32_t ops;
@@ -37,7 +38,13 @@ TimedLoopResult runTimedLoop(uint32_t minDurationMs, uint32_t opsPerIteration, F
   unsigned long start = micros();
   unsigned long elapsed = 0;
   do {
-    func();
+    if constexpr (std::is_void_v<decltype(func())>) {
+      func();
+    } else {
+      if (!func()) {
+        break;
+      }
+    }
     result.iterations++;
     result.totalOps += opsPerIteration;
 #if defined(ESP32) || defined(ESP8266) || defined(ARDUINO_ARCH_RP2040)

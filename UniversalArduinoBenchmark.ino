@@ -355,6 +355,30 @@ unsigned long endBenchmark() {
   return micros() - benchmarkStart;
 }
 
+struct TimedLoopResult {
+  unsigned long elapsedMicros;
+  unsigned long iterations;
+  float opsPerMs;
+};
+
+const unsigned long MIN_BENCHMARK_MICROS = 5000;
+
+TimedLoopResult runTimedLoop(void (*operation)(void*), void* context, unsigned long minDurationMicros = MIN_BENCHMARK_MICROS) {
+  TimedLoopResult result = {0, 0, 0.0f};
+  unsigned long start = micros();
+  unsigned long elapsed = 0;
+
+  do {
+    operation(context);
+    result.iterations++;
+    elapsed = micros() - start;
+  } while (elapsed < minDurationMicros);
+
+  result.elapsedMicros = elapsed;
+  result.opsPerMs = result.iterations * 1000.0f / elapsed;
+  return result;
+}
+
 // ==================== CPU BENCHMARKS ====================
 
 void benchmarkCPUStress() {
@@ -603,48 +627,81 @@ void benchmarkFloatOps() {
 void benchmarkStringOps() {
   printHeader("CPU: STRING OPERATIONS");
 
+  struct StringConcatContext {
+    String* target;
+    size_t maxLen;
+  };
+
+  struct StringCompareContext {
+    const String* left;
+    const String* right;
+    volatile bool result;
+  };
+
+  struct StringToIntContext {
+    String* target;
+    int value;
+    volatile int checksum;
+  };
+
+  auto concatOp = [](void* context) {
+    StringConcatContext* ctx = static_cast<StringConcatContext*>(context);
+    if (ctx->target->length() >= ctx->maxLen) {
+      ctx->target->remove(0);
+    }
+    *(ctx->target) += 'X';
+  };
+
+  auto compareOp = [](void* context) {
+    StringCompareContext* ctx = static_cast<StringCompareContext*>(context);
+    ctx->result = (*(ctx->left) == *(ctx->right));
+  };
+
+  auto toStringOp = [](void* context) {
+    StringToIntContext* ctx = static_cast<StringToIntContext*>(context);
+    *(ctx->target) = String(ctx->value);
+    ctx->checksum += ctx->target->length();
+    ctx->value = (ctx->value + 1) % 1000;
+  };
+
   // String concatenation
-  startBenchmark();
   String testString = "";
-  for (int i = 0; i < 100; i++) {
-    testString += "X";
-  }
-  unsigned long concatTime = endBenchmark();
+  StringConcatContext concatContext = {&testString, 100};
+  TimedLoopResult concatResult = runTimedLoop(concatOp, &concatContext);
 
   // String comparison
   String str1 = "TestString123";
   String str2 = "TestString123";
-  startBenchmark();
-  volatile bool cmpResult;
-  for (int i = 0; i < 1000; i++) {
-    cmpResult = (str1 == str2);
-  }
-  unsigned long cmpTime = endBenchmark();
+  StringCompareContext compareContext = {&str1, &str2, false};
+  TimedLoopResult compareResult = runTimedLoop(compareOp, &compareContext);
 
   // Integer to String
-  startBenchmark();
   String numStr;
-  for (int i = 0; i < 1000; i++) {
-    numStr = String(i);
-  }
-  unsigned long toStrTime = endBenchmark();
+  StringToIntContext toStringContext = {&numStr, 0, 0};
+  TimedLoopResult toStringResult = runTimedLoop(toStringOp, &toStringContext);
 
-  Serial.print(F("Concatenation (100 ops): "));
-  Serial.print(concatTime);
+  Serial.print(F("Concatenation ("));
+  Serial.print(concatResult.iterations);
+  Serial.print(F(" ops): "));
+  Serial.print(concatResult.elapsedMicros);
   Serial.print(F(" μs ("));
-  Serial.print(100.0 / concatTime * 1000);
+  Serial.print(concatResult.opsPerMs);
   Serial.println(F(" ops/ms)"));
 
-  Serial.print(F("Comparison (1000 ops): "));
-  Serial.print(cmpTime);
+  Serial.print(F("Comparison ("));
+  Serial.print(compareResult.iterations);
+  Serial.print(F(" ops): "));
+  Serial.print(compareResult.elapsedMicros);
   Serial.print(F(" μs ("));
-  Serial.print(1000.0 / cmpTime * 1000);
+  Serial.print(compareResult.opsPerMs);
   Serial.println(F(" ops/ms)"));
 
-  Serial.print(F("Int to String (1000 ops): "));
-  Serial.print(toStrTime);
+  Serial.print(F("Int to String ("));
+  Serial.print(toStringResult.iterations);
+  Serial.print(F(" ops): "));
+  Serial.print(toStringResult.elapsedMicros);
   Serial.print(F(" μs ("));
-  Serial.print(1000.0 / toStrTime * 1000);
+  Serial.print(toStringResult.opsPerMs);
   Serial.println(F(" ops/ms)"));
 }
 
@@ -1020,39 +1077,53 @@ void benchmarkAnalogIO() {
 
   // analogRead benchmark - accumulate to prevent optimization
   if (analogInPin >= 0) {
-    volatile uint32_t sum = 0;
-    startBenchmark();
-    for (int i = 0; i < 100; i++) {
-      sum += analogRead(analogInPin);
-    }
-    unsigned long readTime = endBenchmark();
+    struct AnalogReadContext {
+      int pin;
+      volatile uint32_t sum;
+    };
 
-    Serial.print(F("analogRead() (100 ops): "));
-    Serial.print(readTime);
+    auto analogReadOp = [](void* context) {
+      AnalogReadContext* ctx = static_cast<AnalogReadContext*>(context);
+      ctx->sum += analogRead(ctx->pin);
+    };
+
+    AnalogReadContext readContext = {analogInPin, 0};
+    TimedLoopResult readResult = runTimedLoop(analogReadOp, &readContext);
+
+    Serial.print(F("analogRead() ("));
+    Serial.print(readResult.iterations);
+    Serial.print(F(" ops): "));
+    Serial.print(readResult.elapsedMicros);
     Serial.print(F(" μs ("));
-    Serial.print(100.0 / readTime * 1000);
+    Serial.print(readResult.opsPerMs);
     Serial.println(F(" ops/ms)"));
     Serial.print(F("ADC average: "));
-    Serial.println((uint32_t)(sum / 100));
+    Serial.println((uint32_t)(readContext.sum / readResult.iterations));
   }
 
   // analogWrite/PWM benchmark
   if (analogOutPin >= 0) {
     pinMode(analogOutPin, OUTPUT);
-    volatile uint32_t iterations = 0;
-    startBenchmark();
-    for (int i = 0; i < 100; i++) {
-      analogWrite(analogOutPin, i % 256);
-      iterations++;
-    }
-    unsigned long writeTime = endBenchmark();
+    struct AnalogWriteContext {
+      int pin;
+      uint8_t value;
+    };
+
+    auto analogWriteOp = [](void* context) {
+      AnalogWriteContext* ctx = static_cast<AnalogWriteContext*>(context);
+      analogWrite(ctx->pin, ctx->value);
+      ctx->value++;
+    };
+
+    AnalogWriteContext writeContext = {analogOutPin, 0};
+    TimedLoopResult writeResult = runTimedLoop(analogWriteOp, &writeContext);
 
     Serial.print(F("analogWrite() ("));
-    Serial.print(iterations);
+    Serial.print(writeResult.iterations);
     Serial.print(F(" ops): "));
-    Serial.print(writeTime);
+    Serial.print(writeResult.elapsedMicros);
     Serial.print(F(" μs ("));
-    Serial.print(iterations * 1000.0 / writeTime);
+    Serial.print(writeResult.opsPerMs);
     Serial.println(F(" ops/ms)"));
   }
 }

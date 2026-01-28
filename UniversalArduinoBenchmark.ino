@@ -355,6 +355,27 @@ unsigned long endBenchmark() {
   return micros() - benchmarkStart;
 }
 
+struct MinDurationResult {
+  uint32_t ops;
+  unsigned long elapsedUs;
+};
+
+template <typename Func>
+MinDurationResult runForAtLeastUs(unsigned long minUs, Func fn) {
+  MinDurationResult result = {};
+  unsigned long start = micros();
+  unsigned long elapsed = 0;
+  do {
+    result.ops += fn();
+#if defined(ESP32) || defined(ESP8266) || defined(ARDUINO_ARCH_RP2040)
+    yield();
+#endif
+    elapsed = micros() - start;
+  } while (elapsed < minUs);
+  result.elapsedUs = elapsed;
+  return result;
+}
+
 struct TimedLoopResult {
   unsigned long elapsedMicros;
   uint32_t iterations;

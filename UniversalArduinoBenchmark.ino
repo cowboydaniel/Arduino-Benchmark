@@ -2092,26 +2092,32 @@ void benchmarkSoftwareATSE() {
   Serial.println(F("--- Public Key Generation ---"));
   
   bool keyGenSupported = false;
+  const uint16_t keySlot = 0;
   unsigned long keyGenStart = millis();
   byte publicKey[64];  // Buffer for public key
+  byte privateKey[32]; // Buffer for private key
   
-  // Try to generate public key in slot 0
-  if (SATSE.generatePublicKey(0, publicKey) == 1) {
-    unsigned long keyGenTime = millis() - keyGenStart;
-    keyGenSupported = true;
-    
-    Serial.print(F("SoftwareATSE: Public key generation (ms): "));
-    Serial.println(keyGenTime);
-    
-    Serial.print(F("  Rate: "));
-    if (keyGenTime > 0) {
-      Serial.print(1000.0f / keyGenTime, 3);
-      Serial.println(F(" keys/sec"));
+  if (SATSE.generatePrivateKey(keySlot, privateKey) == 1) {
+    // Try to generate public key in the same slot
+    if (SATSE.generatePublicKey(keySlot, publicKey) == 1) {
+      unsigned long keyGenTime = millis() - keyGenStart;
+      keyGenSupported = true;
+      
+      Serial.print(F("SoftwareATSE: Public key generation (ms): "));
+      Serial.println(keyGenTime);
+      
+      Serial.print(F("  Rate: "));
+      if (keyGenTime > 0) {
+        Serial.print(1000.0f / keyGenTime, 3);
+        Serial.println(F(" keys/sec"));
+      } else {
+        Serial.println(F("N/A (too fast)"));
+      }
     } else {
-      Serial.println(F("N/A (too fast)"));
+      Serial.println(F("SoftwareATSE: Public key generation - not supported"));
     }
   } else {
-    Serial.println(F("SoftwareATSE: Public key generation - not supported"));
+    Serial.println(F("SoftwareATSE: Private key generation failed; skipping public key test"));
   }
   
   Serial.println();

@@ -404,12 +404,14 @@ void benchmarkCPUStress() {
   unsigned long stressStart = millis();
   unsigned long iterations = 0;
   volatile float result = 1.0f;
+  const float twoPi = 6.2831853f;
 
   while (millis() - stressStart < 10000) {
     // Mix of integer and float operations
     for (int i = 0; i < 100; i++) {
-      result = result * 1.0001f + sqrt((float)i);
-      result = sin(result) + cos(result);
+      result = result * 1.0001f + sqrtf((float)i);
+      result = fmodf(result, twoPi);
+      result = sinf(result) + cosf(result);
       iterations++;
     }
 

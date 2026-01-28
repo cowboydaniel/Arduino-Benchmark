@@ -1964,7 +1964,7 @@ void benchmarkESP32Crypto() {
   const uint32_t pbkdf2Iterations = 500;
 
   TimedLoopResult pbkdf2Result = runTimedLoop(minDurationMs, 1, [&]() {
-#if defined(MBEDTLS_VERSION_MAJOR) && MBEDTLS_VERSION_MAJOR >= 3
+#if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x03000000
     if (mbedtls_pkcs5_pbkdf2_hmac_ext(MBEDTLS_MD_SHA256,
                                      reinterpret_cast<const unsigned char *>(password),
                                      strlen(password),

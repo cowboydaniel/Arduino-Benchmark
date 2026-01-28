@@ -55,6 +55,15 @@
 #include <driver/gpio.h>
 #include "soc/gpio_struct.h"
 #include "soc/gpio_reg.h"
+#include "mbedtls/md5.h"
+#include "mbedtls/sha1.h"
+#include "mbedtls/sha256.h"
+#include "mbedtls/sha512.h"
+#include "mbedtls/md.h"
+#include "mbedtls/pkcs5.h"
+#if defined(MBEDTLS_SHA3_C)
+#include "mbedtls/sha3.h"
+#endif
 #define EEPROM_SIZE 512
 
 // ESP8266 Family
@@ -1801,6 +1810,209 @@ void benchmarkSHA1() {
 }
 #endif
 
+#if defined(ESP32)
+void benchmarkESP32Crypto() {
+  printHeader("CRYPTO: Hashing (ESP32)");
+
+  const uint8_t inputSize = 128;
+  uint8_t input[inputSize];
+  for (uint8_t i = 0; i < inputSize; i++) {
+    input[i] = (uint8_t)(i * 3 + 7);
+  }
+
+  uint8_t digest[64];
+  char hexDigest[129];
+  volatile uint32_t checksum = 0;
+
+  auto toHex = [&](const uint8_t *data, size_t len, char *out) {
+    static const char *kHex = "0123456789abcdef";
+    for (size_t i = 0; i < len; i++) {
+      out[i * 2] = kHex[data[i] >> 4];
+      out[i * 2 + 1] = kHex[data[i] & 0x0F];
+    }
+    out[len * 2] = '\0';
+  };
+
+  const uint32_t minDurationMs = max(5UL, (gMinBenchUs + 999UL) / 1000UL);
+
+  Serial.println(F("Example digests:"));
+  mbedtls_md5_ret(input, inputSize, digest);
+  toHex(digest, 16, hexDigest);
+  Serial.print(F("MD5: "));
+  Serial.println(hexDigest);
+
+  mbedtls_sha1_ret(input, inputSize, digest);
+  toHex(digest, 20, hexDigest);
+  Serial.print(F("SHA1: "));
+  Serial.println(hexDigest);
+
+  mbedtls_sha256_ret(input, inputSize, digest, 0);
+  toHex(digest, 32, hexDigest);
+  Serial.print(F("SHA256: "));
+  Serial.println(hexDigest);
+
+  mbedtls_sha512_ret(input, inputSize, digest, 0);
+  toHex(digest, 64, hexDigest);
+  Serial.print(F("SHA512: "));
+  Serial.println(hexDigest);
+
+#if defined(MBEDTLS_SHA3_C)
+  {
+    mbedtls_sha3_context sha3;
+    mbedtls_sha3_init(&sha3);
+    mbedtls_sha3_starts(&sha3, 256);
+    mbedtls_sha3_update(&sha3, input, inputSize);
+    mbedtls_sha3_finish(&sha3, digest);
+    mbedtls_sha3_free(&sha3);
+    toHex(digest, 32, hexDigest);
+    Serial.print(F("SHA3-256: "));
+    Serial.println(hexDigest);
+  }
+#else
+  Serial.println(F("SHA3-256: not available in this build"));
+#endif
+
+  TimedLoopResult hexResult = runTimedLoop(minDurationMs, 20, [&]() {
+    for (uint8_t i = 0; i < 20; i++) {
+      toHex(input, inputSize, hexDigest);
+      checksum += hexDigest[0];
+    }
+  });
+
+  TimedLoopResult md5Result = runTimedLoop(minDurationMs, 10, [&]() {
+    for (uint8_t i = 0; i < 10; i++) {
+      mbedtls_md5_ret(input, inputSize, digest);
+      checksum += digest[0];
+    }
+  });
+
+  TimedLoopResult sha1Result = runTimedLoop(minDurationMs, 10, [&]() {
+    for (uint8_t i = 0; i < 10; i++) {
+      mbedtls_sha1_ret(input, inputSize, digest);
+      checksum += digest[0];
+    }
+  });
+
+  TimedLoopResult sha256Result = runTimedLoop(minDurationMs, 10, [&]() {
+    for (uint8_t i = 0; i < 10; i++) {
+      mbedtls_sha256_ret(input, inputSize, digest, 0);
+      checksum += digest[0];
+    }
+  });
+
+  TimedLoopResult sha512Result = runTimedLoop(minDurationMs, 10, [&]() {
+    for (uint8_t i = 0; i < 10; i++) {
+      mbedtls_sha512_ret(input, inputSize, digest, 0);
+      checksum += digest[0];
+    }
+  });
+
+#if defined(MBEDTLS_SHA3_C)
+  TimedLoopResult sha3Result = runTimedLoop(minDurationMs, 5, [&]() {
+    for (uint8_t i = 0; i < 5; i++) {
+      mbedtls_sha3_context sha3;
+      mbedtls_sha3_init(&sha3);
+      mbedtls_sha3_starts(&sha3, 256);
+      mbedtls_sha3_update(&sha3, input, inputSize);
+      mbedtls_sha3_finish(&sha3, digest);
+      mbedtls_sha3_free(&sha3);
+      checksum += digest[0];
+    }
+  });
+#endif
+
+  const uint8_t saltSize = 16;
+  uint8_t salt[saltSize];
+  for (uint8_t i = 0; i < saltSize; i++) {
+    salt[i] = (uint8_t)(0xA5 ^ i);
+  }
+  const char *password = "esp32-benchmark";
+  const uint32_t pbkdf2Iterations = 500;
+
+  TimedLoopResult pbkdf2Result = runTimedLoop(minDurationMs, 1, [&]() {
+    mbedtls_md_context_t ctx;
+    mbedtls_md_init(&ctx);
+    const mbedtls_md_info_t *info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    if (info != nullptr && mbedtls_md_setup(&ctx, info, 1) == 0) {
+      if (mbedtls_pkcs5_pbkdf2_hmac(&ctx,
+                                   reinterpret_cast<const unsigned char *>(password),
+                                   strlen(password),
+                                   salt,
+                                   saltSize,
+                                   pbkdf2Iterations,
+                                   32,
+                                   digest) == 0) {
+        checksum += digest[0];
+      }
+    }
+    mbedtls_md_free(&ctx);
+  });
+
+  Serial.print(F("Checksum: "));
+  Serial.println(checksum);
+
+  Serial.print(F("HEX encode ("));
+  Serial.print(hexResult.totalOps);
+  Serial.print(F(" ops): "));
+  Serial.print(hexResult.elapsedMicros);
+  Serial.print(F(" μs ("));
+  Serial.print(hexResult.opsPerMs);
+  Serial.println(F(" ops/ms)"));
+
+  Serial.print(F("MD5 ("));
+  Serial.print(md5Result.totalOps);
+  Serial.print(F(" ops): "));
+  Serial.print(md5Result.elapsedMicros);
+  Serial.print(F(" μs ("));
+  Serial.print(md5Result.opsPerMs);
+  Serial.println(F(" ops/ms)"));
+
+  Serial.print(F("SHA1 ("));
+  Serial.print(sha1Result.totalOps);
+  Serial.print(F(" ops): "));
+  Serial.print(sha1Result.elapsedMicros);
+  Serial.print(F(" μs ("));
+  Serial.print(sha1Result.opsPerMs);
+  Serial.println(F(" ops/ms)"));
+
+  Serial.print(F("SHA256 ("));
+  Serial.print(sha256Result.totalOps);
+  Serial.print(F(" ops): "));
+  Serial.print(sha256Result.elapsedMicros);
+  Serial.print(F(" μs ("));
+  Serial.print(sha256Result.opsPerMs);
+  Serial.println(F(" ops/ms)"));
+
+  Serial.print(F("SHA512 ("));
+  Serial.print(sha512Result.totalOps);
+  Serial.print(F(" ops): "));
+  Serial.print(sha512Result.elapsedMicros);
+  Serial.print(F(" μs ("));
+  Serial.print(sha512Result.opsPerMs);
+  Serial.println(F(" ops/ms)"));
+
+#if defined(MBEDTLS_SHA3_C)
+  Serial.print(F("SHA3-256 ("));
+  Serial.print(sha3Result.totalOps);
+  Serial.print(F(" ops): "));
+  Serial.print(sha3Result.elapsedMicros);
+  Serial.print(F(" μs ("));
+  Serial.print(sha3Result.opsPerMs);
+  Serial.println(F(" ops/ms)"));
+#endif
+
+  Serial.print(F("PBKDF2-HMAC-SHA256 ("));
+  Serial.print(pbkdf2Result.totalOps);
+  Serial.print(F(" ops): "));
+  Serial.print(pbkdf2Result.elapsedMicros);
+  Serial.print(F(" μs ("));
+  Serial.print(pbkdf2Result.opsPerMs);
+  Serial.println(F(" ops/ms)"));
+  Serial.print(F("  Iterations per op: "));
+  Serial.println(pbkdf2Iterations);
+}
+#endif
+
 // ==================== TIMING PRECISION BENCHMARKS ====================
 
 void benchmarkTimingPrecision() {
@@ -2619,6 +2831,7 @@ void setup() {
   benchmarkMultiCore();
 #endif
 #if defined(ESP32)
+  benchmarkESP32Crypto();
   benchmarkHardwareRNG();
 #endif
 #if defined(ARDUINO_UNOR4_WIFI)

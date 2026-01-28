@@ -282,7 +282,6 @@
 #if defined(RNG) || defined(RNG_BASE)
 #define HAS_RNG
 #endif
-#include <EEPROM.h>
 #if __has_include("stm32u5xx_hal.h")
 #include "stm32u5xx_hal.h"
 #endif

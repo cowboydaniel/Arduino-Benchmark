@@ -1038,6 +1038,38 @@ void benchmarkAnalogIO() {
 
   // analogWrite/PWM benchmark
   if (analogOutPin >= 0) {
+#if defined(ESP32)
+    const int pwmChannel = 0;
+    const int pwmFreq = 5000;
+    const int pwmResolution = 8;
+
+    startBenchmark();
+    ledcSetup(pwmChannel, pwmFreq, pwmResolution);
+    ledcAttachPin(analogOutPin, pwmChannel);
+    unsigned long setupTime = endBenchmark();
+
+    volatile uint32_t iterations = 0;
+    startBenchmark();
+    for (int i = 0; i < 100; i++) {
+      ledcWrite(pwmChannel, i % 256);
+      iterations++;
+    }
+    unsigned long updateTime = endBenchmark();
+
+    Serial.print(F("PWM setup: "));
+    Serial.print(setupTime);
+    Serial.print(F(" μs ("));
+    Serial.print(1000.0 / setupTime);
+    Serial.println(F(" ops/ms)"));
+
+    Serial.print(F("PWM duty update ("));
+    Serial.print(iterations);
+    Serial.print(F(" ops): "));
+    Serial.print(updateTime);
+    Serial.print(F(" μs ("));
+    Serial.print(iterations * 1000.0 / updateTime);
+    Serial.println(F(" ops/ms)"));
+#else
     pinMode(analogOutPin, OUTPUT);
     volatile uint32_t iterations = 0;
     startBenchmark();
@@ -1054,6 +1086,7 @@ void benchmarkAnalogIO() {
     Serial.print(F(" μs ("));
     Serial.print(iterations * 1000.0 / writeTime);
     Serial.println(F(" ops/ms)"));
+#endif
   }
 }
 

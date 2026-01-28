@@ -61,6 +61,7 @@
 #include "mbedtls/sha512.h"
 #include "mbedtls/md.h"
 #include "mbedtls/pkcs5.h"
+#include "mbedtls/version.h"
 #if defined(MBEDTLS_SHA3_C)
 #include "mbedtls/sha3.h"
 #endif
@@ -1812,6 +1813,38 @@ void benchmarkSHA1() {
 #endif
 
 #if defined(ESP32)
+static inline int benchmarkMd5(const unsigned char *input, size_t size, unsigned char *output) {
+#if defined(MBEDTLS_VERSION_MAJOR) && MBEDTLS_VERSION_MAJOR >= 3
+  return mbedtls_md5(input, size, output);
+#else
+  return mbedtls_md5_ret(input, size, output);
+#endif
+}
+
+static inline int benchmarkSha1(const unsigned char *input, size_t size, unsigned char *output) {
+#if defined(MBEDTLS_VERSION_MAJOR) && MBEDTLS_VERSION_MAJOR >= 3
+  return mbedtls_sha1(input, size, output);
+#else
+  return mbedtls_sha1_ret(input, size, output);
+#endif
+}
+
+static inline int benchmarkSha256(const unsigned char *input, size_t size, unsigned char *output) {
+#if defined(MBEDTLS_VERSION_MAJOR) && MBEDTLS_VERSION_MAJOR >= 3
+  return mbedtls_sha256(input, size, output, 0);
+#else
+  return mbedtls_sha256_ret(input, size, output, 0);
+#endif
+}
+
+static inline int benchmarkSha512(const unsigned char *input, size_t size, unsigned char *output) {
+#if defined(MBEDTLS_VERSION_MAJOR) && MBEDTLS_VERSION_MAJOR >= 3
+  return mbedtls_sha512(input, size, output, 0);
+#else
+  return mbedtls_sha512_ret(input, size, output, 0);
+#endif
+}
+
 void benchmarkESP32Crypto() {
   printHeader("CRYPTO: Hashing (ESP32)");
 
@@ -1837,22 +1870,22 @@ void benchmarkESP32Crypto() {
   const uint32_t minDurationMs = max(5UL, (gMinBenchUs + 999UL) / 1000UL);
 
   Serial.println(F("Example digests:"));
-  mbedtls_md5_ret(input, inputSize, digest);
+  benchmarkMd5(input, inputSize, digest);
   toHex(digest, 16, hexDigest);
   Serial.print(F("MD5: "));
   Serial.println(hexDigest);
 
-  mbedtls_sha1_ret(input, inputSize, digest);
+  benchmarkSha1(input, inputSize, digest);
   toHex(digest, 20, hexDigest);
   Serial.print(F("SHA1: "));
   Serial.println(hexDigest);
 
-  mbedtls_sha256_ret(input, inputSize, digest, 0);
+  benchmarkSha256(input, inputSize, digest);
   toHex(digest, 32, hexDigest);
   Serial.print(F("SHA256: "));
   Serial.println(hexDigest);
 
-  mbedtls_sha512_ret(input, inputSize, digest, 0);
+  benchmarkSha512(input, inputSize, digest);
   toHex(digest, 64, hexDigest);
   Serial.print(F("SHA512: "));
   Serial.println(hexDigest);
@@ -1882,28 +1915,28 @@ void benchmarkESP32Crypto() {
 
   TimedLoopResult md5Result = runTimedLoop(minDurationMs, 10, [&]() {
     for (uint8_t i = 0; i < 10; i++) {
-      mbedtls_md5_ret(input, inputSize, digest);
+      benchmarkMd5(input, inputSize, digest);
       checksum += digest[0];
     }
   });
 
   TimedLoopResult sha1Result = runTimedLoop(minDurationMs, 10, [&]() {
     for (uint8_t i = 0; i < 10; i++) {
-      mbedtls_sha1_ret(input, inputSize, digest);
+      benchmarkSha1(input, inputSize, digest);
       checksum += digest[0];
     }
   });
 
   TimedLoopResult sha256Result = runTimedLoop(minDurationMs, 10, [&]() {
     for (uint8_t i = 0; i < 10; i++) {
-      mbedtls_sha256_ret(input, inputSize, digest, 0);
+      benchmarkSha256(input, inputSize, digest);
       checksum += digest[0];
     }
   });
 
   TimedLoopResult sha512Result = runTimedLoop(minDurationMs, 10, [&]() {
     for (uint8_t i = 0; i < 10; i++) {
-      mbedtls_sha512_ret(input, inputSize, digest, 0);
+      benchmarkSha512(input, inputSize, digest);
       checksum += digest[0];
     }
   });
@@ -1935,7 +1968,12 @@ void benchmarkESP32Crypto() {
     mbedtls_md_init(&ctx);
     const mbedtls_md_info_t *info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
     if (info != nullptr && mbedtls_md_setup(&ctx, info, 1) == 0) {
-      if (mbedtls_pkcs5_pbkdf2_hmac(&ctx,
+      if (
+#if defined(MBEDTLS_VERSION_MAJOR) && MBEDTLS_VERSION_MAJOR >= 3
+          mbedtls_pkcs5_pbkdf2_hmac_ext(&ctx,
+#else
+          mbedtls_pkcs5_pbkdf2_hmac(&ctx,
+#endif
                                    reinterpret_cast<const unsigned char *>(password),
                                    strlen(password),
                                    salt,

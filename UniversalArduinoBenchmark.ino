@@ -921,11 +921,13 @@ void benchmarkDigitalIO() {
 
 // Direct port manipulation (AVR only)
 #ifdef __AVR__
+  volatile uint8_t *out = portOutputRegister(digitalPinToPort(testPin));
+  uint8_t mask = digitalPinToBitMask(testPin);
   iterations = 0;
   startBenchmark();
   for (int i = 0; i < 1000; i++) {
-    PORTB |= (1 << PB5);   // Set
-    PORTB &= ~(1 << PB5);  // Clear
+    *out |= mask;   // Set
+    *out &= ~mask;  // Clear
     iterations += 2;
   }
   unsigned long portTime = endBenchmark();

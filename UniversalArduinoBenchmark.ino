@@ -629,22 +629,37 @@ void benchmarkStringOps() {
   }
   unsigned long toStrTime = endBenchmark();
 
-  Serial.print(F("Concatenation (100 ops): "));
+  // snprintf into fixed buffer (no heap allocation)
+  char fixedBuffer[32];
+  volatile int snprintfTotal = 0;
+  startBenchmark();
+  for (int i = 0; i < 1000; i++) {
+    snprintfTotal += snprintf(fixedBuffer, sizeof(fixedBuffer), "%d", i);
+  }
+  unsigned long snprintfTime = endBenchmark();
+
+  Serial.print(F("Arduino String (heap stress) - Concatenation (100 ops): "));
   Serial.print(concatTime);
   Serial.print(F(" μs ("));
   Serial.print(100.0 / concatTime * 1000);
   Serial.println(F(" ops/ms)"));
 
-  Serial.print(F("Comparison (1000 ops): "));
+  Serial.print(F("Arduino String (heap stress) - Comparison (1000 ops): "));
   Serial.print(cmpTime);
   Serial.print(F(" μs ("));
   Serial.print(1000.0 / cmpTime * 1000);
   Serial.println(F(" ops/ms)"));
 
-  Serial.print(F("Int to String (1000 ops): "));
+  Serial.print(F("Arduino String (heap stress) - Int to String (1000 ops): "));
   Serial.print(toStrTime);
   Serial.print(F(" μs ("));
   Serial.print(1000.0 / toStrTime * 1000);
+  Serial.println(F(" ops/ms)"));
+
+  Serial.print(F("snprintf (fixed buffer, 1000 ops): "));
+  Serial.print(snprintfTime);
+  Serial.print(F(" μs ("));
+  Serial.print(1000.0 / snprintfTime * 1000);
   Serial.println(F(" ops/ms)"));
 }
 

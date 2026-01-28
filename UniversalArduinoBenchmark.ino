@@ -910,12 +910,12 @@ void benchmarkDigitalIO() {
   pinMode(testPin, OUTPUT);
 
   // digitalWrite benchmark
-  volatile uint32_t iterations = 0;
+  volatile uint32_t dwOps = 0;
   startBenchmark();
   for (int i = 0; i < 1000; i++) {
     digitalWrite(testPin, HIGH);
     digitalWrite(testPin, LOW);
-    iterations += 2;
+    dwOps += 2;
   }
   unsigned long writeTime = endBenchmark();
 
@@ -923,19 +923,19 @@ void benchmarkDigitalIO() {
 #ifdef __AVR__
   volatile uint8_t *out = portOutputRegister(digitalPinToPort(testPin));
   uint8_t mask = digitalPinToBitMask(testPin);
-  iterations = 0;
+  volatile uint32_t portOps = 0;
   startBenchmark();
   for (int i = 0; i < 1000; i++) {
     *out |= mask;   // Set
     *out &= ~mask;  // Clear
-    iterations += 2;
+    portOps += 2;
   }
   unsigned long portTime = endBenchmark();
 #endif
 
 // Direct register write (ESP32)
 #ifdef ESP32
-  iterations = 0;
+  volatile uint32_t regOps = 0;
   startBenchmark();
   for (int i = 0; i < 1000; i++) {
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 0, 0)
@@ -945,38 +945,38 @@ void benchmarkDigitalIO() {
     digitalWrite(testPin, HIGH);
     digitalWrite(testPin, LOW);
 #endif
-    iterations += 2;
+    regOps += 2;
   }
   unsigned long regTime = endBenchmark();
 #endif
 
 // Direct register write (RP2040)
 #ifdef ARDUINO_ARCH_RP2040
-  iterations = 0;
+  volatile uint32_t regOps = 0;
   startBenchmark();
   for (int i = 0; i < 1000; i++) {
     sio_hw->gpio_set = 1ul << testPin;  // Set
     sio_hw->gpio_clr = 1ul << testPin;  // Clear
-    iterations += 2;
+    regOps += 2;
   }
   unsigned long regTime = endBenchmark();
 #endif
 
   Serial.print(F("digitalWrite() ("));
-  Serial.print(iterations);
+  Serial.print(dwOps);
   Serial.print(F(" ops): "));
   Serial.print(writeTime);
   Serial.print(F(" μs ("));
-  Serial.print(iterations * 1000.0 / writeTime);
+  Serial.print(dwOps * 1000.0 / writeTime);
   Serial.println(F(" ops/ms)"));
 
 #ifdef __AVR__
   Serial.print(F("Direct Port ("));
-  Serial.print(iterations);
+  Serial.print(portOps);
   Serial.print(F(" ops): "));
   Serial.print(portTime);
   Serial.print(F(" μs ("));
-  Serial.print(iterations * 1000.0 / portTime);
+  Serial.print(portOps * 1000.0 / portTime);
   Serial.println(F(" ops/ms)"));
   Serial.print(F("Speedup: "));
   Serial.print((float)writeTime / portTime);
@@ -985,11 +985,11 @@ void benchmarkDigitalIO() {
 
 #if defined(ESP32) || defined(ARDUINO_ARCH_RP2040)
   Serial.print(F("Direct Register ("));
-  Serial.print(iterations);
+  Serial.print(regOps);
   Serial.print(F(" ops): "));
   Serial.print(regTime);
   Serial.print(F(" μs ("));
-  Serial.print(iterations * 1000.0 / regTime);
+  Serial.print(regOps * 1000.0 / regTime);
   Serial.println(F(" ops/ms)"));
   Serial.print(F("Speedup: "));
   Serial.print((float)writeTime / regTime);

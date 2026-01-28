@@ -467,16 +467,31 @@ void benchmarkCPUStress() {
   // CPU stress test - run all cores
   unsigned long stressStart = millis();
   unsigned long lastService = millis();
+#if defined(ARDUINO_ARCH_RP2040)
+  unsigned long lastIo = millis();
+#endif
   unsigned long iterations = 0;
   volatile float result = 1.0f;
   const float twoPi = 6.2831853f;
+#if defined(ARDUINO_ARCH_RP2040)
+  uint32_t lcg = 0x12345678u;
+#endif
 
   while (millis() - stressStart < 10000) {
     // Mix of integer and float operations
     for (int i = 0; i < 100; i++) {
+#if defined(ARDUINO_ARCH_RP2040)
+      lcg = lcg * 1664525u + 1013904223u;
+      uint32_t mixed = lcg ^ (lcg >> 16);
+      float f1 = (mixed & 0xFFFF) * 0.0001f;
+      float f2 = (mixed & 0xFF) * 0.00001f;
+      result = result * 1.0001f + f1;
+      result = result * 0.9999f + f2;
+#else
       result = result * 1.0001f + sqrtf((float)i);
       result = fmodf(result, twoPi);
       result = sinf(result) + cosf(result);
+#endif
       iterations++;
     }
 
@@ -490,6 +505,13 @@ void benchmarkCPUStress() {
 #endif
       lastService = millis();
     }
+
+#if defined(ARDUINO_ARCH_RP2040)
+    if (millis() - lastIo >= 250) {
+      Serial.write('.');
+      lastIo = millis();
+    }
+#endif
   }
 
   unsigned long stressDuration = millis() - stressStart;

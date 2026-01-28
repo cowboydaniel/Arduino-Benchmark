@@ -514,6 +514,8 @@ void benchmarkCPUStress() {
 void benchmarkIntegerOps() {
   printHeader("CPU: INTEGER OPERATIONS");
 
+  const uint32_t minDurationMs = 5;
+
   // Addition - use volatile uint64_t to prevent optimization and overflow
   volatile uint64_t acc = 0;
   startBenchmark();
@@ -526,22 +528,22 @@ void benchmarkIntegerOps() {
 
   // Multiplication - use LCG-style updates to prevent optimization
   acc = 1;
-  startBenchmark();
-  for (uint32_t i = 1; i <= BENCHMARK_ITERATIONS / 100; i++) {
-    acc = (acc * (i | 1)) & 0xFFFFFFFF;  // Ensure odd multiplier, prevent overflow
-  }
-  unsigned long mulTime = endBenchmark();
+  TimedLoopResult mulResult = runTimedLoop(minDurationMs, 100, [&]() {
+    for (uint32_t i = 1; i <= 100; i++) {
+      acc = (acc * (i | 1)) & 0xFFFFFFFF;  // Ensure odd multiplier, prevent overflow
+    }
+  });
   Serial.print(F("Checksum: "));
   Serial.println((uint32_t)acc);
 
   // Division - vary both dividend and divisor
   acc = 0xFFFFFFFFULL;
-  startBenchmark();
-  for (uint32_t i = 1; i <= BENCHMARK_ITERATIONS / 100; i++) {
-    uint32_t divisor = (i % 127) + 2;  // 2-128, avoid div-by-1
-    acc = (acc / divisor) + i;         // Accumulate to prevent optimization
-  }
-  unsigned long divTime = endBenchmark();
+  TimedLoopResult divResult = runTimedLoop(minDurationMs, 100, [&]() {
+    for (uint32_t i = 1; i <= 100; i++) {
+      uint32_t divisor = (i % 127) + 2;  // 2-128, avoid div-by-1
+      acc = (acc / divisor) + i;         // Accumulate to prevent optimization
+    }
+  });
   Serial.print(F("Checksum: "));
   Serial.println((uint32_t)acc);
 
@@ -554,24 +556,26 @@ void benchmarkIntegerOps() {
   Serial.println(F(" ops/ms)"));
 
   Serial.print(F("Multiplication ("));
-  Serial.print(BENCHMARK_ITERATIONS / 100);
+  Serial.print(mulResult.totalOps);
   Serial.print(F(" ops): "));
-  Serial.print(mulTime);
+  Serial.print(mulResult.elapsedMicros);
   Serial.print(F(" μs ("));
-  Serial.print((float)(BENCHMARK_ITERATIONS / 100) / mulTime * 1000);
+  Serial.print(mulResult.opsPerMs);
   Serial.println(F(" ops/ms)"));
 
   Serial.print(F("Division ("));
-  Serial.print(BENCHMARK_ITERATIONS / 100);
+  Serial.print(divResult.totalOps);
   Serial.print(F(" ops): "));
-  Serial.print(divTime);
+  Serial.print(divResult.elapsedMicros);
   Serial.print(F(" μs ("));
-  Serial.print((float)(BENCHMARK_ITERATIONS / 100) / divTime * 1000);
+  Serial.print(divResult.opsPerMs);
   Serial.println(F(" ops/ms)"));
 }
 
 void benchmarkFloatOps() {
   printHeader("CPU: FLOATING POINT OPERATIONS");
+
+  const uint32_t minDurationMs = 5;
 
   // Float addition - volatile prevents optimization
   volatile float fresult = 0.0f;
@@ -595,21 +599,21 @@ void benchmarkFloatOps() {
 
   // Sqrt - accumulate to prevent optimization
   fresult = 0.0f;
-  startBenchmark();
-  for (uint32_t i = 0; i < BENCHMARK_ITERATIONS / 100; i++) {
-    fresult += sqrt((float)i);
-  }
-  unsigned long sqrtTime = endBenchmark();
+  TimedLoopResult sqrtResult = runTimedLoop(minDurationMs, 100, [&]() {
+    for (uint32_t i = 0; i < 100; i++) {
+      fresult += sqrt((float)i);
+    }
+  });
   Serial.print(F("Checksum: "));
   Serial.println(fresult);
 
   // Sin/Cos - accumulate to prevent optimization
   fresult = 0.0f;
-  startBenchmark();
-  for (uint32_t i = 0; i < BENCHMARK_ITERATIONS / 100; i++) {
-    fresult += sin((float)i / 100.0f) + cos((float)i / 100.0f);
-  }
-  unsigned long trigTime = endBenchmark();
+  TimedLoopResult trigResult = runTimedLoop(minDurationMs, 100, [&]() {
+    for (uint32_t i = 0; i < 100; i++) {
+      fresult += sin((float)i / 100.0f) + cos((float)i / 100.0f);
+    }
+  });
   Serial.print(F("Checksum: "));
   Serial.println(fresult);
 
@@ -630,19 +634,19 @@ void benchmarkFloatOps() {
   Serial.println(F(" ops/ms)"));
 
   Serial.print(F("Square Root ("));
-  Serial.print(BENCHMARK_ITERATIONS / 100);
+  Serial.print(sqrtResult.totalOps);
   Serial.print(F(" ops): "));
-  Serial.print(sqrtTime);
+  Serial.print(sqrtResult.elapsedMicros);
   Serial.print(F(" μs ("));
-  Serial.print((float)(BENCHMARK_ITERATIONS / 100) / sqrtTime * 1000);
+  Serial.print(sqrtResult.opsPerMs);
   Serial.println(F(" ops/ms)"));
 
   Serial.print(F("Sin/Cos ("));
-  Serial.print(BENCHMARK_ITERATIONS / 100);
+  Serial.print(trigResult.totalOps);
   Serial.print(F(" ops): "));
-  Serial.print(trigTime);
+  Serial.print(trigResult.elapsedMicros);
   Serial.print(F(" μs ("));
-  Serial.print((float)(BENCHMARK_ITERATIONS / 100) / trigTime * 1000);
+  Serial.print(trigResult.opsPerMs);
   Serial.println(F(" ops/ms)"));
 }
 
@@ -725,50 +729,58 @@ void benchmarkStringOps() {
 void benchmarkSRAM() {
   printHeader("MEMORY: SRAM READ/WRITE");
 
+  const uint32_t minDurationMs = 5;
+
   // Sequential write
-  startBenchmark();
-  for (uint16_t i = 0; i < 256; i++) {
-    testBuffer[i] = (uint8_t)i;
-  }
-  unsigned long writeTime = endBenchmark();
+  TimedLoopResult writeResult = runTimedLoop(minDurationMs, 256, [&]() {
+    for (uint16_t i = 0; i < 256; i++) {
+      testBuffer[i] = (uint8_t)i;
+    }
+  });
 
   // Sequential read - accumulate to prevent optimization
   volatile uint32_t checksum = 0;
-  startBenchmark();
-  for (uint16_t i = 0; i < 256; i++) {
-    checksum += testBuffer[i];
-  }
-  unsigned long readTime = endBenchmark();
+  TimedLoopResult readResult = runTimedLoop(minDurationMs, 256, [&]() {
+    for (uint16_t i = 0; i < 256; i++) {
+      checksum += testBuffer[i];
+    }
+  });
   Serial.print(F("Read checksum: "));
   Serial.println((uint32_t)checksum);
 
   // Random access - accumulate to prevent optimization
   checksum = 0;
-  startBenchmark();
-  for (uint16_t i = 0; i < 256; i++) {
-    uint8_t idx = (i * 7 + 13) % 256;  // Pseudo-random
-    checksum += testBuffer[idx];
-  }
-  unsigned long randomTime = endBenchmark();
+  TimedLoopResult randomResult = runTimedLoop(minDurationMs, 256, [&]() {
+    for (uint16_t i = 0; i < 256; i++) {
+      uint8_t idx = (i * 7 + 13) % 256;  // Pseudo-random
+      checksum += testBuffer[idx];
+    }
+  });
   Serial.print(F("Random checksum: "));
   Serial.println((uint32_t)checksum);
 
-  Serial.print(F("Sequential Write (256 bytes): "));
-  Serial.print(writeTime);
+  Serial.print(F("Sequential Write ("));
+  Serial.print(writeResult.totalOps);
+  Serial.print(F(" ops): "));
+  Serial.print(writeResult.elapsedMicros);
   Serial.print(F(" μs ("));
-  Serial.print(256.0 / writeTime * 1000);
+  Serial.print(writeResult.opsPerMs);
   Serial.println(F(" ops/ms)"));
 
-  Serial.print(F("Sequential Read (256 bytes): "));
-  Serial.print(readTime);
+  Serial.print(F("Sequential Read ("));
+  Serial.print(readResult.totalOps);
+  Serial.print(F(" ops): "));
+  Serial.print(readResult.elapsedMicros);
   Serial.print(F(" μs ("));
-  Serial.print(256.0 / readTime * 1000);
+  Serial.print(readResult.opsPerMs);
   Serial.println(F(" ops/ms)"));
 
-  Serial.print(F("Random Access (256 ops): "));
-  Serial.print(randomTime);
+  Serial.print(F("Random Access ("));
+  Serial.print(randomResult.totalOps);
+  Serial.print(F(" ops): "));
+  Serial.print(randomResult.elapsedMicros);
   Serial.print(F(" μs ("));
-  Serial.print(256.0 / randomTime * 1000);
+  Serial.print(randomResult.opsPerMs);
   Serial.println(F(" ops/ms)"));
 }
 
@@ -965,6 +977,8 @@ void benchmarkPSRAM() {
 void benchmarkDigitalIO() {
   printHeader("I/O: DIGITAL PIN OPERATIONS");
 
+  const uint32_t minDurationMs = 5;
+
   // Find a safe digital pin to test
   int testPin;
 #if defined(LED_BUILTIN)
@@ -995,43 +1009,37 @@ void benchmarkDigitalIO() {
 #ifdef __AVR__
   volatile uint8_t *out = portOutputRegister(digitalPinToPort(testPin));
   uint8_t mask = digitalPinToBitMask(testPin);
-  volatile uint32_t portOps = 0;
-  startBenchmark();
-  for (int i = 0; i < 1000; i++) {
-    *out |= mask;   // Set
-    *out &= ~mask;  // Clear
-    portOps += 2;
-  }
-  unsigned long portTime = endBenchmark();
+  TimedLoopResult portResult = runTimedLoop(minDurationMs, 2000, [&]() {
+    for (int i = 0; i < 1000; i++) {
+      *out |= mask;   // Set
+      *out &= ~mask;  // Clear
+    }
+  });
 #endif
 
 // Direct register write (ESP32)
 #ifdef ESP32
-  volatile uint32_t regOps = 0;
-  startBenchmark();
-  for (int i = 0; i < 1000; i++) {
+  TimedLoopResult regResult = runTimedLoop(minDurationMs, 2000, [&]() {
+    for (int i = 0; i < 1000; i++) {
 #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 0, 0)
-    gpio_set_level((gpio_num_t)testPin, 1);
-    gpio_set_level((gpio_num_t)testPin, 0);
+      gpio_set_level((gpio_num_t)testPin, 1);
+      gpio_set_level((gpio_num_t)testPin, 0);
 #else
-    digitalWrite(testPin, HIGH);
-    digitalWrite(testPin, LOW);
+      digitalWrite(testPin, HIGH);
+      digitalWrite(testPin, LOW);
 #endif
-    regOps += 2;
-  }
-  unsigned long regTime = endBenchmark();
+    }
+  });
 #endif
 
 // Direct register write (RP2040)
 #ifdef ARDUINO_ARCH_RP2040
-  volatile uint32_t regOps = 0;
-  startBenchmark();
-  for (int i = 0; i < 1000; i++) {
-    sio_hw->gpio_set = 1ul << testPin;  // Set
-    sio_hw->gpio_clr = 1ul << testPin;  // Clear
-    regOps += 2;
-  }
-  unsigned long regTime = endBenchmark();
+  TimedLoopResult regResult = runTimedLoop(minDurationMs, 2000, [&]() {
+    for (int i = 0; i < 1000; i++) {
+      sio_hw->gpio_set = 1ul << testPin;  // Set
+      sio_hw->gpio_clr = 1ul << testPin;  // Clear
+    }
+  });
 #endif
 
   Serial.print(F("digitalWrite() ("));
@@ -1044,27 +1052,27 @@ void benchmarkDigitalIO() {
 
 #ifdef __AVR__
   Serial.print(F("Direct Port ("));
-  Serial.print(portOps);
+  Serial.print(portResult.totalOps);
   Serial.print(F(" ops): "));
-  Serial.print(portTime);
+  Serial.print(portResult.elapsedMicros);
   Serial.print(F(" μs ("));
-  Serial.print(portOps * 1000.0 / portTime);
+  Serial.print(portResult.opsPerMs);
   Serial.println(F(" ops/ms)"));
   Serial.print(F("Speedup: "));
-  Serial.print((float)writeTime / portTime);
+  Serial.print((float)writeTime / portResult.elapsedMicros);
   Serial.println(F("x faster"));
 #endif
 
 #if defined(ESP32) || defined(ARDUINO_ARCH_RP2040)
   Serial.print(F("Direct Register ("));
-  Serial.print(regOps);
+  Serial.print(regResult.totalOps);
   Serial.print(F(" ops): "));
-  Serial.print(regTime);
+  Serial.print(regResult.elapsedMicros);
   Serial.print(F(" μs ("));
-  Serial.print(regOps * 1000.0 / regTime);
+  Serial.print(regResult.opsPerMs);
   Serial.println(F(" ops/ms)"));
   Serial.print(F("Speedup: "));
-  Serial.print((float)writeTime / regTime);
+  Serial.print((float)writeTime / regResult.elapsedMicros);
   Serial.println(F("x faster"));
 #endif
 }

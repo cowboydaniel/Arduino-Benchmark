@@ -350,6 +350,7 @@
 #endif
 
 #include "BenchmarkHelpers.h"
+#include <HEXBuilder.h>
 
 // ==================== GLOBAL VARIABLES ====================
 uint8_t testBuffer[256];
@@ -1848,7 +1849,7 @@ static inline int benchmarkSha512(const unsigned char *input, size_t size, unsig
 void benchmarkESP32Crypto() {
   printHeader("CRYPTO: Hashing (ESP32)");
 
-  const uint8_t inputSize = 128;
+  constexpr uint8_t inputSize = 128;
   uint8_t input[inputSize];
   for (uint8_t i = 0; i < inputSize; i++) {
     input[i] = (uint8_t)(i * 3 + 7);
@@ -1856,11 +1857,13 @@ void benchmarkESP32Crypto() {
 
   uint8_t digest[64];
   char hexDigest[129];
+  char hexInput[(inputSize * 2) + 1];
   volatile uint32_t checksum = 0;
   uint32_t lastProgressMs = millis();
   const uint32_t maxCryptoMs = 15000;
   const uint32_t cryptoStartMs = lastProgressMs;
   bool cryptoTimedOut = false;
+  bool cryptoAbortPrinted = false;
   auto benchYield = []() {
 #if defined(ESP32) || defined(ESP8266) || defined(ARDUINO_ARCH_RP2040)
     yield();
@@ -1873,36 +1876,55 @@ void benchmarkESP32Crypto() {
     }
     return cryptoTimedOut;
   };
-
-  auto toHex = [&](const uint8_t *data, size_t len, char *out) {
-    static const char *kHex = "0123456789abcdef";
-    for (size_t i = 0; i < len; i++) {
-      out[i * 2] = kHex[data[i] >> 4];
-      out[i * 2 + 1] = kHex[data[i] & 0x0F];
+  auto abortCryptoIfTimedOut = [&]() -> bool {
+    if (cryptoTimedOut && !cryptoAbortPrinted) {
+      Serial.println(F("Crypto benchmark aborted due to timeout."));
+      cryptoAbortPrinted = true;
     }
-    out[len * 2] = '\0';
+    return cryptoTimedOut;
+  };
+
+  auto toHex = [&](const uint8_t *data, size_t len, char *out, size_t outCapacity) -> bool {
+    const size_t requiredSize = (len * 2) + 1;
+    if (outCapacity < requiredSize) {
+      return false;
+    }
+    size_t written = HEXBuilder::bytes2hex(out, outCapacity, data, len);
+    return written >= requiredSize;
   };
 
   const uint32_t minDurationMs = max(5UL, (gMinBenchUs + 999UL) / 1000UL);
 
   Serial.println(F("Example digests:"));
   benchmarkMd5(input, inputSize, digest);
-  toHex(digest, 16, hexDigest);
+  if (!toHex(digest, 16, hexDigest, sizeof(hexDigest))) {
+    Serial.println(F("MD5 hex buffer too small."));
+    return;
+  }
   Serial.print(F("MD5: "));
   Serial.println(hexDigest);
 
   benchmarkSha1(input, inputSize, digest);
-  toHex(digest, 20, hexDigest);
+  if (!toHex(digest, 20, hexDigest, sizeof(hexDigest))) {
+    Serial.println(F("SHA1 hex buffer too small."));
+    return;
+  }
   Serial.print(F("SHA1: "));
   Serial.println(hexDigest);
 
   benchmarkSha256(input, inputSize, digest);
-  toHex(digest, 32, hexDigest);
+  if (!toHex(digest, 32, hexDigest, sizeof(hexDigest))) {
+    Serial.println(F("SHA256 hex buffer too small."));
+    return;
+  }
   Serial.print(F("SHA256: "));
   Serial.println(hexDigest);
 
   benchmarkSha512(input, inputSize, digest);
-  toHex(digest, 64, hexDigest);
+  if (!toHex(digest, 64, hexDigest, sizeof(hexDigest))) {
+    Serial.println(F("SHA512 hex buffer too small."));
+    return;
+  }
   Serial.print(F("SHA512: "));
   Serial.println(hexDigest);
 
@@ -1914,7 +1936,10 @@ void benchmarkESP32Crypto() {
     mbedtls_sha3_update(&sha3, input, inputSize);
     mbedtls_sha3_finish(&sha3, digest);
     mbedtls_sha3_free(&sha3);
-    toHex(digest, 32, hexDigest);
+    if (!toHex(digest, 32, hexDigest, sizeof(hexDigest))) {
+      Serial.println(F("SHA3-256 hex buffer too small."));
+      return;
+    }
     Serial.print(F("SHA3-256: "));
     Serial.println(hexDigest);
   }
@@ -1928,14 +1953,20 @@ void benchmarkESP32Crypto() {
       if (checkCryptoTimeout()) {
         return false;
       }
-      toHex(input, inputSize, hexDigest);
-      checksum += hexDigest[0];
+      if (!toHex(input, inputSize, hexInput, sizeof(hexInput))) {
+        Serial.println(F("HEX encode buffer too small."));
+        return false;
+      }
+      checksum += hexInput[0];
       if ((i % 5) == 0) {
         benchYield();
       }
     }
     return true;
   });
+  if (abortCryptoIfTimedOut()) {
+    return;
+  }
   Serial.println(F("...running MD5"));
   TimedLoopResult md5Result = runTimedLoop(minDurationMs, 10, [&]() -> bool {
     for (uint8_t i = 0; i < 10; i++) {
@@ -1950,6 +1981,9 @@ void benchmarkESP32Crypto() {
     }
     return true;
   });
+  if (abortCryptoIfTimedOut()) {
+    return;
+  }
   Serial.println(F("...running SHA1"));
   TimedLoopResult sha1Result = runTimedLoop(minDurationMs, 10, [&]() -> bool {
     for (uint8_t i = 0; i < 10; i++) {
@@ -1964,6 +1998,9 @@ void benchmarkESP32Crypto() {
     }
     return true;
   });
+  if (abortCryptoIfTimedOut()) {
+    return;
+  }
   Serial.println(F("...running SHA256"));
   TimedLoopResult sha256Result = runTimedLoop(minDurationMs, 10, [&]() -> bool {
     for (uint8_t i = 0; i < 10; i++) {
@@ -1978,6 +2015,9 @@ void benchmarkESP32Crypto() {
     }
     return true;
   });
+  if (abortCryptoIfTimedOut()) {
+    return;
+  }
   Serial.println(F("...running SHA512"));
   TimedLoopResult sha512Result = runTimedLoop(minDurationMs, 10, [&]() -> bool {
     for (uint8_t i = 0; i < 10; i++) {
@@ -1992,6 +2032,9 @@ void benchmarkESP32Crypto() {
     }
     return true;
   });
+  if (abortCryptoIfTimedOut()) {
+    return;
+  }
 #if defined(MBEDTLS_SHA3_C)
   Serial.println(F("...running SHA3-256"));
   TimedLoopResult sha3Result = runTimedLoop(minDurationMs, 5, [&]() -> bool {
@@ -2010,7 +2053,7 @@ void benchmarkESP32Crypto() {
     }
     return true;
   });
-  if (cryptoTimedOut) {
+  if (abortCryptoIfTimedOut()) {
     return;
   }
 #endif

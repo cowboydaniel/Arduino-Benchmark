@@ -329,6 +329,8 @@
 #define MEMORY_TEST_SIZE 1024
 #define SERIAL_BAUD 115200
 
+#include "BenchmarkHelpers.h"
+
 // ==================== GLOBAL VARIABLES ====================
 uint8_t testBuffer[256];
 unsigned long gMinBenchUs = 20000;
@@ -355,50 +357,6 @@ void startBenchmark() {
 
 unsigned long endBenchmark() {
   return micros() - benchmarkStart;
-}
-
-struct MinDurationResult {
-  uint32_t ops;
-  unsigned long elapsedUs;
-};
-
-template <typename Func>
-MinDurationResult runForAtLeastUs(unsigned long minUs, Func fn) {
-  MinDurationResult result = {};
-  unsigned long start = micros();
-  unsigned long elapsed = 0;
-  do {
-    result.ops += fn();
-#if defined(ESP32) || defined(ESP8266) || defined(ARDUINO_ARCH_RP2040)
-    yield();
-#endif
-    elapsed = micros() - start;
-  } while (elapsed < minUs);
-  result.elapsedUs = elapsed;
-  return result;
-}
-
-struct TimedLoopResult {
-  unsigned long elapsedMicros;
-  uint32_t iterations;
-  uint32_t totalOps;
-  float opsPerMs;
-};
-
-template <typename Func>
-TimedLoopResult runTimedLoop(uint32_t minDurationMs, uint32_t opsPerIteration, Func func) {
-  TimedLoopResult result = {};
-  startBenchmark();
-  unsigned long elapsed = 0;
-  do {
-    func();
-    result.iterations++;
-    result.totalOps += opsPerIteration;
-    elapsed = micros() - benchmarkStart;
-  } while (elapsed < (minDurationMs * 1000UL));
-  result.elapsedMicros = elapsed;
-  result.opsPerMs = (result.totalOps * 1000.0f) / result.elapsedMicros;
-  return result;
 }
 
 template <typename T, size_t N>
@@ -1273,18 +1231,26 @@ void benchmarkAnalogIO() {
   // analogWrite/PWM benchmark
   if (analogOutPin >= 0) {
 #if defined(ESP32)
-    const int pwmChannel = 0;
     const int pwmFreq = 5000;
     const int pwmResolution = 8;
 
     startBenchmark();
+#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+    int pwmChannel = ledcAttach(analogOutPin, pwmFreq, pwmResolution);
+#else
+    const int pwmChannel = 0;
     ledcSetup(pwmChannel, pwmFreq, pwmResolution);
     ledcAttachPin(analogOutPin, pwmChannel);
+#endif
     unsigned long setupTime = endBenchmark();
 
     uint32_t pwmValue = 0;
     TimedLoopResult updateResult = runTimedLoop(minDurationMs, 1, [&]() {
+#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+      ledcWrite(analogOutPin, pwmValue % 256);
+#else
       ledcWrite(pwmChannel, pwmValue % 256);
+#endif
       pwmValue++;
     });
 

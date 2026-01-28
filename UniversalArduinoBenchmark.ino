@@ -53,6 +53,8 @@
 #include <BLEDevice.h>
 #include <BLEScan.h>
 #include <driver/gpio.h>
+#include "soc/gpio_struct.h"
+#include "soc/gpio_reg.h"
 #define EEPROM_SIZE 512
 
 // ESP8266 Family

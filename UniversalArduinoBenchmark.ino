@@ -331,6 +331,10 @@
 #define MEMORY_TEST_SIZE 1024
 #define SERIAL_BAUD 115200
 
+#if defined(ARDUINO_ARCH_RP2040)
+#include <Hash.h>
+#endif
+
 #include "BenchmarkHelpers.h"
 
 // ==================== GLOBAL VARIABLES ====================
@@ -1740,6 +1744,60 @@ void benchmarkAdvancedMath() {
   Serial.println(F(" ops/ms)"));
 }
 
+#if defined(ARDUINO_ARCH_RP2040)
+void benchmarkSHA1() {
+  printHeader("CRYPTO: SHA1");
+
+  Serial.println(F("Example digests:"));
+  Serial.print(F("SHA1:"));
+  Serial.println(sha1("abc"));
+
+  uint8_t hash[20];
+  sha1("test", &hash[0]);
+  Serial.print(F("SHA1:"));
+  for (uint16_t i = 0; i < 20; i++) {
+    Serial.printf("%02x", hash[i]);
+  }
+  Serial.println();
+
+  const uint32_t minDurationMs = max(5UL, (gMinBenchUs + 999UL) / 1000UL);
+  volatile uint32_t checksum = 0;
+
+  TimedLoopResult stringResult = runTimedLoop(minDurationMs, 10, [&]() {
+    for (uint8_t i = 0; i < 10; i++) {
+      String digest = sha1("abc");
+      checksum += digest.length();
+    }
+  });
+
+  TimedLoopResult bufferResult = runTimedLoop(minDurationMs, 10, [&]() {
+    for (uint8_t i = 0; i < 10; i++) {
+      sha1("test", &hash[0]);
+      checksum += hash[0];
+    }
+  });
+
+  Serial.print(F("Checksum: "));
+  Serial.println(checksum);
+
+  Serial.print(F("SHA1 String ("));
+  Serial.print(stringResult.totalOps);
+  Serial.print(F(" ops): "));
+  Serial.print(stringResult.elapsedMicros);
+  Serial.print(F(" μs ("));
+  Serial.print(stringResult.opsPerMs);
+  Serial.println(F(" ops/ms)"));
+
+  Serial.print(F("SHA1 Buffer ("));
+  Serial.print(bufferResult.totalOps);
+  Serial.print(F(" ops): "));
+  Serial.print(bufferResult.elapsedMicros);
+  Serial.print(F(" μs ("));
+  Serial.print(bufferResult.opsPerMs);
+  Serial.println(F(" ops/ms)"));
+}
+#endif
+
 // ==================== TIMING PRECISION BENCHMARKS ====================
 
 void benchmarkTimingPrecision() {
@@ -2491,6 +2549,9 @@ void setup() {
   benchmarkAdvancedMath();
   benchmarkTimingPrecision();
   benchmarkStackDepth();
+#if defined(ARDUINO_ARCH_RP2040)
+  benchmarkSHA1();
+#endif
 #if defined(ESP32) || defined(ARDUINO_ARCH_RP2040)
   benchmarkMultiCore();
 #endif

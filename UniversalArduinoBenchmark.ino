@@ -1964,16 +1964,23 @@ void benchmarkESP32Crypto() {
   const uint32_t pbkdf2Iterations = 500;
 
   TimedLoopResult pbkdf2Result = runTimedLoop(minDurationMs, 1, [&]() {
+#if defined(MBEDTLS_VERSION_MAJOR) && MBEDTLS_VERSION_MAJOR >= 3
+    if (mbedtls_pkcs5_pbkdf2_hmac_ext(MBEDTLS_MD_SHA256,
+                                     reinterpret_cast<const unsigned char *>(password),
+                                     strlen(password),
+                                     salt,
+                                     saltSize,
+                                     pbkdf2Iterations,
+                                     32,
+                                     digest) == 0) {
+      checksum += digest[0];
+    }
+#else
     mbedtls_md_context_t ctx;
     mbedtls_md_init(&ctx);
     const mbedtls_md_info_t *info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
     if (info != nullptr && mbedtls_md_setup(&ctx, info, 1) == 0) {
-      if (
-#if defined(MBEDTLS_VERSION_MAJOR) && MBEDTLS_VERSION_MAJOR >= 3
-          mbedtls_pkcs5_pbkdf2_hmac_ext(&ctx,
-#else
-          mbedtls_pkcs5_pbkdf2_hmac(&ctx,
-#endif
+      if (mbedtls_pkcs5_pbkdf2_hmac(&ctx,
                                    reinterpret_cast<const unsigned char *>(password),
                                    strlen(password),
                                    salt,
@@ -1985,6 +1992,7 @@ void benchmarkESP32Crypto() {
       }
     }
     mbedtls_md_free(&ctx);
+#endif
   });
 
   Serial.print(F("Checksum: "));

@@ -270,6 +270,24 @@
 #include <EEPROM.h>
 #define BOARD_AVR
 
+// Arduino Uno Q (STM32U585 MCU target)
+#elif defined(ARDUINO_UNO_Q_MCU) || defined(ARDUINO_UNO_Q) || defined(STM32U5xx) || defined(STM32U585xx)
+#define BOARD_NAME "Arduino Uno Q (MCU)"
+#define BOARD_STM32U5
+#if defined(__FPU_PRESENT) && (__FPU_PRESENT == 1)
+#define HAS_FPU
+#endif
+#if defined(RNG) || defined(RNG_BASE)
+#define HAS_RNG
+#endif
+#include <EEPROM.h>
+#if __has_include("stm32u5xx_hal.h")
+#include "stm32u5xx_hal.h"
+#endif
+#if __has_include("stm32u5xx_hal_rng.h")
+#include "stm32u5xx_hal_rng.h"
+#endif
+
 // STM32 Family (Blue Pill, Black Pill, Nucleo)
 #elif defined(ARDUINO_ARCH_STM32)
 #if defined(ARDUINO_BLUEPILL_F103C8) || defined(ARDUINO_BLUEPILL_F103CB)

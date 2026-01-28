@@ -55,7 +55,6 @@
 #include <driver/gpio.h>
 #include "soc/gpio_struct.h"
 #include "soc/gpio_reg.h"
-#include <sys/time.h>
 #define EEPROM_SIZE 512
 
 // ESP8266 Family
@@ -64,7 +63,6 @@
 #define HAS_WIFI
 #include <ESP8266WiFi.h>
 #include <EEPROM.h>
-#include <sys/time.h>
 #define EEPROM_SIZE 512
 
 // RP2040 Family (Pico, Pico W, Arduino Nano RP2040 Connect)
@@ -94,7 +92,6 @@
 #define HAS_TEMPERATURE
 // RP2040 hardware register access
 #include "hardware/gpio.h"
-#include "hardware/rtc.h"
 
 // Renesas RA4M1 (Arduino Uno R4 WiFi & Minima)
 #elif defined(ARDUINO_UNOR4_WIFI)
@@ -364,7 +361,7 @@ unsigned long endBenchmark() {
   return micros() - benchmarkStart;
 }
 
-template <typename T, size_t N>
+template<typename T, size_t N>
 struct MedianCollector {
   T values[N];
   uint8_t count;
@@ -422,28 +419,6 @@ void calibrateBenchmarkTime() {
   } else {
     gMinBenchUs = 50000;
   }
-}
-
-bool readRtcMicros(uint64_t &ticksUs) {
-#if defined(ESP32) || defined(ESP8266)
-  timeval tv;
-  if (gettimeofday(&tv, nullptr) != 0) {
-    return false;
-  }
-  ticksUs = ((uint64_t)tv.tv_sec * 1000000ULL) + (uint64_t)tv.tv_usec;
-  return true;
-#elif defined(ARDUINO_ARCH_RP2040)
-  datetime_t now;
-  if (!rtc_get_datetime(&now)) {
-    return false;
-  }
-  uint64_t seconds = (uint64_t)now.hour * 3600ULL + (uint64_t)now.min * 60ULL + (uint64_t)now.sec;
-  ticksUs = seconds * 1000000ULL;
-  return true;
-#else
-  (void)ticksUs;
-  return false;
-#endif
 }
 
 // ==================== CPU BENCHMARKS ====================
@@ -1106,7 +1081,7 @@ void benchmarkDigitalIO() {
 
 // Direct port manipulation (AVR only)
 #ifdef __AVR__
-  volatile uint8_t *out = portOutputRegister(digitalPinToPort(testPin));
+  volatile uint8_t* out = portOutputRegister(digitalPinToPort(testPin));
   uint8_t mask = digitalPinToBitMask(testPin);
   MedianCollector<float, kJitterTrials> portOpsMedian = {};
   MedianCollector<unsigned long, kJitterTrials> portElapsedMedian = {};
@@ -1144,8 +1119,8 @@ void benchmarkDigitalIO() {
           GPIO.out1_w1tc.data = 1u << (testPin - 32);
         }
 #else
-        digitalWrite(testPin, HIGH);
-        digitalWrite(testPin, LOW);
+          digitalWrite(testPin, HIGH);
+          digitalWrite(testPin, LOW);
 #endif
       }
     });
@@ -1230,7 +1205,7 @@ void benchmarkAnalogIO() {
 #if defined(ARDUINO_NANO_ESP32)
   int analogInPin = A0;
 #elif defined(CONFIG_IDF_TARGET_ESP32S3)
-  int analogInPin = 1;  // ADC1 channel
+  int analogInPin = 1;    // ADC1 channel
 #elif defined(CONFIG_IDF_TARGET_ESP32S2)
   int analogInPin = 1;  // ADC1 channel
 #elif defined(CONFIG_IDF_TARGET_ESP32C3)
@@ -1308,7 +1283,7 @@ void benchmarkAnalogIO() {
 #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
       ledcWrite(analogOutPin, pwmValue % 256);
 #else
-      ledcWrite(pwmChannel, pwmValue % 256);
+        ledcWrite(pwmChannel, pwmValue % 256);
 #endif
       pwmValue++;
     });
@@ -1853,114 +1828,6 @@ void benchmarkTimingPrecision() {
   Serial.println(F("%"));
 }
 
-// ==================== RTC BENCHMARK ====================
-
-void benchmarkRTC() {
-  printHeader("RTC: Real-Time Clock");
-
-  const char* rtcApi = "None";
-  const char* rtcLfDomain = "Unknown";
-  const char* rtcNotes = "No RTC detected in this core.";
-  bool rtcAvailable = false;
-
-#if defined(ESP32)
-  rtcAvailable = true;
-  rtcApi = "gettimeofday()";
-  rtcLfDomain = "Yes (RTC slow clock domain)";
-  rtcNotes = "ESP32 time APIs map to the RTC slow clock when running.";
-#elif defined(ESP8266)
-  rtcAvailable = true;
-  rtcApi = "gettimeofday()";
-  rtcLfDomain = "Likely (RTC counter in RTC memory)";
-  rtcNotes = "ESP8266 timekeeping uses system RTC; SNTP sets the epoch.";
-#elif defined(ARDUINO_ARCH_RP2040)
-  rtcAvailable = true;
-  rtcApi = "rtc_get_datetime()";
-  rtcLfDomain = "Yes (1 Hz RTC tick)";
-  rtcNotes = "RP2040 RTC from pico-sdk; time must be set by sketch/user.";
-#elif defined(ARDUINO_ARCH_AVR) || defined(BOARD_AVR)
-  rtcNotes = "AVR core has no on-chip RTC peripheral.";
-#elif defined(ARDUINO_ARCH_SAMD)
-  rtcNotes = "SAMD has RTC hardware but no core RTC API wired here.";
-#elif defined(ARDUINO_ARCH_RENESAS)
-  rtcNotes = "RA4M1 has RTC hardware; not exposed in this benchmark.";
-#elif defined(BOARD_NRF52)
-  rtcNotes = "nRF52 has RTC peripherals; not exposed in this benchmark.";
-#else
-  rtcNotes = "RTC support not detected for this core.";
-#endif
-
-  Serial.print(F("RTC API: "));
-  Serial.println(rtcApi);
-  Serial.print(F("Low-frequency clock: "));
-  Serial.println(rtcLfDomain);
-  Serial.print(F("Notes: "));
-  Serial.println(rtcNotes);
-
-  if (!rtcAvailable) {
-    Serial.println(F("RTC Status: no RTC"));
-    return;
-  }
-
-#if defined(ARDUINO_ARCH_RP2040)
-  rtc_init();
-#endif
-
-  uint64_t currentTicks = 0;
-  if (!readRtcMicros(currentTicks)) {
-    Serial.println(F("RTC Status: API present but time not available"));
-    return;
-  }
-
-  uint64_t minDelta = UINT64_MAX;
-  uint64_t lastTicks = currentTicks;
-  const uint16_t kResolutionSamples = 2000;
-  for (uint16_t i = 0; i < kResolutionSamples; i++) {
-    if (!readRtcMicros(currentTicks)) {
-      break;
-    }
-    if (currentTicks > lastTicks) {
-      uint64_t delta = currentTicks - lastTicks;
-      if (delta != 0 && delta < minDelta) {
-        minDelta = delta;
-      }
-    }
-    lastTicks = currentTicks;
-  }
-
-  Serial.print(F("Tick resolution: "));
-  if (minDelta == UINT64_MAX) {
-    Serial.println(F("no non-zero delta observed"));
-  } else if (minDelta >= 1000000ULL) {
-    Serial.print(F("1 s (min delta "));
-    Serial.print(minDelta);
-    Serial.println(F(" μs)"));
-  } else if (minDelta >= 1000ULL) {
-    Serial.print(F("1 ms (min delta "));
-    Serial.print(minDelta);
-    Serial.println(F(" μs)"));
-  } else {
-    Serial.print(F("sub-ms (min delta "));
-    Serial.print(minDelta);
-    Serial.println(F(" μs)"));
-  }
-
-  const uint16_t kReadIterations = 1000;
-  volatile uint64_t sink = 0;
-  unsigned long readStart = micros();
-  for (uint16_t i = 0; i < kReadIterations; i++) {
-    if (readRtcMicros(currentTicks)) {
-      sink ^= currentTicks;
-    }
-  }
-  unsigned long readElapsed = micros() - readStart;
-  float readCost = (float)readElapsed / (float)kReadIterations;
-  Serial.print(F("RTC read cost: "));
-  Serial.print(readCost, 2);
-  Serial.println(F(" μs/call"));
-  (void)sink;
-}
-
 // ==================== STACK DEPTH BENCHMARK ====================
 
 volatile int recursionCounter = 0;
@@ -2197,6 +2064,228 @@ void benchmarkHardwareRNG() {
 }
 #endif
 
+// ==================== SOFTWARE ATSE BENCHMARK ====================
+
+// Arduino Uno R4 WiFi has an ESP32-S3 WiFi module with secure element capabilities
+// SoftwareATSE library is included with the WiFiS3 library on Uno R4 WiFi
+#if defined(ARDUINO_UNOR4_WIFI)
+
+#include <SoftwareATSE.h>
+
+void benchmarkSoftwareATSE() {
+  printHeader("CRYPTO: SoftwareATSE (Uno R4 WiFi)");
+  
+  Serial.println(F("Initializing SoftwareATSE..."));
+  
+  // Initialize SoftwareATSE
+  if (!SATSE.begin()) {
+    Serial.println(F("SoftwareATSE initialization failed"));
+    Serial.println(F("The WiFi module may not be responding or"));
+    Serial.println(F("secure element features may not be available."));
+    return;
+  }
+  
+  Serial.println(F("SoftwareATSE initialized successfully!"));
+  Serial.println();
+  
+  // ===== Public Key Generation Benchmark =====
+  Serial.println(F("--- Public Key Generation ---"));
+  
+  bool keyGenSupported = false;
+  unsigned long keyGenStart = millis();
+  byte publicKey[64];  // Buffer for public key
+  
+  // Try to generate public key in slot 0
+  if (SATSE.generatePublicKey(0, publicKey) == 1) {
+    unsigned long keyGenTime = millis() - keyGenStart;
+    keyGenSupported = true;
+    
+    Serial.print(F("SoftwareATSE: Public key generation (ms): "));
+    Serial.println(keyGenTime);
+    
+    Serial.print(F("  Rate: "));
+    if (keyGenTime > 0) {
+      Serial.print(1000.0f / keyGenTime, 3);
+      Serial.println(F(" keys/sec"));
+    } else {
+      Serial.println(F("N/A (too fast)"));
+    }
+  } else {
+    Serial.println(F("SoftwareATSE: Public key generation - not supported"));
+  }
+  
+  Serial.println();
+  
+  // ===== Configuration Write Benchmark =====
+  Serial.println(F("--- Secure Storage Operations ---"));
+  
+  uint8_t testConfig[256];
+  for (int i = 0; i < 256; i++) {
+    testConfig[i] = i & 0xFF;
+  }
+  
+  unsigned long writeStart = millis();
+  bool writeSuccess = false;
+  
+  if (SATSE.writeConfiguration(testConfig) == 1) {
+    unsigned long writeTime = millis() - writeStart;
+    writeSuccess = true;
+    
+    Serial.print(F("Config write (ms): "));
+    Serial.println(writeTime);
+    
+    Serial.print(F("  Write speed: "));
+    if (writeTime > 0) {
+      Serial.print(256000.0f / writeTime, 2);
+      Serial.println(F(" bytes/sec"));
+    } else {
+      Serial.println(F("N/A (too fast)"));
+    }
+  } else {
+    Serial.println(F("Config write - not supported"));
+  }
+  
+  Serial.println();
+  
+  // ===== Signing Benchmark =====
+  Serial.println(F("--- EC Signing ---"));
+  
+  if (keyGenSupported) {
+    uint8_t testData[32];
+    for (int i = 0; i < 32; i++) {
+      testData[i] = (uint8_t)(i * 7 + 13);
+    }
+    
+    uint8_t signature[64];
+    
+    // Signing benchmark
+    const int NUM_SIGN_OPS = 10;
+    unsigned long signStart = micros();
+    int successfulSigns = 0;
+    
+    for (int i = 0; i < NUM_SIGN_OPS; i++) {
+      if (SATSE.ecSign(0, testData, signature)) {  // slot 0
+        successfulSigns++;
+      }
+      yield();
+    }
+    
+    unsigned long signTime = micros() - signStart;
+    
+    if (successfulSigns > 0) {
+      float avgSignTimeMs = (signTime / 1000.0f) / successfulSigns;
+      Serial.print(F("EC signing (avg ms/op): "));
+      Serial.println(avgSignTimeMs, 3);
+      
+      Serial.print(F("  Rate: "));
+      Serial.print(1000.0f / avgSignTimeMs, 2);
+      Serial.println(F(" ops/sec"));
+      
+      Serial.print(F("  Successful operations: "));
+      Serial.print(successfulSigns);
+      Serial.print(F("/"));
+      Serial.println(NUM_SIGN_OPS);
+    } else {
+      Serial.println(F("EC signing - not supported"));
+    }
+  } else {
+    Serial.println(F("Signing tests skipped (key generation not supported)"));
+  }
+  
+  Serial.println();
+  
+  // ===== Secure RNG Benchmark =====
+  Serial.println(F("--- Secure Random Number Generator ---"));
+  
+  uint8_t rngTest[16];
+  if (SATSE.random(rngTest, 16)) {
+    
+    // Benchmark RNG throughput
+    const int RNG_BUFFER_SIZE = 256;
+    const int RNG_ITERATIONS = 20;
+    uint8_t rngBuffer[RNG_BUFFER_SIZE];
+    
+    unsigned long rngStart = micros();
+    int successfulReads = 0;
+    uint32_t rngChecksum = 0;
+    
+    for (int i = 0; i < RNG_ITERATIONS; i++) {
+      if (SATSE.random(rngBuffer, RNG_BUFFER_SIZE)) {
+        successfulReads++;
+        for (int j = 0; j < RNG_BUFFER_SIZE; j++) {
+          rngChecksum += rngBuffer[j];
+        }
+      }
+      yield();
+    }
+    
+    unsigned long rngTime = micros() - rngStart;
+    
+    Serial.print(F("RNG checksum: "));
+    Serial.println(rngChecksum);
+    
+    if (successfulReads > 0) {
+      unsigned long totalBytes = successfulReads * RNG_BUFFER_SIZE;
+      float bytesPerSec = (totalBytes * 1000000.0f) / rngTime;
+      
+      Serial.print(F("Secure RNG throughput: "));
+      Serial.print(bytesPerSec, 2);
+      Serial.println(F(" bytes/sec"));
+      
+      Serial.print(F("  Total bytes generated: "));
+      Serial.println(totalBytes);
+      
+      Serial.print(F("  Time: "));
+      Serial.print(rngTime / 1000.0f, 2);
+      Serial.println(F(" ms"));
+      
+      Serial.print(F("  Successful reads: "));
+      Serial.print(successfulReads);
+      Serial.print(F("/"));
+      Serial.println(RNG_ITERATIONS);
+      
+      // Distribution test
+      Serial.println(F("Distribution test (first 1000 bytes):"));
+      uint32_t byteBins[4] = {0, 0, 0, 0};
+      
+      for (int i = 0; i < 1000; i++) {
+        uint8_t randomByte;
+        if (SATSE.random(&randomByte, 1)) {
+          byteBins[randomByte % 4]++;
+        }
+      }
+      
+      for (int i = 0; i < 4; i++) {
+        Serial.print(F("  Bin "));
+        Serial.print(i);
+        Serial.print(F(": "));
+        Serial.print(byteBins[i]);
+        Serial.print(F(" ("));
+        Serial.print(byteBins[i] / 10.0f, 1);
+        Serial.println(F("%)"));
+      }
+      Serial.println(F("  (Ideal: 25% each bin)"));
+    } else {
+      Serial.println(F("Secure RNG - read operations failed"));
+    }
+  } else {
+    Serial.println(F("Secure RNG - not supported"));
+  }
+  
+  Serial.println();
+  Serial.println(F("SoftwareATSE benchmarks complete"));
+}
+
+#else  // !ARDUINO_UNOR4_WIFI
+
+// Stub function for non-Uno R4 WiFi boards
+void benchmarkSoftwareATSE() {
+  // This function intentionally left empty for non-R4 boards
+  // It won't be called due to compile-time guards in setup()
+}
+
+#endif  // ARDUINO_UNOR4_WIFI
+
 // ==================== SYSTEM INFO ====================
 
 void printSystemInfo() {
@@ -2391,13 +2480,15 @@ void setup() {
   // Advanced benchmarks
   benchmarkAdvancedMath();
   benchmarkTimingPrecision();
-  benchmarkRTC();
   benchmarkStackDepth();
 #if defined(ESP32) || defined(ARDUINO_ARCH_RP2040)
   benchmarkMultiCore();
 #endif
 #if defined(ESP32)
   benchmarkHardwareRNG();
+#endif
+#if defined(ARDUINO_UNOR4_WIFI)
+  benchmarkSoftwareATSE();
 #endif
 
   // Final summary

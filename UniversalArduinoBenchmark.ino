@@ -1019,8 +1019,26 @@ void benchmarkAnalogIO() {
 
 // Find analog pins
 #if defined(ESP32)
-  int analogInPin = 36;   // VP
+#if defined(ARDUINO_NANO_ESP32)
+  int analogInPin = A0;
+#elif defined(CONFIG_IDF_TARGET_ESP32S3)
+  int analogInPin = 1;  // ADC1 channel
+#elif defined(CONFIG_IDF_TARGET_ESP32S2)
+  int analogInPin = 1;  // ADC1 channel
+#elif defined(CONFIG_IDF_TARGET_ESP32C3)
+  int analogInPin = 0;  // ADC1 channel
+#elif defined(CONFIG_IDF_TARGET_ESP32C6)
+  int analogInPin = 0;  // ADC1 channel
+#elif defined(CONFIG_IDF_TARGET_ESP32H2)
+  int analogInPin = 0;  // ADC1 channel
+#else
+  int analogInPin = 36;  // VP (ESP32 ADC1)
+#endif
+#if defined(CONFIG_IDF_TARGET_ESP32)
   int analogOutPin = 25;  // DAC1
+#else
+  int analogOutPin = -1;  // No DAC on these variants
+#endif
 #elif defined(ESP8266)
   int analogInPin = A0;
   int analogOutPin = -1;  // No DAC
@@ -1038,9 +1056,14 @@ void benchmarkAnalogIO() {
   // analogRead benchmark - accumulate to prevent optimization
   if (analogInPin >= 0) {
     volatile uint32_t sum = 0;
+    bool allZero = true;
     startBenchmark();
     for (int i = 0; i < 100; i++) {
-      sum += analogRead(analogInPin);
+      int value = analogRead(analogInPin);
+      sum += value;
+      if (value != 0) {
+        allZero = false;
+      }
     }
     unsigned long readTime = endBenchmark();
 
@@ -1051,6 +1074,9 @@ void benchmarkAnalogIO() {
     Serial.println(F(" ops/ms)"));
     Serial.print(F("ADC average: "));
     Serial.println((uint32_t)(sum / 100));
+    if (allZero) {
+      Serial.println(F("Warning: ADC reads were all zero; ADC pin may be invalid or floating."));
+    }
   }
 
   // analogWrite/PWM benchmark

@@ -1923,10 +1923,10 @@ void benchmarkESP32Crypto() {
 #endif
 
   Serial.println(F("...running HEX encode"));
-  TimedLoopResult hexResult = runTimedLoop(minDurationMs, 20, [&]() {
+  TimedLoopResult hexResult = runTimedLoop(minDurationMs, 20, [&]() -> bool {
     for (uint8_t i = 0; i < 20; i++) {
       if (checkCryptoTimeout()) {
-        return;
+        return false;
       }
       toHex(input, inputSize, hexDigest);
       checksum += hexDigest[0];
@@ -1934,12 +1934,13 @@ void benchmarkESP32Crypto() {
         benchYield();
       }
     }
+    return true;
   });
   Serial.println(F("...running MD5"));
-  TimedLoopResult md5Result = runTimedLoop(minDurationMs, 10, [&]() {
+  TimedLoopResult md5Result = runTimedLoop(minDurationMs, 10, [&]() -> bool {
     for (uint8_t i = 0; i < 10; i++) {
       if (checkCryptoTimeout()) {
-        return;
+        return false;
       }
       benchmarkMd5(input, inputSize, digest);
       checksum += digest[0];
@@ -1947,12 +1948,13 @@ void benchmarkESP32Crypto() {
         benchYield();
       }
     }
+    return true;
   });
   Serial.println(F("...running SHA1"));
-  TimedLoopResult sha1Result = runTimedLoop(minDurationMs, 10, [&]() {
+  TimedLoopResult sha1Result = runTimedLoop(minDurationMs, 10, [&]() -> bool {
     for (uint8_t i = 0; i < 10; i++) {
       if (checkCryptoTimeout()) {
-        return;
+        return false;
       }
       benchmarkSha1(input, inputSize, digest);
       checksum += digest[0];
@@ -1960,12 +1962,13 @@ void benchmarkESP32Crypto() {
         benchYield();
       }
     }
+    return true;
   });
   Serial.println(F("...running SHA256"));
-  TimedLoopResult sha256Result = runTimedLoop(minDurationMs, 10, [&]() {
+  TimedLoopResult sha256Result = runTimedLoop(minDurationMs, 10, [&]() -> bool {
     for (uint8_t i = 0; i < 10; i++) {
       if (checkCryptoTimeout()) {
-        return;
+        return false;
       }
       benchmarkSha256(input, inputSize, digest);
       checksum += digest[0];
@@ -1973,12 +1976,13 @@ void benchmarkESP32Crypto() {
         benchYield();
       }
     }
+    return true;
   });
   Serial.println(F("...running SHA512"));
-  TimedLoopResult sha512Result = runTimedLoop(minDurationMs, 10, [&]() {
+  TimedLoopResult sha512Result = runTimedLoop(minDurationMs, 10, [&]() -> bool {
     for (uint8_t i = 0; i < 10; i++) {
       if (checkCryptoTimeout()) {
-        return;
+        return false;
       }
       benchmarkSha512(input, inputSize, digest);
       checksum += digest[0];
@@ -1986,13 +1990,14 @@ void benchmarkESP32Crypto() {
         benchYield();
       }
     }
+    return true;
   });
 #if defined(MBEDTLS_SHA3_C)
   Serial.println(F("...running SHA3-256"));
-  TimedLoopResult sha3Result = runTimedLoop(minDurationMs, 5, [&]() {
+  TimedLoopResult sha3Result = runTimedLoop(minDurationMs, 5, [&]() -> bool {
     for (uint8_t i = 0; i < 5; i++) {
       if (checkCryptoTimeout()) {
-        return;
+        return false;
       }
       mbedtls_sha3_context sha3;
       mbedtls_sha3_init(&sha3);
@@ -2003,6 +2008,7 @@ void benchmarkESP32Crypto() {
       checksum += digest[0];
       benchYield();
     }
+    return true;
   });
   if (cryptoTimedOut) {
     return;
@@ -2018,9 +2024,9 @@ void benchmarkESP32Crypto() {
   const uint32_t pbkdf2Iterations = 500;
 
   Serial.println(F("...running PBKDF2-HMAC-SHA256"));
-  TimedLoopResult pbkdf2Result = runTimedLoop(minDurationMs, 1, [&]() {
+  TimedLoopResult pbkdf2Result = runTimedLoop(minDurationMs, 1, [&]() -> bool {
     if (checkCryptoTimeout()) {
-      return;
+      return false;
     }
 #if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x03000000
     if (mbedtls_pkcs5_pbkdf2_hmac_ext(MBEDTLS_MD_SHA256,
@@ -2056,6 +2062,7 @@ void benchmarkESP32Crypto() {
       lastProgressMs = millis();
     }
     benchYield();
+    return !checkCryptoTimeout();
   });
   Serial.print(F("Checksum: "));
   Serial.println(checksum);

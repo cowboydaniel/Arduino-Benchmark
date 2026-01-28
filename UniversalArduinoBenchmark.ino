@@ -1857,6 +1857,11 @@ void benchmarkESP32Crypto() {
   uint8_t digest[64];
   char hexDigest[129];
   volatile uint32_t checksum = 0;
+  auto benchYield = []() {
+#if defined(ESP32) || defined(ESP8266) || defined(ARDUINO_ARCH_RP2040)
+    yield();
+#endif
+  };
 
   auto toHex = [&](const uint8_t *data, size_t len, char *out) {
     static const char *kHex = "0123456789abcdef";
@@ -1910,6 +1915,9 @@ void benchmarkESP32Crypto() {
     for (uint8_t i = 0; i < 20; i++) {
       toHex(input, inputSize, hexDigest);
       checksum += hexDigest[0];
+      if ((i % 5) == 0) {
+        benchYield();
+      }
     }
   });
 
@@ -1917,6 +1925,9 @@ void benchmarkESP32Crypto() {
     for (uint8_t i = 0; i < 10; i++) {
       benchmarkMd5(input, inputSize, digest);
       checksum += digest[0];
+      if ((i % 3) == 0) {
+        benchYield();
+      }
     }
   });
 
@@ -1924,6 +1935,9 @@ void benchmarkESP32Crypto() {
     for (uint8_t i = 0; i < 10; i++) {
       benchmarkSha1(input, inputSize, digest);
       checksum += digest[0];
+      if ((i % 3) == 0) {
+        benchYield();
+      }
     }
   });
 
@@ -1931,6 +1945,9 @@ void benchmarkESP32Crypto() {
     for (uint8_t i = 0; i < 10; i++) {
       benchmarkSha256(input, inputSize, digest);
       checksum += digest[0];
+      if ((i % 3) == 0) {
+        benchYield();
+      }
     }
   });
 
@@ -1938,6 +1955,9 @@ void benchmarkESP32Crypto() {
     for (uint8_t i = 0; i < 10; i++) {
       benchmarkSha512(input, inputSize, digest);
       checksum += digest[0];
+      if ((i % 2) == 0) {
+        benchYield();
+      }
     }
   });
 
@@ -1951,6 +1971,7 @@ void benchmarkESP32Crypto() {
       mbedtls_sha3_finish(&sha3, digest);
       mbedtls_sha3_free(&sha3);
       checksum += digest[0];
+      benchYield();
     }
   });
 #endif
@@ -1993,6 +2014,7 @@ void benchmarkESP32Crypto() {
     }
     mbedtls_md_free(&ctx);
 #endif
+    benchYield();
   });
 
   Serial.print(F("Checksum: "));

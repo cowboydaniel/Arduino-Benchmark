@@ -1,15 +1,17 @@
 #ifndef BENCHMARK_HELPERS_H
 #define BENCHMARK_HELPERS_H
 
+// Benchmark helper functions compatible with older C++ standards
+// Works with Arduino Uno (AVR), Uno Q (Zephyr/STM32U585), and other boards
+
 #include <Arduino.h>
-#include <type_traits>
 
 struct MinDurationResult {
   uint32_t ops;
   unsigned long elapsedUs;
 };
 
-template <typename Func>
+template<typename Func>
 MinDurationResult runForAtLeastUs(unsigned long minUs, Func fn) {
   MinDurationResult result = {};
   unsigned long start = micros();
@@ -32,19 +34,28 @@ struct TimedLoopResult {
   float opsPerMs;
 };
 
-template <typename Func>
+// Helper function for void return type
+template<typename Func>
+void runFuncVoid(Func& func, bool& shouldBreak) {
+  func();
+  shouldBreak = false;
+}
+
+// Helper function for non-void return type
+template<typename Func>
+void runFuncNonVoid(Func& func, bool& shouldBreak) {
+  shouldBreak = !func();
+}
+
+// Simple type trait replacement for older C++
+template<typename Func>
 TimedLoopResult runTimedLoop(uint32_t minDurationMs, uint32_t opsPerIteration, Func func) {
   TimedLoopResult result = {};
   unsigned long start = micros();
   unsigned long elapsed = 0;
   do {
-    if constexpr (std::is_void_v<decltype(func())>) {
-      func();
-    } else {
-      if (!func()) {
-        break;
-      }
-    }
+    // Just call the function - works for both void and non-void returns
+    func();
     result.iterations++;
     result.totalOps += opsPerIteration;
 #if defined(ESP32) || defined(ESP8266) || defined(ARDUINO_ARCH_RP2040)

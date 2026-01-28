@@ -270,23 +270,44 @@
 #include <EEPROM.h>
 #define BOARD_AVR
 
-// Arduino Uno Q (STM32U585 MCU target)
-#elif defined(ARDUINO_UNO_Q)
+// Arduino Uno Q (Dual-processor: STM32U585 MCU + Qualcomm QRB2210 Linux MPU)
+// Uno Q can be detected via multiple defines depending on the core used
+#elif defined(ARDUINO_UNO_Q) || (defined(__ZEPHYR__) && defined(CONFIG_BOARD_ARDUINO_UNO_Q)) || defined(ARDUINO_ARDUINO_UNO_Q)
 #define BOARD_NAME "Arduino Uno Q (MCU)"
 #define BOARD_STM32U5
 #define BOARD_SRAM_KB 786
+#define BOARD_FLASH_KB 2048
+#define HAS_DUAL_PROCESSOR  // MCU + Linux MPU
 #if defined(__FPU_PRESENT) && (__FPU_PRESENT == 1)
 #define HAS_FPU
 #endif
 #define HAS_DSP
-#if defined(RNG) || defined(RNG_BASE)
-#define HAS_RNG
-#endif
+// For Zephyr-based Uno Q, use Zephyr APIs
+#if defined(__ZEPHYR__)
+// Zephyr RTOS is being used
+#define USING_ZEPHYR
+#else
+// Standard STM32 HAL (if using STM32duino core)
 #if __has_include("stm32u5xx_hal.h")
 #include "stm32u5xx_hal.h"
 #endif
 #if __has_include("stm32u5xx_hal_rng.h")
 #include "stm32u5xx_hal_rng.h"
+#endif
+#if defined(RNG) || defined(RNG_BASE)
+#define HAS_RNG
+#endif
+#endif
+// Arduino Bridge RPC for MCU<->Linux communication
+// Supports both RouterBridge (higher-level) and RPClite (lower-level)
+#if __has_include("Arduino_RouterBridge.h")
+#include "Arduino_RouterBridge.h"
+#define HAS_ROUTER_BRIDGE
+#define HAS_RPC_BRIDGE
+#elif __has_include("Arduino_RPClite.h")
+#include "Arduino_RPClite.h"
+#define HAS_RPCLITE
+#define HAS_RPC_BRIDGE
 #endif
 
 // STM32 Family (Blue Pill, Black Pill, Nucleo)
@@ -531,7 +552,13 @@ void benchmarkCPUStress() {
       result = result * 0.9999f + f2;
 #else
       result = result * 1.0001f + sqrtf((float)i);
+#if defined(__ZEPHYR__) || defined(BOARD_STM32U5)
+      // Manual fmod implementation for Zephyr (avoids libm linking issues)
+      float divisor = twoPi;
+      result = result - ((int)(result / divisor)) * divisor;
+#else
       result = fmodf(result, twoPi);
+#endif
       result = sinf(result) + cosf(result);
 #endif
       iterations++;
@@ -659,6 +686,78 @@ void benchmarkIntegerOps() {
   Serial.print(F(" μs ("));
   Serial.print(divResult.opsPerMs);
   Serial.println(F(" ops/ms)"));
+
+#if defined(BOARD_STM32U5) || defined(HAS_DSP)
+  // Enhanced tests for Cortex-M33 with DSP extensions
+  Serial.println();
+  Serial.println(F("--- DSP-Enhanced Integer Tests (Cortex-M33) ---"));
+  
+  // 64-bit integer operations (emulated on 32-bit MCU)
+  volatile uint64_t acc64 = 0x123456789ABCDEFULL;
+  TimedLoopResult mul64Result = runTimedLoop(minDurationMs, 50, [&]() {
+    for (uint32_t i = 1; i <= 50; i++) {
+      acc64 = (acc64 * (i | 1));  // 64-bit multiply
+    }
+  });
+  Serial.print(F("64-bit Multiply ("));
+  Serial.print(mul64Result.totalOps);
+  Serial.print(F(" ops): "));
+  Serial.print(mul64Result.opsPerMs);
+  Serial.println(F(" ops/ms"));
+  
+  // 64-bit division (expensive on 32-bit MCU)
+  acc64 = 0xFFFFFFFFFFFFFFFFULL;
+  TimedLoopResult div64Result = runTimedLoop(minDurationMs, 50, [&]() {
+    for (uint32_t i = 1; i <= 50; i++) {
+      uint64_t divisor = ((uint64_t)i * 123456) + 2;
+      acc64 = (acc64 / divisor) + i;
+    }
+  });
+  Serial.print(F("64-bit Divide ("));
+  Serial.print(div64Result.totalOps);
+  Serial.print(F(" ops): "));
+  Serial.print(div64Result.opsPerMs);
+  Serial.println(F(" ops/ms"));
+  
+  // MAC (Multiply-Accumulate) style operations - DSP strength
+  volatile int32_t macAcc = 0;
+  volatile int32_t macResult[4] = {0, 0, 0, 0};
+  startBenchmark();
+  for (uint32_t i = 0; i < 1000; i++) {
+    // Simulate DSP-style MAC operations
+    int32_t a = (int32_t)(i & 0xFFFF);
+    int32_t b = (int32_t)((i >> 8) & 0xFFFF);
+    macAcc += a * b;  // MAC operation
+    macResult[i % 4] += macAcc;
+  }
+  unsigned long macTime = endBenchmark();
+  Serial.print(F("MAC Operations (1000 ops): "));
+  Serial.print(macTime);
+  Serial.print(F(" μs ("));
+  Serial.print(1000000.0 / macTime);
+  Serial.println(F(" ops/ms)"));
+  Serial.print(F("MAC Checksum: "));
+  Serial.println(macAcc);
+  
+  // Saturating arithmetic (DSP-style)
+  volatile int32_t satAcc = 0;
+  startBenchmark();
+  for (uint32_t i = 0; i < 1000; i++) {
+    int32_t val = (int32_t)i * 1000000;
+    // Simulate saturating add (clamp to INT32_MAX)
+    if (satAcc > INT32_MAX - val) {
+      satAcc = INT32_MAX;
+    } else {
+      satAcc += val;
+    }
+  }
+  unsigned long satTime = endBenchmark();
+  Serial.print(F("Saturating Add (1000 ops): "));
+  Serial.print(satTime);
+  Serial.print(F(" μs ("));
+  Serial.print(1000000.0 / satTime);
+  Serial.println(F(" ops/ms)"));
+#endif
 }
 
 void benchmarkFloatOps() {
@@ -884,6 +983,112 @@ void benchmarkSRAM() {
   Serial.print(F(" ops/ms, "));
   Serial.print(kJitterTrials);
   Serial.println(F(" trials)"));
+
+#if defined(BOARD_STM32U5)
+  // Enhanced tests for STM32U585's 786 KB SRAM
+  Serial.println();
+  Serial.println(F("--- Enhanced SRAM Tests (STM32U585) ---"));
+  
+  // Large buffer memcpy test
+  const size_t LARGE_BUF_SIZE = 8192;  // 8 KB - safe for stack
+  uint8_t largeSrc[LARGE_BUF_SIZE];
+  uint8_t largeDst[LARGE_BUF_SIZE];
+  
+  // Initialize source buffer
+  for (size_t i = 0; i < LARGE_BUF_SIZE; i++) {
+    largeSrc[i] = (uint8_t)(i & 0xFF);
+  }
+  
+  // memcpy throughput test
+  startBenchmark();
+  for (int iter = 0; iter < 100; iter++) {
+    memcpy(largeDst, largeSrc, LARGE_BUF_SIZE);
+  }
+  unsigned long memcpyTime = endBenchmark();
+  
+  Serial.print(F("memcpy ("));
+  Serial.print(LARGE_BUF_SIZE * 100);
+  Serial.print(F(" bytes): "));
+  Serial.print(memcpyTime);
+  Serial.print(F(" μs ("));
+  Serial.print((LARGE_BUF_SIZE * 100.0) / memcpyTime);
+  Serial.println(F(" MB/s)"));
+  
+  // memset throughput test
+  startBenchmark();
+  for (int iter = 0; iter < 100; iter++) {
+    memset(largeDst, 0xAA, LARGE_BUF_SIZE);
+  }
+  unsigned long memsetTime = endBenchmark();
+  
+  Serial.print(F("memset ("));
+  Serial.print(LARGE_BUF_SIZE * 100);
+  Serial.print(F(" bytes): "));
+  Serial.print(memsetTime);
+  Serial.print(F(" μs ("));
+  Serial.print((LARGE_BUF_SIZE * 100.0) / memsetTime);
+  Serial.println(F(" MB/s)"));
+  
+  // Memory bandwidth test - tight loop
+  volatile uint32_t* ramPtr = (volatile uint32_t*)largeDst;
+  const size_t numWords = LARGE_BUF_SIZE / 4;
+  
+  startBenchmark();
+  for (int iter = 0; iter < 100; iter++) {
+    for (size_t i = 0; i < numWords; i++) {
+      ramPtr[i] = i;  // Sequential write
+    }
+  }
+  unsigned long bandwidthWriteTime = endBenchmark();
+  
+  startBenchmark();
+  volatile uint32_t sum = 0;
+  for (int iter = 0; iter < 100; iter++) {
+    for (size_t i = 0; i < numWords; i++) {
+      sum += ramPtr[i];  // Sequential read
+    }
+  }
+  unsigned long bandwidthReadTime = endBenchmark();
+  
+  Serial.print(F("RAM Write Bandwidth: "));
+  Serial.print((LARGE_BUF_SIZE * 100.0) / bandwidthWriteTime);
+  Serial.println(F(" MB/s"));
+  
+  Serial.print(F("RAM Read Bandwidth: "));
+  Serial.print((LARGE_BUF_SIZE * 100.0) / bandwidthReadTime);
+  Serial.println(F(" MB/s"));
+  Serial.print(F("Read sum: "));
+  Serial.println((uint32_t)sum);
+  
+  // Stack vs Heap comparison
+  Serial.println();
+  Serial.println(F("Stack vs Heap:"));
+  
+  // Stack allocation (already done above)
+  Serial.print(F("  Stack buffer ("));
+  Serial.print(LARGE_BUF_SIZE * 2);
+  Serial.println(F(" bytes): OK"));
+  
+  // Heap allocation test
+  uint8_t* heapBuf = (uint8_t*)malloc(LARGE_BUF_SIZE);
+  if (heapBuf != NULL) {
+    startBenchmark();
+    for (size_t i = 0; i < LARGE_BUF_SIZE; i++) {
+      heapBuf[i] = (uint8_t)i;
+    }
+    unsigned long heapWriteTime = endBenchmark();
+    
+    Serial.print(F("  Heap buffer ("));
+    Serial.print(LARGE_BUF_SIZE);
+    Serial.print(F(" bytes): "));
+    Serial.print(heapWriteTime);
+    Serial.println(F(" μs"));
+    
+    free(heapBuf);
+  } else {
+    Serial.println(F("  Heap allocation failed"));
+  }
+#endif
 }
 
 #if defined(EEPROM_h) || defined(ESP32) || defined(ESP8266)
@@ -1742,7 +1947,14 @@ void benchmarkAdvancedMath() {
   // fmod test
   startBenchmark();
   for (int i = 0; i < 1000; i++) {
+#if defined(__ZEPHYR__) || defined(BOARD_STM32U5)
+    // Manual fmod for Zephyr (avoids libm linking issues)
+    float val = (float)i;
+    float divisor = 7.3f;
+    checksum += val - ((int)(val / divisor)) * divisor;
+#else
     checksum += fmod((float)i, 7.3f);
+#endif
   }
   unsigned long fmodTime = endBenchmark();
 
@@ -2546,15 +2758,25 @@ void benchmarkSerialBaudRates() {
 
 // ==================== HARDWARE RNG BENCHMARK ====================
 
-#ifdef ESP32
+#if defined(ESP32) || defined(BOARD_STM32U5)
 void benchmarkHardwareRNG() {
   printHeader("CRYPTO: Hardware RNG");
+
+#if defined(ESP32)
+  Serial.println(F("Using ESP32 hardware RNG"));
+#elif defined(BOARD_STM32U5)
+  Serial.println(F("Using STM32U585 RNG"));
+#endif
 
   // Test RNG speed
   startBenchmark();
   volatile uint32_t rngSum = 0;
   for (int i = 0; i < 1000; i++) {
+#if defined(ESP32)
     rngSum += esp_random();
+#elif defined(BOARD_STM32U5)
+    rngSum += random(0, 0xFFFFFFFF);  // May use hardware RNG on Zephyr
+#endif
   }
   unsigned long rngTime = endBenchmark();
 
@@ -2570,7 +2792,11 @@ void benchmarkHardwareRNG() {
   // Test randomness distribution
   uint32_t bins[4] = { 0, 0, 0, 0 };
   for (int i = 0; i < 10000; i++) {
+#if defined(ESP32)
     uint32_t val = esp_random();
+#elif defined(BOARD_STM32U5)
+    uint32_t val = random(0, 0xFFFFFFFF);
+#endif
     bins[val % 4]++;
   }
 
@@ -2585,6 +2811,12 @@ void benchmarkHardwareRNG() {
     Serial.println(F("%)"));
   }
   Serial.println(F("(Ideal: 25% each bin)"));
+  
+#if defined(BOARD_STM32U5)
+  Serial.println();
+  Serial.println(F("NOTE: Using Arduino random(). For true hardware RNG,"));
+  Serial.println(F("      use Zephyr sys_rand32_get() if available."));
+#endif
 }
 #endif
 
@@ -2820,6 +3052,228 @@ void benchmarkSoftwareATSE() {
 
 #endif  // ARDUINO_UNOR4_WIFI
 
+// ==================== ARDUINO BRIDGE (UNO Q MCU<->LINUX) ====================
+
+#if defined(BOARD_STM32U5) && defined(HAS_DUAL_PROCESSOR)
+
+void benchmarkArduinoBridge() {
+  printHeader("ARDUINO BRIDGE (MCU<->LINUX RPC)");
+  
+#ifdef HAS_RPC_BRIDGE
+  Serial.println(F("Testing MCU<->Linux RPC communication..."));
+  Serial.println(F("Using MessagePack RPC over Serial1"));
+  Serial.println();
+  
+  // Note: For RouterBridge, Bridge object is pre-initialized
+  // For RPClite, we need to create transport and client
+  
+#ifdef HAS_ROUTER_BRIDGE
+  // Using Arduino_RouterBridge high-level API
+  Serial.println(F("Bridge Type: RouterBridge (high-level API)"));
+  Serial.println();
+  
+  // Test 1: Simple RPC call latency
+  Serial.println(F("1. RPC Call Latency Test"));
+  const int PING_COUNT = 50;
+  unsigned long totalLatency = 0;
+  int successfulCalls = 0;
+  
+  for (int i = 0; i < PING_COUNT; i++) {
+    unsigned long start = micros();
+    
+    // Call a simple echo/ping function on Linux side
+    // Assumes Linux has registered an "echo" or "ping" method
+    String result;
+    bool ok = Bridge.call("echo", result, "ping").result(result);
+    
+    unsigned long elapsed = micros() - start;
+    
+    if (ok) {
+      totalLatency += elapsed;
+      successfulCalls++;
+    }
+    
+    if (i % 10 == 0) {
+      yield();
+    }
+  }
+  
+  if (successfulCalls > 0) {
+    Serial.print(F("  Successful calls: "));
+    Serial.print(successfulCalls);
+    Serial.print(F("/"));
+    Serial.println(PING_COUNT);
+    Serial.print(F("  Average latency: "));
+    Serial.print(totalLatency / successfulCalls);
+    Serial.println(F(" µs"));
+    Serial.print(F("  Calls per second: "));
+    Serial.println((successfulCalls * 1000000.0) / totalLatency, 0);
+  } else {
+    Serial.println(F("  ERROR: No successful RPC calls"));
+    Serial.println(F("  Make sure Linux side has 'echo' method registered"));
+  }
+  Serial.println();
+  
+  // Test 2: Integer arithmetic RPC
+  Serial.println(F("2. Integer Arithmetic RPC Test"));
+  int mathTests = 0;
+  int mathSuccess = 0;
+  unsigned long mathTime = micros();
+  
+  for (int i = 0; i < 20; i++) {
+    int sum;
+    if (Bridge.call("add", sum, i, i+1).result(sum)) {
+      if (sum == (i + i + 1)) {
+        mathSuccess++;
+      }
+      mathTests++;
+    }
+  }
+  
+  mathTime = micros() - mathTime;
+  Serial.print(F("  Tests: "));
+  Serial.print(mathSuccess);
+  Serial.print(F("/"));
+  Serial.println(mathTests);
+  Serial.print(F("  Average time: "));
+  Serial.print(mathTime / mathTests);
+  Serial.println(F(" µs"));
+  Serial.println();
+  
+  // Test 3: String operations
+  Serial.println(F("3. String RPC Test"));
+  int strTests = 0;
+  int strSuccess = 0;
+  unsigned long strTime = micros();
+  
+  for (int i = 0; i < 10; i++) {
+    String message = "Test_" + String(i);
+    String response;
+    if (Bridge.call("loopback", response, message).result(response)) {
+      if (response == message) {
+        strSuccess++;
+      }
+      strTests++;
+    }
+  }
+  
+  strTime = micros() - strTime;
+  Serial.print(F("  Tests: "));
+  Serial.print(strSuccess);
+  Serial.print(F("/"));
+  Serial.println(strTests);
+  Serial.print(F("  Average time: "));
+  Serial.print(strTime / strTests);
+  Serial.println(F(" µs"));
+  Serial.println();
+  
+  // Test 4: Async call test
+  Serial.println(F("4. Async RPC Call Test"));
+  unsigned long asyncStart = micros();
+  
+  // Make multiple async calls
+  RpcCall call1 = Bridge.call("add", 10, 20);
+  RpcCall call2 = Bridge.call("add", 30, 40);
+  RpcCall call3 = Bridge.call("add", 50, 60);
+  
+  // Now wait for results
+  int result1, result2, result3;
+  bool ok1 = call1.result(result1);
+  bool ok2 = call2.result(result2);
+  bool ok3 = call3.result(result3);
+  
+  unsigned long asyncTime = micros() - asyncStart;
+  
+  Serial.print(F("  3 async calls completed in: "));
+  Serial.print(asyncTime);
+  Serial.println(F(" µs"));
+  if (ok1 && ok2 && ok3) {
+    Serial.print(F("  Results: "));
+    Serial.print(result1);
+    Serial.print(F(", "));
+    Serial.print(result2);
+    Serial.print(F(", "));
+    Serial.println(result3);
+  }
+  Serial.println();
+  
+  Serial.println(F("NOTE: These tests require corresponding RPC methods"));
+  Serial.println(F("      registered on the Linux side (echo, add, loopback)."));
+  Serial.println(F("      See Arduino_RouterBridge examples for Linux setup."));
+  
+#elif defined(HAS_RPCLITE)
+  // Using Arduino_RPClite low-level API
+  Serial.println(F("Bridge Type: RPClite (low-level API)"));
+  Serial.println();
+  
+  SerialTransport transport(Serial1);
+  RPCClient client(transport);
+  
+  Serial.println(F("1. RPC Call Latency Test"));
+  const int PING_COUNT = 50;
+  unsigned long totalLatency = 0;
+  int successfulCalls = 0;
+  
+  for (int i = 0; i < PING_COUNT; i++) {
+    unsigned long start = micros();
+    
+    String result;
+    bool ok = client.call("echo", result, "ping");
+    
+    unsigned long elapsed = micros() - start;
+    
+    if (ok) {
+      totalLatency += elapsed;
+      successfulCalls++;
+    }
+    
+    if (i % 10 == 0) {
+      yield();
+    }
+  }
+  
+  if (successfulCalls > 0) {
+    Serial.print(F("  Successful calls: "));
+    Serial.print(successfulCalls);
+    Serial.print(F("/"));
+    Serial.println(PING_COUNT);
+    Serial.print(F("  Average latency: "));
+    Serial.print(totalLatency / successfulCalls);
+    Serial.println(F(" µs"));
+  }
+  Serial.println();
+  
+  Serial.println(F("NOTE: RPClite requires manual transport setup."));
+  Serial.println(F("      Ensure Serial1 is properly initialized."));
+#endif
+  
+#else
+  Serial.println(F("Arduino RPC Bridge library not detected."));
+  Serial.println();
+  Serial.println(F("To enable Bridge/RPC benchmarks:"));
+  Serial.println(F("  1. Install Arduino_RouterBridge or Arduino_RPClite"));
+  Serial.println(F("  2. Ensure Linux side has RPC server running"));
+  Serial.println(F("  3. Register test methods (echo, add, loopback)"));
+  Serial.println(F("  4. Re-compile and upload sketch"));
+  Serial.println();
+  Serial.println(F("Library: github.com/arduino-libraries/Arduino_RouterBridge"));
+  Serial.println(F("Library: github.com/arduino-libraries/Arduino_RPClite"));
+#endif
+  
+  Serial.println();
+  Serial.println(F("Arduino Bridge benchmarks complete"));
+}
+
+#else  // !BOARD_STM32U5 || !HAS_DUAL_PROCESSOR
+
+// Stub function for non-Uno Q boards
+void benchmarkArduinoBridge() {
+  // This function intentionally left empty for non-Uno Q boards
+  // It won't be called due to compile-time guards in setup()
+}
+
+#endif  // BOARD_STM32U5 && HAS_DUAL_PROCESSOR
+
 // ==================== SYSTEM INFO ====================
 
 void printSystemInfo() {
@@ -2901,10 +3355,49 @@ void printSystemInfo() {
 #if defined(__IMXRT1062__)
   Serial.println(F("MCU: i.MX RT1062 (ARM Cortex-M7)"));
 #endif
+#elif defined(BOARD_STM32U5)
+  Serial.println(F("MCU: STM32U585 (ARM Cortex-M33)"));
+  Serial.print(F("MCU Frequency: "));
+  
+  // Try to get actual clock frequency
+#if defined(CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC)
+  Serial.print(CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000);
+#elif defined(F_CPU)
+  Serial.print(F_CPU / 1000000);
+#else
+  Serial.print(F("160"));  // STM32U585 default max frequency
+#endif
+  
+  Serial.println(F(" MHz"));
+  Serial.println(F("MCU Features: FPU, DSP, TrustZone"));
+  Serial.println(F("MCU RAM: 786 KB SRAM"));
+  Serial.println(F("MCU Flash: 2 MB"));
+#ifdef USING_ZEPHYR
+  Serial.println(F("MCU RTOS: Zephyr"));
+#endif
+  Serial.println();
+  Serial.println(F("Linux MPU: Qualcomm QRB2210"));
+  Serial.println(F("MPU: Quad Cortex-A53 @ up to 2.0 GHz"));
+  Serial.println(F("MPU RAM: 2-4 GB"));
+  Serial.println(F("MPU Storage: 16 GB eMMC"));
+  Serial.println(F("MPU OS: Debian-based Linux"));
+  Serial.println();
+  Serial.println(F("Communication: Arduino Bridge RPC (MCU<->Linux)"));
+#ifdef HAS_ROUTER_BRIDGE
+  Serial.println(F("RPC Library: Arduino_RouterBridge (MessagePack)"));
+#elif defined(HAS_RPCLITE)
+  Serial.println(F("RPC Library: Arduino_RPClite (MessagePack)"));
+#else
+  Serial.println(F("RPC Library: Not detected"));
+#endif
 #else
   Serial.print(F("CPU Frequency: "));
+#if defined(F_CPU)
   Serial.print(F_CPU / 1000000);
   Serial.println(F(" MHz"));
+#else
+  Serial.println(F("Unknown"));
+#endif
 #endif
 
   // RAM Info
@@ -3029,8 +3522,14 @@ void setup() {
   benchmarkESP32Crypto();
   benchmarkHardwareRNG();
 #endif
+#if defined(BOARD_STM32U5)
+  benchmarkHardwareRNG();
+#endif
 #if defined(ARDUINO_UNOR4_WIFI)
   benchmarkSoftwareATSE();
+#endif
+#if defined(BOARD_STM32U5) && defined(HAS_DUAL_PROCESSOR)
+  benchmarkArduinoBridge();
 #endif
 
   // Final summary

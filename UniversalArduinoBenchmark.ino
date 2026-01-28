@@ -92,8 +92,9 @@
 #define HAS_TEMPERATURE
 // RP2040 hardware register access
 #include "hardware/gpio.h"
-#if defined(ARDUINO_PICO_MAJOR_VERSION)
+#if defined(ARDUINO_ARCH_RP2040) && __has_include("pico/multicore.h")
 #include "pico/multicore.h"
+#define HAS_PICO_MULTICORE
 #endif
 
 // Renesas RA4M1 (Arduino Uno R4 WiFi & Minima)
@@ -1964,7 +1965,7 @@ void core1Task(void* parameter) {
 }
 #endif
 
-#if defined(ARDUINO_ARCH_RP2040) && defined(ARDUINO_PICO_MAJOR_VERSION)
+#if defined(ARDUINO_ARCH_RP2040) && defined(HAS_PICO_MULTICORE)
 volatile unsigned long rp2040Core0Count = 0;
 volatile unsigned long rp2040Core1Count = 0;
 volatile bool rp2040TestRunning = false;
@@ -2034,7 +2035,7 @@ void benchmarkMultiCore() {
 
 #elif defined(ARDUINO_ARCH_RP2040)
   Serial.println(F("RP2040 Dual-Core Test"));
-#if defined(ARDUINO_PICO_MAJOR_VERSION)
+#if defined(HAS_PICO_MULTICORE)
   Serial.println(F("Running dual-core workload for 1 second..."));
 
   rp2040Core0Count = 0;

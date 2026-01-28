@@ -368,7 +368,9 @@
 #endif
 
 #include "BenchmarkHelpers.h"
+#if defined(ESP32)
 #include <HEXBuilder.h>
+#endif
 
 // ==================== GLOBAL VARIABLES ====================
 uint8_t testBuffer[256];
@@ -1907,8 +1909,19 @@ void benchmarkESP32Crypto() {
     if (outCapacity < requiredSize) {
       return false;
     }
+#if defined(ESP32)
     size_t written = HEXBuilder::bytes2hex(out, outCapacity, data, len);
     return written >= requiredSize;
+#else
+    static const char kHexChars[] = "0123456789abcdef";
+    for (size_t i = 0; i < len; ++i) {
+      const uint8_t byteValue = data[i];
+      out[i * 2] = kHexChars[(byteValue >> 4) & 0x0F];
+      out[(i * 2) + 1] = kHexChars[byteValue & 0x0F];
+    }
+    out[len * 2] = '\0';
+    return true;
+#endif
   };
 
   const uint32_t minDurationMs = max(5UL, (gMinBenchUs + 999UL) / 1000UL);

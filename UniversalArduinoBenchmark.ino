@@ -2004,6 +2004,9 @@ void benchmarkESP32Crypto() {
       benchYield();
     }
   });
+  if (cryptoTimedOut) {
+    return;
+  }
 #endif
 
   const uint8_t saltSize = 16;

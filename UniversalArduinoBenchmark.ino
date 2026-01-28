@@ -331,6 +331,7 @@
 
 // ==================== GLOBAL VARIABLES ====================
 uint8_t testBuffer[256];
+unsigned long gMinBenchUs = 20000;
 
 // ==================== HELPER FUNCTIONS ====================
 
@@ -397,6 +398,30 @@ TimedLoopResult runTimedLoop(uint32_t minDurationMs, uint32_t opsPerIteration, F
   result.elapsedMicros = elapsed;
   result.opsPerMs = (result.totalOps * 1000.0f) / result.elapsedMicros;
   return result;
+}
+
+void calibrateBenchmarkTime() {
+  unsigned long start = micros();
+  unsigned long next = start;
+  uint32_t spins = 0;
+  while (next == start && spins < 100000) {
+    next = micros();
+    spins++;
+  }
+  unsigned long microsResolution = next - start;
+
+  unsigned long delayStart = micros();
+  delayMicroseconds(1000);
+  unsigned long delayElapsed = micros() - delayStart;
+  long delayError = abs((long)delayElapsed - 1000);
+
+  if (microsResolution <= 2 && delayError <= 5) {
+    gMinBenchUs = 5000;
+  } else if (microsResolution <= 8 && delayError <= 25) {
+    gMinBenchUs = 20000;
+  } else {
+    gMinBenchUs = 50000;
+  }
 }
 
 // ==================== CPU BENCHMARKS ====================
@@ -653,7 +678,7 @@ void benchmarkFloatOps() {
 void benchmarkStringOps() {
   printHeader("CPU: STRING OPERATIONS");
 
-  const uint32_t minDurationMs = 5;
+  const uint32_t minDurationMs = max(5UL, (gMinBenchUs + 999UL) / 1000UL);
 
   // String concatenation
   String testString = "";
@@ -1080,7 +1105,7 @@ void benchmarkDigitalIO() {
 void benchmarkAnalogIO() {
   printHeader("I/O: ANALOG OPERATIONS");
 
-  const uint32_t minDurationMs = 5;
+  const uint32_t minDurationMs = max(5UL, (gMinBenchUs + 999UL) / 1000UL);
 
 // Find analog pins
 #if defined(ESP32)
@@ -2073,6 +2098,8 @@ void printSystemInfo() {
 void setup() {
   Serial.begin(SERIAL_BAUD);
   delay(2000);  // Wait for serial connection
+
+  calibrateBenchmarkTime();
 
   Serial.println();
   Serial.println();

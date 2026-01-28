@@ -2010,6 +2010,9 @@ void benchmarkESP32Crypto() {
     }
     return true;
   });
+  if (cryptoTimedOut) {
+    return;
+  }
 #endif
 
   const uint8_t saltSize = 16;

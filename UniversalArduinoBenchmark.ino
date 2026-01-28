@@ -355,6 +355,29 @@ unsigned long endBenchmark() {
   return micros() - benchmarkStart;
 }
 
+struct TimedLoopResult {
+  unsigned long elapsedMicros;
+  uint32_t iterations;
+  uint32_t totalOps;
+  float opsPerMs;
+};
+
+template <typename Func>
+TimedLoopResult runTimedLoop(uint32_t minDurationMs, uint32_t opsPerIteration, Func func) {
+  TimedLoopResult result = {};
+  startBenchmark();
+  unsigned long elapsed = 0;
+  do {
+    func();
+    result.iterations++;
+    result.totalOps += opsPerIteration;
+    elapsed = micros() - benchmarkStart;
+  } while (elapsed < (minDurationMs * 1000UL));
+  result.elapsedMicros = elapsed;
+  result.opsPerMs = (result.totalOps * 1000.0f) / result.elapsedMicros;
+  return result;
+}
+
 // ==================== CPU BENCHMARKS ====================
 
 void benchmarkCPUStress() {
@@ -605,63 +628,74 @@ void benchmarkFloatOps() {
 void benchmarkStringOps() {
   printHeader("CPU: STRING OPERATIONS");
 
+  const uint32_t minDurationMs = 5;
+
   // String concatenation
-  startBenchmark();
   String testString = "";
-  for (int i = 0; i < 100; i++) {
-    testString += "X";
-  }
-  unsigned long concatTime = endBenchmark();
+  TimedLoopResult concatResult = runTimedLoop(minDurationMs, 100, [&]() {
+    testString = "";
+    for (int i = 0; i < 100; i++) {
+      testString += "X";
+    }
+  });
 
   // String comparison
   String str1 = "TestString123";
   String str2 = "TestString123";
-  startBenchmark();
   volatile bool cmpResult;
-  for (int i = 0; i < 1000; i++) {
-    cmpResult = (str1 == str2);
-  }
-  unsigned long cmpTime = endBenchmark();
+  TimedLoopResult cmpResultData = runTimedLoop(minDurationMs, 1000, [&]() {
+    for (int i = 0; i < 1000; i++) {
+      cmpResult = (str1 == str2);
+    }
+  });
 
   // Integer to String
-  startBenchmark();
   String numStr;
-  for (int i = 0; i < 1000; i++) {
-    numStr = String(i);
-  }
-  unsigned long toStrTime = endBenchmark();
+  TimedLoopResult toStrResult = runTimedLoop(minDurationMs, 1000, [&]() {
+    for (int i = 0; i < 1000; i++) {
+      numStr = String(i);
+    }
+  });
 
   // snprintf into fixed buffer (no heap allocation)
   char fixedBuffer[32];
   volatile int snprintfTotal = 0;
-  startBenchmark();
-  for (int i = 0; i < 1000; i++) {
-    snprintfTotal += snprintf(fixedBuffer, sizeof(fixedBuffer), "%d", i);
-  }
-  unsigned long snprintfTime = endBenchmark();
+  TimedLoopResult snprintfResult = runTimedLoop(minDurationMs, 1000, [&]() {
+    for (int i = 0; i < 1000; i++) {
+      snprintfTotal += snprintf(fixedBuffer, sizeof(fixedBuffer), "%d", i);
+    }
+  });
 
-  Serial.print(F("Arduino String (heap stress) - Concatenation (100 ops): "));
-  Serial.print(concatTime);
+  Serial.print(F("Arduino String (heap stress) - Concatenation ("));
+  Serial.print(concatResult.totalOps);
+  Serial.print(F(" ops): "));
+  Serial.print(concatResult.elapsedMicros);
   Serial.print(F(" μs ("));
-  Serial.print(100.0 / concatTime * 1000);
+  Serial.print(concatResult.opsPerMs);
   Serial.println(F(" ops/ms)"));
 
-  Serial.print(F("Arduino String (heap stress) - Comparison (1000 ops): "));
-  Serial.print(cmpTime);
+  Serial.print(F("Arduino String (heap stress) - Comparison ("));
+  Serial.print(cmpResultData.totalOps);
+  Serial.print(F(" ops): "));
+  Serial.print(cmpResultData.elapsedMicros);
   Serial.print(F(" μs ("));
-  Serial.print(1000.0 / cmpTime * 1000);
+  Serial.print(cmpResultData.opsPerMs);
   Serial.println(F(" ops/ms)"));
 
-  Serial.print(F("Arduino String (heap stress) - Int to String (1000 ops): "));
-  Serial.print(toStrTime);
+  Serial.print(F("Arduino String (heap stress) - Int to String ("));
+  Serial.print(toStrResult.totalOps);
+  Serial.print(F(" ops): "));
+  Serial.print(toStrResult.elapsedMicros);
   Serial.print(F(" μs ("));
-  Serial.print(1000.0 / toStrTime * 1000);
+  Serial.print(toStrResult.opsPerMs);
   Serial.println(F(" ops/ms)"));
 
-  Serial.print(F("snprintf (fixed buffer, 1000 ops): "));
-  Serial.print(snprintfTime);
+  Serial.print(F("snprintf (fixed buffer, "));
+  Serial.print(snprintfResult.totalOps);
+  Serial.print(F(" ops): "));
+  Serial.print(snprintfResult.elapsedMicros);
   Serial.print(F(" μs ("));
-  Serial.print(1000.0 / snprintfTime * 1000);
+  Serial.print(snprintfResult.opsPerMs);
   Serial.println(F(" ops/ms)"));
 }
 
@@ -1017,6 +1051,8 @@ void benchmarkDigitalIO() {
 void benchmarkAnalogIO() {
   printHeader("I/O: ANALOG OPERATIONS");
 
+  const uint32_t minDurationMs = 5;
+
 // Find analog pins
 #if defined(ESP32)
 #if defined(ARDUINO_NANO_ESP32)
@@ -1057,23 +1093,23 @@ void benchmarkAnalogIO() {
   if (analogInPin >= 0) {
     volatile uint32_t sum = 0;
     bool allZero = true;
-    startBenchmark();
-    for (int i = 0; i < 100; i++) {
+    TimedLoopResult readResult = runTimedLoop(minDurationMs, 1, [&]() {
       int value = analogRead(analogInPin);
       sum += value;
       if (value != 0) {
         allZero = false;
       }
-    }
-    unsigned long readTime = endBenchmark();
+    });
 
-    Serial.print(F("analogRead() (100 ops): "));
-    Serial.print(readTime);
+    Serial.print(F("analogRead() ("));
+    Serial.print(readResult.totalOps);
+    Serial.print(F(" ops): "));
+    Serial.print(readResult.elapsedMicros);
     Serial.print(F(" μs ("));
-    Serial.print(100.0 / readTime * 1000);
+    Serial.print(readResult.opsPerMs);
     Serial.println(F(" ops/ms)"));
     Serial.print(F("ADC average: "));
-    Serial.println((uint32_t)(sum / 100));
+    Serial.println((uint32_t)(sum / readResult.totalOps));
     if (allZero) {
       Serial.println(F("Warning: ADC reads were all zero; ADC pin may be invalid or floating."));
     }
@@ -1091,13 +1127,11 @@ void benchmarkAnalogIO() {
     ledcAttachPin(analogOutPin, pwmChannel);
     unsigned long setupTime = endBenchmark();
 
-    volatile uint32_t iterations = 0;
-    startBenchmark();
-    for (int i = 0; i < 100; i++) {
-      ledcWrite(pwmChannel, i % 256);
-      iterations++;
-    }
-    unsigned long updateTime = endBenchmark();
+    uint32_t pwmValue = 0;
+    TimedLoopResult updateResult = runTimedLoop(minDurationMs, 1, [&]() {
+      ledcWrite(pwmChannel, pwmValue % 256);
+      pwmValue++;
+    });
 
     Serial.print(F("PWM setup: "));
     Serial.print(setupTime);
@@ -1106,28 +1140,26 @@ void benchmarkAnalogIO() {
     Serial.println(F(" ops/ms)"));
 
     Serial.print(F("PWM duty update ("));
-    Serial.print(iterations);
+    Serial.print(updateResult.totalOps);
     Serial.print(F(" ops): "));
-    Serial.print(updateTime);
+    Serial.print(updateResult.elapsedMicros);
     Serial.print(F(" μs ("));
-    Serial.print(iterations * 1000.0 / updateTime);
+    Serial.print(updateResult.opsPerMs);
     Serial.println(F(" ops/ms)"));
 #else
     pinMode(analogOutPin, OUTPUT);
-    volatile uint32_t iterations = 0;
-    startBenchmark();
-    for (int i = 0; i < 100; i++) {
-      analogWrite(analogOutPin, i % 256);
-      iterations++;
-    }
-    unsigned long writeTime = endBenchmark();
+    uint32_t pwmValue = 0;
+    TimedLoopResult writeResult = runTimedLoop(minDurationMs, 1, [&]() {
+      analogWrite(analogOutPin, pwmValue % 256);
+      pwmValue++;
+    });
 
     Serial.print(F("analogWrite() ("));
-    Serial.print(iterations);
+    Serial.print(writeResult.totalOps);
     Serial.print(F(" ops): "));
-    Serial.print(writeTime);
+    Serial.print(writeResult.elapsedMicros);
     Serial.print(F(" μs ("));
-    Serial.print(iterations * 1000.0 / writeTime);
+    Serial.print(writeResult.opsPerMs);
     Serial.println(F(" ops/ms)"));
 #endif
   }

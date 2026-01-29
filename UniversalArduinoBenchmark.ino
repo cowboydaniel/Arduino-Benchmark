@@ -117,7 +117,9 @@
 #include "Arduino_LED_Matrix.h"
 #elif defined(ARDUINO_UNOR4_MINIMA)
 #define BOARD_NAME "Arduino Uno R4 Minima"
+#define HAS_LED_MATRIX
 #include <EEPROM.h>
+#include "Arduino_LED_Matrix.h"
 #elif defined(ARDUINO_ARCH_RENESAS)
 #define BOARD_NAME "Renesas (Uno R4 family)"
 #include <EEPROM.h>
@@ -197,7 +199,6 @@
 #define HAS_BLE
 #define HAS_DUAL_CORE
 #define BOARD_STM32H7
-#include <WiFi.h>
 
 // Arduino Mega + WiFi
 #elif defined(ARDUINO_AVR_MEGA2560)
@@ -1814,10 +1815,10 @@ void benchmarkWiFi() {
   SERIAL_OUT.print(F_STR("MAC Address: "));
   byte mac[6];
   WiFi.macAddress(mac);
-  for (int i = 0; i <= 5; i++) {
+  for (int i = 5; i >= 0; i--) {
     if (mac[i] < 16) SERIAL_OUT.print("0");
     SERIAL_OUT.print(mac[i], HEX);
-    if (i < 5) SERIAL_OUT.print(":");
+    if (i > 0) SERIAL_OUT.print(":");
   }
   SERIAL_OUT.println();
 #else
@@ -1825,10 +1826,10 @@ void benchmarkWiFi() {
   byte mac[6];
   WiFi.macAddress(mac);
   SERIAL_OUT.print(F_STR("MAC Address: "));
-  for (int i = 0; i <= 5; i++) {
+  for (int i = 5; i >= 0; i--) {
     if (mac[i] < 16) SERIAL_OUT.print("0");
     SERIAL_OUT.print(mac[i], HEX);
-    if (i < 5) SERIAL_OUT.print(":");
+    if (i > 0) SERIAL_OUT.print(":");
   }
   SERIAL_OUT.println();
 #endif
@@ -2741,26 +2742,56 @@ void benchmarkMultiCore() {
   printHeader("MULTI-CORE: Parallel Performance");
 
 #ifdef ESP32
-  SERIAL_OUT.println(F_STR("ESP32 Dual-Core Test"));
+  // Check number of cores available
+  uint8_t numCores = 1;
+  #if CONFIG_FREERTOS_UNICORE
+    numCores = 1;
+  #else
+    // For multi-core ESP32 variants, we can check portNUM_PROCESSORS or assume 2
+    #if defined(portNUM_PROCESSORS)
+      numCores = portNUM_PROCESSORS;
+    #elif !defined(CONFIG_IDF_TARGET_ESP32C6) && !defined(CONFIG_IDF_TARGET_ESP32C5) && !defined(CONFIG_IDF_TARGET_ESP32H2) && !defined(CONFIG_IDF_TARGET_ESP32C2) && !defined(CONFIG_IDF_TARGET_ESP32C3)
+      numCores = 2;  // Classic ESP32, S2, S3
+    #endif
+  #endif
 
-  // Create tasks on both cores
-  xTaskCreatePinnedToCore(
-    core0Task,
-    "Task0",
-    10000,
-    NULL,
-    1,
-    &Task1,
-    0);
+  if (numCores < 2) {
+    SERIAL_OUT.println(F_STR("Single-Core ESP32 Variant"));
+    SERIAL_OUT.println(F_STR("Running single-core workload for 1 second..."));
+    
+    volatile unsigned long count = 0;
+    volatile uint32_t accumulator = 0;
+    unsigned long start = millis();
+    while (millis() - start < 1000) {
+      count++;
+      accumulator += 3;
+      accumulator ^= (accumulator << 1);
+    }
+    
+    SERIAL_OUT.print(F_STR("Iterations in 1 second: "));
+    SERIAL_OUT.println(count);
+    SERIAL_OUT.println(F_STR("Note: This variant has only one core"));
+  } else {
+    SERIAL_OUT.println(F_STR("ESP32 Dual-Core Test"));
 
-  xTaskCreatePinnedToCore(
-    core1Task,
-    "Task1",
-    10000,
-    NULL,
-    1,
-    &Task2,
-    1);
+    // Create tasks on both cores
+    xTaskCreatePinnedToCore(
+      core0Task,
+      "Task0",
+      10000,
+      NULL,
+      1,
+      &Task1,
+      0);
+
+    xTaskCreatePinnedToCore(
+      core1Task,
+      "Task1",
+      10000,
+      NULL,
+      1,
+      &Task2,
+      1);
 
   delay(100);  // Let tasks start
 
@@ -2785,6 +2816,7 @@ void benchmarkMultiCore() {
   // Clean up
   vTaskDelete(Task1);
   vTaskDelete(Task2);
+  }  // End of multi-core else block
 
 #elif defined(ARDUINO_ARCH_RP2040)
   SERIAL_OUT.println(F_STR("RP2040 Dual-Core Test"));
@@ -2904,11 +2936,7 @@ void benchmarkSerialBaudRates() {
 
 #if defined(ESP32) || defined(BOARD_STM32U5)
 void benchmarkHardwareRNG() {
-#if defined(ESP32) || (defined(BOARD_STM32U5) && defined(__ZEPHYR__))
   printHeader("CRYPTO: Hardware RNG");
-#else
-  printHeader("CRYPTO: Pseudo RNG");
-#endif
 
 #if defined(ESP32)
   SERIAL_OUT.println(F_STR("Using ESP32 hardware RNG"));
@@ -2916,7 +2944,7 @@ void benchmarkHardwareRNG() {
   #if defined(__ZEPHYR__)
   SERIAL_OUT.println(F_STR("Using STM32U585 hardware RNG (Zephyr)"));
   #else
-  SERIAL_OUT.println(F_STR("Using STM32U585 pseudo RNG (Arduino random)"));
+  SERIAL_OUT.println(F_STR("Using STM32U585 RNG"));
   #endif
 #endif
 
@@ -2937,11 +2965,7 @@ void benchmarkHardwareRNG() {
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println(rngSum);
 
-#if defined(ESP32) || (defined(BOARD_STM32U5) && defined(__ZEPHYR__))
   SERIAL_OUT.print(F_STR("Hardware RNG (1000 values): "));
-#else
-  SERIAL_OUT.print(F_STR("Pseudo RNG (1000 values): "));
-#endif
   SERIAL_OUT.print(rngTime);
   SERIAL_OUT.print(F_STR(" μs ("));
   SERIAL_OUT.print(1000.0f / rngTime * 1000, 2);
@@ -3668,12 +3692,8 @@ void printSystemInfo() {
   SERIAL_OUT.print(F_STR("MCU: STM32H7 (ARM Cortex-M7)"));
   SERIAL_OUT.println();
   SERIAL_OUT.print(F_STR("CPU Frequency: "));
-#if defined(F_CPU)
   SERIAL_OUT.print(F_CPU / 1000000);
   SERIAL_OUT.println(F_STR(" MHz"));
-#else
-  SERIAL_OUT.println(F_STR("Unknown"));
-#endif
 #ifdef HAS_DUAL_CORE
   SERIAL_OUT.println(F_STR("Cores: Dual Core (M7 + M4)"));
 #endif

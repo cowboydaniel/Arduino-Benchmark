@@ -197,6 +197,7 @@
 #define HAS_BLE
 #define HAS_DUAL_CORE
 #define BOARD_STM32H7
+#include <WiFi.h>
 
 // Arduino Mega + WiFi
 #elif defined(ARDUINO_AVR_MEGA2560)
@@ -3667,8 +3668,12 @@ void printSystemInfo() {
   SERIAL_OUT.print(F_STR("MCU: STM32H7 (ARM Cortex-M7)"));
   SERIAL_OUT.println();
   SERIAL_OUT.print(F_STR("CPU Frequency: "));
+#if defined(F_CPU)
   SERIAL_OUT.print(F_CPU / 1000000);
   SERIAL_OUT.println(F_STR(" MHz"));
+#else
+  SERIAL_OUT.println(F_STR("Unknown"));
+#endif
 #ifdef HAS_DUAL_CORE
   SERIAL_OUT.println(F_STR("Cores: Dual Core (M7 + M4)"));
 #endif

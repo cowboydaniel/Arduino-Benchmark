@@ -3570,39 +3570,71 @@ void benchmarkSDCard() {
   Serial.println(F("SD card initialized successfully"));
   Serial.println();
   
-  // Get card info
-  Serial.println(F("Card Information:"));
-  uint8_t cardType = SD.cardType();
-  Serial.print(F("  Type: "));
-  switch(cardType) {
-    case SD_CARD_TYPE_SD1:
-      Serial.println(F("SD1"));
-      break;
-    case SD_CARD_TYPE_SD2:
-      Serial.println(F("SD2"));
-      break;
-    case SD_CARD_TYPE_SDHC:
-      Serial.println(F("SDHC"));
-      break;
-    default:
-      Serial.println(F("Unknown"));
+  // Detailed volume info and file listing (SD utility classes)
+  Sd2Card card;
+  SdVolume volume;
+  SdFile root;
+
+  if (card.init(SPI_HALF_SPEED, SD_CS_PIN)) {
+    Serial.println(F("Card Information:"));
+    Serial.print(F("  Type: "));
+    switch(card.type()) {
+      case SD_CARD_TYPE_SD1:
+        Serial.println(F("SD1"));
+        break;
+      case SD_CARD_TYPE_SD2:
+        Serial.println(F("SD2"));
+        break;
+      case SD_CARD_TYPE_SDHC:
+        Serial.println(F("SDHC"));
+        break;
+      default:
+        Serial.println(F("Unknown"));
+    }
+
+    uint32_t cardBlocks = card.cardSize();
+    uint32_t cardSizeMb = cardBlocks / 2048;  // 2048 blocks of 512 bytes per MB
+    Serial.print(F("  Size: "));
+    Serial.print(cardSizeMb);
+    Serial.println(F(" MB"));
+    Serial.println();
+
+    if (volume.init(card)) {
+      Serial.println(F("Filesystem Information:"));
+      Serial.print(F("  Clusters: "));
+      Serial.println(volume.clusterCount());
+      Serial.print(F("  Blocks x Cluster: "));
+      Serial.println(volume.blocksPerCluster());
+      Serial.print(F("  Total Blocks: "));
+      Serial.println(volume.blocksPerCluster() * volume.clusterCount());
+      Serial.print(F("  Volume type is: FAT"));
+      Serial.println(volume.fatType(), DEC);
+
+      uint32_t volumesize = volume.blocksPerCluster();
+      volumesize *= volume.clusterCount();
+      volumesize /= 2;  // 512 bytes per block
+      Serial.print(F("  Volume size (KB): "));
+      Serial.println(volumesize);
+      Serial.print(F("  Volume size (MB): "));
+      Serial.println(volumesize / 1024);
+      Serial.print(F("  Volume size (GB): "));
+      Serial.println((float)volumesize / 1024.0f / 1024.0f);
+      Serial.println();
+
+      Serial.println(F("Files found on the card (name, date and size in bytes):"));
+      root.openRoot(volume);
+      root.ls(LS_R | LS_DATE | LS_SIZE);
+      root.close();
+      Serial.println();
+    } else {
+      Serial.println(F("WARNING: Could not find FAT16/FAT32 partition."));
+      Serial.println(F("Make sure the card is formatted."));
+      Serial.println();
+    }
+  } else {
+    Serial.println(F("WARNING: Could not read SD card details via Sd2Card."));
+    Serial.println();
   }
-  
-  uint32_t cardSize = SD.cardSize() / (1024 * 1024);
-  Serial.print(F("  Size: "));
-  Serial.print(cardSize);
-  Serial.println(F(" MB"));
-  
-  uint32_t totalBytes = SD.totalBytes() / (1024 * 1024);
-  Serial.print(F("  Total: "));
-  Serial.print(totalBytes);
-  Serial.println(F(" MB"));
-  
-  uint32_t usedBytes = SD.usedBytes() / 1024;
-  Serial.print(F("  Used: "));
-  Serial.print(usedBytes);
-  Serial.println(F(" KB"));
-  Serial.println();
   
   // Initialize test buffer with pattern
   for (size_t i = 0; i < SD_BUFFER_SIZE; i++) {

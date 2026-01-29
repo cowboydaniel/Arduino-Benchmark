@@ -5,7 +5,23 @@
 // Works with Arduino Uno (AVR), Uno Q (Zephyr/STM32U585), and other boards
 
 #include <Arduino.h>
-#include <type_traits>
+
+namespace benchmark_detail {
+template<bool Value>
+struct bool_constant {
+  static const bool value = Value;
+  using type = bool_constant<Value>;
+};
+
+using true_type = bool_constant<true>;
+using false_type = bool_constant<false>;
+
+template<typename A, typename B>
+struct is_same : false_type {};
+
+template<typename A>
+struct is_same<A, A> : true_type {};
+}  // namespace benchmark_detail
 
 struct MinDurationResult {
   uint32_t ops;
@@ -49,13 +65,13 @@ void runFuncNonVoid(Func& func, bool& shouldBreak) {
 }
 
 template<typename Func>
-bool runFuncAndCheck(Func& func, std::true_type) {
+bool runFuncAndCheck(Func& func, benchmark_detail::true_type) {
   func();
   return true;
 }
 
 template<typename Func>
-bool runFuncAndCheck(Func& func, std::false_type) {
+bool runFuncAndCheck(Func& func, benchmark_detail::false_type) {
   return func();
 }
 
@@ -67,7 +83,7 @@ TimedLoopResult runTimedLoop(uint32_t minDurationMs, uint32_t opsPerIteration, F
   do {
     bool shouldContinue = runFuncAndCheck(
       func,
-      typename std::is_same<decltype(func()), void>::type()
+      typename benchmark_detail::is_same<decltype(func()), void>::type()
     );
     if (!shouldContinue) {
       elapsed = micros() - start;

@@ -214,7 +214,15 @@
 #elif defined(ARDUINO_AVR_MULTIDUINO)
 #define BOARD_NAME "Multiduino"
 #include <EEPROM.h>
+#include <Wire.h>
+#include <RTClib.h>  // Adafruit RTClib for DS1307
+#include <SD.h>
+#include <SPI.h>
 #define BOARD_AVR
+#define HAS_RTC
+#define HAS_SD_CARD
+#define SD_CS_PIN 10  // Adjust to your actual SD card CS pin
+#define RTC_I2C_ADDRESS 0x68  // Standard DS1307 I2C address
 
 // Arduino Uno
 #elif defined(ARDUINO_AVR_UNO)
@@ -398,6 +406,17 @@
 uint8_t testBuffer[256];
 unsigned long gMinBenchUs = 20000;
 const uint8_t kJitterTrials = 5;
+
+#ifdef HAS_RTC
+RTC_DS1307 rtc;
+#endif
+
+#ifdef HAS_SD_CARD
+File testFile;
+const char* TEST_FILENAME = "bench.dat";
+const size_t SD_BUFFER_SIZE = 512;  // Standard SD block size
+uint8_t sdBuffer[SD_BUFFER_SIZE];
+#endif
 
 // ==================== HELPER FUNCTIONS ====================
 
@@ -984,111 +1003,116 @@ void benchmarkSRAM() {
   Serial.print(kJitterTrials);
   Serial.println(F(" trials)"));
 
+  // Enhanced memory tests - scaled by available RAM
+  Serial.println();
+  Serial.println(F("--- Memory Bandwidth Tests ---"));
+  
+  // Scale buffer size based on available RAM
+  size_t bufSize;
 #if defined(BOARD_STM32U5)
-  // Enhanced tests for STM32U585's 786 KB SRAM
-  Serial.println();
-  Serial.println(F("--- Enhanced SRAM Tests (STM32U585) ---"));
-  
-  // Large buffer memcpy test
-  const size_t LARGE_BUF_SIZE = 8192;  // 8 KB - safe for stack
-  uint8_t largeSrc[LARGE_BUF_SIZE];
-  uint8_t largeDst[LARGE_BUF_SIZE];
-  
-  // Initialize source buffer
-  for (size_t i = 0; i < LARGE_BUF_SIZE; i++) {
-    largeSrc[i] = (uint8_t)(i & 0xFF);
-  }
-  
-  // memcpy throughput test
-  startBenchmark();
-  for (int iter = 0; iter < 100; iter++) {
-    memcpy(largeDst, largeSrc, LARGE_BUF_SIZE);
-  }
-  unsigned long memcpyTime = endBenchmark();
-  
-  Serial.print(F("memcpy ("));
-  Serial.print(LARGE_BUF_SIZE * 100);
-  Serial.print(F(" bytes): "));
-  Serial.print(memcpyTime);
-  Serial.print(F(" μs ("));
-  Serial.print((LARGE_BUF_SIZE * 100.0) / memcpyTime);
-  Serial.println(F(" MB/s)"));
-  
-  // memset throughput test
-  startBenchmark();
-  for (int iter = 0; iter < 100; iter++) {
-    memset(largeDst, 0xAA, LARGE_BUF_SIZE);
-  }
-  unsigned long memsetTime = endBenchmark();
-  
-  Serial.print(F("memset ("));
-  Serial.print(LARGE_BUF_SIZE * 100);
-  Serial.print(F(" bytes): "));
-  Serial.print(memsetTime);
-  Serial.print(F(" μs ("));
-  Serial.print((LARGE_BUF_SIZE * 100.0) / memsetTime);
-  Serial.println(F(" MB/s)"));
-  
-  // Memory bandwidth test - tight loop
-  volatile uint32_t* ramPtr = (volatile uint32_t*)largeDst;
-  const size_t numWords = LARGE_BUF_SIZE / 4;
-  
-  startBenchmark();
-  for (int iter = 0; iter < 100; iter++) {
-    for (size_t i = 0; i < numWords; i++) {
-      ramPtr[i] = i;  // Sequential write
-    }
-  }
-  unsigned long bandwidthWriteTime = endBenchmark();
-  
-  startBenchmark();
-  volatile uint32_t sum = 0;
-  for (int iter = 0; iter < 100; iter++) {
-    for (size_t i = 0; i < numWords; i++) {
-      sum += ramPtr[i];  // Sequential read
-    }
-  }
-  unsigned long bandwidthReadTime = endBenchmark();
-  
-  Serial.print(F("RAM Write Bandwidth: "));
-  Serial.print((LARGE_BUF_SIZE * 100.0) / bandwidthWriteTime);
-  Serial.println(F(" MB/s"));
-  
-  Serial.print(F("RAM Read Bandwidth: "));
-  Serial.print((LARGE_BUF_SIZE * 100.0) / bandwidthReadTime);
-  Serial.println(F(" MB/s"));
-  Serial.print(F("Read sum: "));
-  Serial.println((uint32_t)sum);
-  
-  // Stack vs Heap comparison
-  Serial.println();
-  Serial.println(F("Stack vs Heap:"));
-  
-  // Stack allocation (already done above)
-  Serial.print(F("  Stack buffer ("));
-  Serial.print(LARGE_BUF_SIZE * 2);
-  Serial.println(F(" bytes): OK"));
-  
-  // Heap allocation test
-  uint8_t* heapBuf = (uint8_t*)malloc(LARGE_BUF_SIZE);
-  if (heapBuf != NULL) {
-    startBenchmark();
-    for (size_t i = 0; i < LARGE_BUF_SIZE; i++) {
-      heapBuf[i] = (uint8_t)i;
-    }
-    unsigned long heapWriteTime = endBenchmark();
-    
-    Serial.print(F("  Heap buffer ("));
-    Serial.print(LARGE_BUF_SIZE);
-    Serial.print(F(" bytes): "));
-    Serial.print(heapWriteTime);
-    Serial.println(F(" μs"));
-    
-    free(heapBuf);
-  } else {
-    Serial.println(F("  Heap allocation failed"));
-  }
+  bufSize = 8192;  // 8 KB for 786 KB RAM
+  Serial.println(F("Using 8 KB buffers (786 KB SRAM)"));
+#elif defined(ESP32)
+  bufSize = 8192;  // 8 KB
+  Serial.println(F("Using 8 KB buffers (large heap)"));
+#elif defined(ARDUINO_ARCH_RP2040)
+  bufSize = 4096;  // 4 KB for 264 KB RAM
+  Serial.println(F("Using 4 KB buffers (264 KB RAM)"));
+#elif defined(ARDUINO_SAM_DUE)
+  bufSize = 2048;  // 2 KB for 96 KB RAM
+  Serial.println(F("Using 2 KB buffers (96 KB RAM)"));
+#elif defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
+  bufSize = 1024;  // 1 KB for 32 KB RAM
+  Serial.println(F("Using 1 KB buffers (32 KB RAM)"));
+#elif defined(__AVR_ATmega2560__)
+  bufSize = 512;   // 512 bytes for 8 KB RAM
+  Serial.println(F("Using 512 byte buffers (8 KB RAM)"));
+#elif defined(__AVR__)
+  bufSize = 256;   // 256 bytes for 2 KB RAM (already tested above)
+  Serial.println(F("Using 256 byte buffers (2 KB RAM)"));
+#else
+  bufSize = 512;   // Conservative default
+  Serial.println(F("Using 512 byte buffers"));
 #endif
+
+  // Allocate buffers on heap for safety
+  uint8_t* largeSrc = (uint8_t*)malloc(bufSize);
+  uint8_t* largeDst = (uint8_t*)malloc(bufSize);
+  
+  if (largeSrc == NULL || largeDst == NULL) {
+    Serial.println(F("ERROR: Could not allocate test buffers"));
+    if (largeSrc) free(largeSrc);
+    if (largeDst) free(largeDst);
+  } else {
+    // Initialize source buffer
+    for (size_t i = 0; i < bufSize; i++) {
+      largeSrc[i] = (uint8_t)(i & 0xFF);
+    }
+    
+    // memcpy throughput test
+    int iterations = (bufSize >= 1024) ? 100 : 200;  // More iterations for small buffers
+    startBenchmark();
+    for (int iter = 0; iter < iterations; iter++) {
+      memcpy(largeDst, largeSrc, bufSize);
+    }
+    unsigned long memcpyTime = endBenchmark();
+    
+    Serial.print(F("memcpy ("));
+    Serial.print(bufSize * iterations);
+    Serial.print(F(" bytes): "));
+    Serial.print(memcpyTime);
+    Serial.print(F(" μs ("));
+    Serial.print((bufSize * iterations * 1.0) / memcpyTime);
+    Serial.println(F(" MB/s)"));
+    
+    // memset throughput test
+    startBenchmark();
+    for (int iter = 0; iter < iterations; iter++) {
+      memset(largeDst, 0xAA, bufSize);
+    }
+    unsigned long memsetTime = endBenchmark();
+    
+    Serial.print(F("memset ("));
+    Serial.print(bufSize * iterations);
+    Serial.print(F(" bytes): "));
+    Serial.print(memsetTime);
+    Serial.print(F(" μs ("));
+    Serial.print((bufSize * iterations * 1.0) / memsetTime);
+    Serial.println(F(" MB/s)"));
+    
+    // Memory bandwidth test - tight loop
+    volatile uint32_t* ramPtr = (volatile uint32_t*)largeDst;
+    const size_t numWords = bufSize / 4;
+    
+    startBenchmark();
+    for (int iter = 0; iter < iterations; iter++) {
+      for (size_t i = 0; i < numWords; i++) {
+        ramPtr[i] = i;  // Sequential write
+      }
+    }
+    unsigned long bandwidthWriteTime = endBenchmark();
+    
+    startBenchmark();
+    volatile uint32_t sum = 0;
+    for (int iter = 0; iter < iterations; iter++) {
+      for (size_t i = 0; i < numWords; i++) {
+        sum += ramPtr[i];  // Sequential read
+      }
+    }
+    unsigned long bandwidthReadTime = endBenchmark();
+    
+    Serial.print(F("RAM Write Bandwidth: "));
+    Serial.print((bufSize * iterations * 1.0) / bandwidthWriteTime);
+    Serial.println(F(" MB/s"));
+    
+    Serial.print(F("RAM Read Bandwidth: "));
+    Serial.print((bufSize * iterations * 1.0) / bandwidthReadTime);
+    Serial.println(F(" MB/s"));
+    
+    // Clean up
+    free(largeSrc);
+    free(largeDst);
+  }
 }
 
 #if defined(EEPROM_h) || defined(ESP32) || defined(ESP8266)
@@ -2433,14 +2457,51 @@ void benchmarkTimingPrecision() {
   Serial.print(millisError);
   Serial.println(F(" ms error)"));
 
-  // Test micros() resolution
+  // Test micros() resolution - wait for value to change to measure granularity
   unsigned long micro1 = micros();
-  unsigned long micro2 = micros();
+  unsigned long micro2 = micro1;
+  uint16_t iterations = 0;
+  const uint16_t maxIterations = 10000;
+  
+  // Wait for micros() to increment
+  while (micro2 == micro1 && iterations < maxIterations) {
+    micro2 = micros();
+    iterations++;
+  }
+  
   unsigned long microResolution = micro2 - micro1;
-
+  
   Serial.print(F("micros() resolution: "));
-  Serial.print(microResolution);
+  if (iterations >= maxIterations) {
+    Serial.println(F("TIMEOUT (timer may not be running)"));
+  } else {
+    Serial.print(microResolution);
+    Serial.print(F(" μs (detected after "));
+    Serial.print(iterations);
+    Serial.println(F(" reads)"));
+  }
+  
+  // Additional resolution test - measure minimum measurable difference
+  unsigned long minDiff = 0xFFFFFFFF;
+  for (int i = 0; i < 100; i++) {
+    unsigned long t1 = micros();
+    unsigned long t2 = micros();
+    while (t2 == t1) {
+      t2 = micros();
+    }
+    unsigned long diff = t2 - t1;
+    if (diff > 0 && diff < minDiff) {
+      minDiff = diff;
+    }
+  }
+  
+  Serial.print(F("Minimum step size (100 samples): "));
+  Serial.print(minDiff);
   Serial.println(F(" μs"));
+  
+#if defined(__AVR__)
+  Serial.println(F("Note: AVR micros() typically advances in 4 μs steps"));
+#endif
 
   // Test micros() consistency over short period
   unsigned long startMicros = micros();
@@ -2522,15 +2583,40 @@ int testRecursion(int depth) {
 void benchmarkStackDepth() {
   printHeader("MEMORY: Stack Depth Test");
 
-#if defined(__AVR__)
-  Serial.println(F("Stack depth test skipped on low-SRAM AVR targets."));
-  Serial.println(F("Reason: recursion can exhaust limited SRAM quickly."));
-  return;
+  // Scale test depth based on available RAM to avoid overflow
+  int testDepth;
+  
+#if defined(BOARD_STM32U5)
+  testDepth = 500;  // 786 KB RAM - can go deep
+  Serial.println(F("Testing deep recursion (786 KB SRAM)"));
+#elif defined(ESP32)
+  testDepth = 500;  // ESP32 has plenty of RAM
+  Serial.println(F("Testing deep recursion (large heap)"));
+#elif defined(ARDUINO_ARCH_RP2040)
+  testDepth = 300;  // 264 KB RAM
+  Serial.println(F("Testing deep recursion (264 KB RAM)"));
+#elif defined(ARDUINO_SAM_DUE)
+  testDepth = 200;  // 96 KB RAM
+  Serial.println(F("Testing moderate recursion (96 KB RAM)"));
+#elif defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
+  testDepth = 100;  // 32 KB RAM - be conservative
+  Serial.println(F("Testing moderate recursion (32 KB RAM)"));
+#elif defined(BOARD_SAMD) || defined(BOARD_NRF52)
+  testDepth = 100;  // Typically 32-256 KB
+  Serial.println(F("Testing moderate recursion (ARM)"));
+#elif defined(__AVR_ATmega2560__)
+  testDepth = 40;   // 8 KB RAM - deeper than Uno
+  Serial.println(F("Testing shallow recursion (8 KB RAM)"));
+#elif defined(__AVR__)
+  testDepth = 20;   // 2-2.5 KB RAM - very conservative
+  Serial.println(F("Testing shallow recursion (2 KB RAM)"));
+#else
+  testDepth = 50;   // Conservative default
+  Serial.println(F("Testing moderate recursion (unknown RAM)"));
 #endif
 
   // Test safe recursion depth
   recursionCounter = 0;
-  int testDepth = 100;
   int result = testRecursion(testDepth);
   (void)result;
 
@@ -2539,10 +2625,27 @@ void benchmarkStackDepth() {
   Serial.print(F(" deep): "));
   if (recursionCounter == testDepth + 1) {
     Serial.println(F("PASS"));
+    Serial.print(F("Successfully executed "));
+    Serial.print(testDepth);
+    Serial.println(F(" nested function calls"));
   } else {
-    Serial.println(F("FAIL"));
+    Serial.print(F("FAIL - reached depth "));
+    Serial.println(recursionCounter);
   }
-  Serial.println(F("Per-call stack usage not measured on this platform."));
+  
+  // Estimate stack usage per call (very rough)
+  // Each recursive call typically uses 20-50 bytes on ARM, more on some platforms
+#if defined(BOARD_STM32U5) || defined(ESP32) || defined(ARDUINO_ARCH_RP2040)
+  Serial.print(F("Estimated stack usage: ~"));
+  Serial.print(testDepth * 40);  // Rough estimate: 40 bytes/call
+  Serial.println(F(" bytes"));
+#elif defined(__AVR__)
+  Serial.print(F("Estimated stack usage: ~"));
+  Serial.print(testDepth * 30);  // AVR: ~30 bytes/call typical
+  Serial.println(F(" bytes"));
+#endif
+  
+  Serial.println(F("Note: Actual stack usage varies by compiler and optimization."));
 }
 
 // ==================== MULTI-CORE BENCHMARKS ====================
@@ -3274,6 +3377,402 @@ void benchmarkArduinoBridge() {
 
 #endif  // BOARD_STM32U5 && HAS_DUAL_PROCESSOR
 
+// ==================== MULTIDUINO-SPECIFIC BENCHMARKS ====================
+
+#ifdef HAS_RTC
+void benchmarkRTC() {
+  printHeader("RTC BENCHMARK (DS1307)");
+  
+  // Initialize RTC
+  if (!rtc.begin()) {
+    Serial.println(F("ERROR: RTC not found!"));
+    Serial.println(F("Check wiring: SDA->A4, SCL->A5"));
+    Serial.println();
+    return;
+  }
+  
+  Serial.println(F("RTC initialized successfully"));
+  
+  // Check if RTC is running
+  if (!rtc.isrunning()) {
+    Serial.println(F("WARNING: RTC is not running!"));
+    Serial.println(F("Starting RTC and setting time..."));
+    // Set to compile time as default
+    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  }
+  
+  // Display current time
+  DateTime now = rtc.now();
+  Serial.print(F("Current Time: "));
+  Serial.print(now.year(), DEC);
+  Serial.print('/');
+  if (now.month() < 10) Serial.print('0');
+  Serial.print(now.month(), DEC);
+  Serial.print('/');
+  if (now.day() < 10) Serial.print('0');
+  Serial.print(now.day(), DEC);
+  Serial.print(" ");
+  if (now.hour() < 10) Serial.print('0');
+  Serial.print(now.hour(), DEC);
+  Serial.print(':');
+  if (now.minute() < 10) Serial.print('0');
+  Serial.print(now.minute(), DEC);
+  Serial.print(':');
+  if (now.second() < 10) Serial.print('0');
+  Serial.println(now.second(), DEC);
+  Serial.println();
+  
+  // Benchmark 1: RTC Read Speed
+  Serial.println(F("Test: RTC Read Speed"));
+  volatile uint32_t readChecksum = 0;
+  unsigned long startTime = micros();
+  uint32_t reads = 0;
+  
+  unsigned long testDuration = 1000000UL; // 1 second
+  while (micros() - startTime < testDuration) {
+    DateTime reading = rtc.now();
+    readChecksum += reading.unixtime();
+    reads++;
+  }
+  unsigned long elapsed = micros() - startTime;
+  
+  float readsPerMs = (reads * 1000.0f) / elapsed;
+  Serial.print(F("  Reads: "));
+  Serial.print(reads);
+  Serial.print(F(" in "));
+  Serial.print(elapsed / 1000.0f, 2);
+  Serial.println(F(" ms"));
+  Serial.print(F("  Speed: "));
+  Serial.print(readsPerMs, 2);
+  Serial.println(F(" reads/ms"));
+  Serial.print(F("  Time per read: "));
+  Serial.print((float)elapsed / reads, 2);
+  Serial.println(F(" μs"));
+  Serial.print(F("  Checksum: 0x"));
+  Serial.println((unsigned long)readChecksum, HEX);
+  Serial.println();
+  
+  // Benchmark 2: RTC Write Speed (Using adjust - time setting)
+  Serial.println(F("Test: RTC Write Speed (Time Adjust)"));
+  startTime = micros();
+  uint32_t writes = 0;
+  
+  testDuration = 1000000UL; // 1 second
+  DateTime testTime = DateTime(2025, 1, 1, 12, 0, 0);
+  while (micros() - startTime < testDuration) {
+    rtc.adjust(testTime);
+    writes++;
+  }
+  elapsed = micros() - startTime;
+  
+  // Restore current time
+  rtc.adjust(now);
+  
+  float writesPerMs = (writes * 1000.0f) / elapsed;
+  Serial.print(F("  Writes: "));
+  Serial.print(writes);
+  Serial.print(F(" in "));
+  Serial.print(elapsed / 1000.0f, 2);
+  Serial.println(F(" ms"));
+  Serial.print(F("  Speed: "));
+  Serial.print(writesPerMs, 2);
+  Serial.println(F(" writes/ms"));
+  Serial.print(F("  Time per write: "));
+  Serial.print((float)elapsed / writes, 2);
+  Serial.println(F(" μs"));
+  Serial.println();
+  
+  // Benchmark 3: NVRAM Read/Write Speed (DS1307 has 56 bytes of NVRAM)
+  Serial.println(F("Test: NVRAM Read/Write (56 bytes)"));
+  const uint8_t nvramSize = 56;
+  uint8_t nvramData[nvramSize];
+  
+  // Write test
+  for (uint8_t i = 0; i < nvramSize; i++) {
+    nvramData[i] = i;
+  }
+  
+  startTime = micros();
+  uint32_t nvramWrites = 0;
+  testDuration = 1000000UL; // 1 second
+  
+  while (micros() - startTime < testDuration) {
+    for (uint8_t addr = 0; addr < nvramSize; addr++) {
+      rtc.writenvram(addr, nvramData[addr]);
+    }
+    nvramWrites++;
+  }
+  elapsed = micros() - startTime;
+  
+  uint32_t totalBytesWritten = nvramWrites * nvramSize;
+  float nvramWriteSpeed = (totalBytesWritten * 1000.0f) / elapsed;
+  
+  Serial.print(F("  NVRAM Writes: "));
+  Serial.print(totalBytesWritten);
+  Serial.print(F(" bytes in "));
+  Serial.print(elapsed / 1000.0f, 2);
+  Serial.println(F(" ms"));
+  Serial.print(F("  Speed: "));
+  Serial.print(nvramWriteSpeed, 2);
+  Serial.println(F(" bytes/ms"));
+  
+  // Read test
+  volatile uint32_t nvramChecksum = 0;
+  startTime = micros();
+  uint32_t nvramReads = 0;
+  
+  while (micros() - startTime < testDuration) {
+    for (uint8_t addr = 0; addr < nvramSize; addr++) {
+      nvramChecksum += rtc.readnvram(addr);
+    }
+    nvramReads++;
+  }
+  elapsed = micros() - startTime;
+  
+  uint32_t totalBytesRead = nvramReads * nvramSize;
+  float nvramReadSpeed = (totalBytesRead * 1000.0f) / elapsed;
+  
+  Serial.print(F("  NVRAM Reads: "));
+  Serial.print(totalBytesRead);
+  Serial.print(F(" bytes in "));
+  Serial.print(elapsed / 1000.0f, 2);
+  Serial.println(F(" ms"));
+  Serial.print(F("  Speed: "));
+  Serial.print(nvramReadSpeed, 2);
+  Serial.println(F(" bytes/ms"));
+  Serial.print(F("  Checksum: 0x"));
+  Serial.println((unsigned long)nvramChecksum, HEX);
+  Serial.println();
+  
+  Serial.println(F("RTC benchmarks complete"));
+}
+#endif  // HAS_RTC
+
+#ifdef HAS_SD_CARD
+void benchmarkSDCard() {
+  printHeader("SD CARD BENCHMARK");
+  
+  // Initialize SD card
+  Serial.print(F("Initializing SD card on CS pin "));
+  Serial.print(SD_CS_PIN);
+  Serial.println(F("..."));
+  
+  if (!SD.begin(SD_CS_PIN)) {
+    Serial.println(F("ERROR: SD card initialization failed!"));
+    Serial.println(F("Check:"));
+    Serial.println(F("  - SD card is inserted"));
+    Serial.println(F("  - CS pin is correct"));
+    Serial.println(F("  - Wiring: MOSI->11, MISO->12, SCK->13"));
+    Serial.println();
+    return;
+  }
+  
+  Serial.println(F("SD card initialized successfully"));
+  Serial.println();
+  
+  // Get card info
+  Serial.println(F("Card Information:"));
+  uint8_t cardType = SD.cardType();
+  Serial.print(F("  Type: "));
+  switch(cardType) {
+    case SD_CARD_TYPE_SD1:
+      Serial.println(F("SD1"));
+      break;
+    case SD_CARD_TYPE_SD2:
+      Serial.println(F("SD2"));
+      break;
+    case SD_CARD_TYPE_SDHC:
+      Serial.println(F("SDHC"));
+      break;
+    default:
+      Serial.println(F("Unknown"));
+  }
+  
+  uint32_t cardSize = SD.cardSize() / (1024 * 1024);
+  Serial.print(F("  Size: "));
+  Serial.print(cardSize);
+  Serial.println(F(" MB"));
+  
+  uint32_t totalBytes = SD.totalBytes() / (1024 * 1024);
+  Serial.print(F("  Total: "));
+  Serial.print(totalBytes);
+  Serial.println(F(" MB"));
+  
+  uint32_t usedBytes = SD.usedBytes() / 1024;
+  Serial.print(F("  Used: "));
+  Serial.print(usedBytes);
+  Serial.println(F(" KB"));
+  Serial.println();
+  
+  // Initialize test buffer with pattern
+  for (size_t i = 0; i < SD_BUFFER_SIZE; i++) {
+    sdBuffer[i] = (uint8_t)(i & 0xFF);
+  }
+  
+  // Benchmark 1: Sequential Write
+  Serial.println(F("Test: Sequential Write (512-byte blocks)"));
+  
+  // Remove old test file if exists
+  if (SD.exists(TEST_FILENAME)) {
+    SD.remove(TEST_FILENAME);
+  }
+  
+  testFile = SD.open(TEST_FILENAME, FILE_WRITE);
+  if (!testFile) {
+    Serial.println(F("ERROR: Could not create test file"));
+    return;
+  }
+  
+  const uint32_t writeBlocks = 100;  // 51.2 KB total
+  unsigned long startTime = micros();
+  
+  for (uint32_t i = 0; i < writeBlocks; i++) {
+    testFile.write(sdBuffer, SD_BUFFER_SIZE);
+  }
+  testFile.flush();  // Ensure data is written
+  
+  unsigned long elapsed = micros() - startTime;
+  testFile.close();
+  
+  uint32_t bytesWritten = writeBlocks * SD_BUFFER_SIZE;
+  float writeSpeed = (bytesWritten / 1024.0f) / (elapsed / 1000000.0f);
+  
+  Serial.print(F("  Wrote: "));
+  Serial.print(bytesWritten / 1024.0f, 2);
+  Serial.print(F(" KB in "));
+  Serial.print(elapsed / 1000.0f, 2);
+  Serial.println(F(" ms"));
+  Serial.print(F("  Speed: "));
+  Serial.print(writeSpeed, 2);
+  Serial.println(F(" KB/s"));
+  Serial.println();
+  
+  // Benchmark 2: Sequential Read
+  Serial.println(F("Test: Sequential Read (512-byte blocks)"));
+  
+  testFile = SD.open(TEST_FILENAME, FILE_READ);
+  if (!testFile) {
+    Serial.println(F("ERROR: Could not open test file for reading"));
+    return;
+  }
+  
+  const uint32_t readBlocks = 100;
+  volatile uint32_t readChecksum = 0;
+  startTime = micros();
+  
+  for (uint32_t i = 0; i < readBlocks; i++) {
+    size_t bytesRead = testFile.read(sdBuffer, SD_BUFFER_SIZE);
+    for (size_t j = 0; j < bytesRead; j++) {
+      readChecksum += sdBuffer[j];
+    }
+  }
+  
+  elapsed = micros() - startTime;
+  testFile.close();
+  
+  uint32_t bytesRead = readBlocks * SD_BUFFER_SIZE;
+  float readSpeed = (bytesRead / 1024.0f) / (elapsed / 1000000.0f);
+  
+  Serial.print(F("  Read: "));
+  Serial.print(bytesRead / 1024.0f, 2);
+  Serial.print(F(" KB in "));
+  Serial.print(elapsed / 1000.0f, 2);
+  Serial.println(F(" ms"));
+  Serial.print(F("  Speed: "));
+  Serial.print(readSpeed, 2);
+  Serial.println(F(" KB/s"));
+  Serial.print(F("  Checksum: 0x"));
+  Serial.println((unsigned long)readChecksum, HEX);
+  Serial.println();
+  
+  // Benchmark 3: Random Access (Seek)
+  Serial.println(F("Test: Random Access (Seek)"));
+  
+  testFile = SD.open(TEST_FILENAME, FILE_READ);
+  if (!testFile) {
+    Serial.println(F("ERROR: Could not open test file"));
+    return;
+  }
+  
+  const uint32_t seekCount = 100;
+  volatile uint32_t seekChecksum = 0;
+  startTime = micros();
+  
+  for (uint32_t i = 0; i < seekCount; i++) {
+    // Seek to random position
+    uint32_t pos = (i * 123) % (bytesWritten - SD_BUFFER_SIZE);
+    testFile.seek(pos);
+    
+    // Read a block
+    size_t read = testFile.read(sdBuffer, SD_BUFFER_SIZE);
+    seekChecksum += sdBuffer[0];  // Just check first byte
+  }
+  
+  elapsed = micros() - startTime;
+  testFile.close();
+  
+  float seeksPerMs = (seekCount * 1000.0f) / elapsed;
+  Serial.print(F("  Seeks: "));
+  Serial.print(seekCount);
+  Serial.print(F(" in "));
+  Serial.print(elapsed / 1000.0f, 2);
+  Serial.println(F(" ms"));
+  Serial.print(F("  Speed: "));
+  Serial.print(seeksPerMs, 2);
+  Serial.println(F(" seeks/ms"));
+  Serial.print(F("  Time per seek: "));
+  Serial.print((float)elapsed / seekCount / 1000.0f, 2);
+  Serial.println(F(" ms"));
+  Serial.print(F("  Checksum: 0x"));
+  Serial.println((unsigned long)seekChecksum, HEX);
+  Serial.println();
+  
+  // Benchmark 4: File Operations (Create/Delete)
+  Serial.println(F("Test: File Operations"));
+  
+  const uint32_t fileOpCount = 50;
+  startTime = micros();
+  
+  for (uint32_t i = 0; i < fileOpCount; i++) {
+    // Create file
+    char filename[16];
+    sprintf(filename, "test%lu.tmp", (unsigned long)i);
+    
+    File f = SD.open(filename, FILE_WRITE);
+    if (f) {
+      f.println("Test data");
+      f.close();
+    }
+    
+    // Delete file
+    SD.remove(filename);
+  }
+  
+  elapsed = micros() - startTime;
+  
+  float fileOpsPerMs = (fileOpCount * 2 * 1000.0f) / elapsed;  // *2 for create+delete
+  Serial.print(F("  Operations: "));
+  Serial.print(fileOpCount * 2);
+  Serial.print(F(" ("));
+  Serial.print(fileOpCount);
+  Serial.print(F(" creates + "));
+  Serial.print(fileOpCount);
+  Serial.println(F(" deletes)"));
+  Serial.print(F("  Time: "));
+  Serial.print(elapsed / 1000.0f, 2);
+  Serial.println(F(" ms"));
+  Serial.print(F("  Speed: "));
+  Serial.print(fileOpsPerMs, 2);
+  Serial.println(F(" ops/ms"));
+  Serial.println();
+  
+  // Clean up test file
+  SD.remove(TEST_FILENAME);
+  
+  Serial.println(F("SD card benchmarks complete"));
+}
+#endif  // HAS_SD_CARD
+
 // ==================== SYSTEM INFO ====================
 
 void printSystemInfo() {
@@ -3398,6 +3897,10 @@ void printSystemInfo() {
 #else
   Serial.println(F("Unknown"));
 #endif
+#endif
+
+#if defined(ARDUINO_AVR_MULTIDUINO)
+  Serial.println(F("Features: RTC (DS1307), microSD card"));
 #endif
 
   // RAM Info
@@ -3530,6 +4033,14 @@ void setup() {
 #endif
 #if defined(BOARD_STM32U5) && defined(HAS_DUAL_PROCESSOR)
   benchmarkArduinoBridge();
+#endif
+
+  // Multiduino-specific benchmarks
+#ifdef HAS_RTC
+  benchmarkRTC();
+#endif
+#ifdef HAS_SD_CARD
+  benchmarkSDCard();
 #endif
 
   // Final summary

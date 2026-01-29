@@ -2903,7 +2903,11 @@ void benchmarkSerialBaudRates() {
 
 #if defined(ESP32) || defined(BOARD_STM32U5)
 void benchmarkHardwareRNG() {
+#if defined(ESP32) || (defined(BOARD_STM32U5) && defined(__ZEPHYR__))
   printHeader("CRYPTO: Hardware RNG");
+#else
+  printHeader("CRYPTO: Pseudo RNG");
+#endif
 
 #if defined(ESP32)
   SERIAL_OUT.println(F_STR("Using ESP32 hardware RNG"));
@@ -2911,7 +2915,7 @@ void benchmarkHardwareRNG() {
   #if defined(__ZEPHYR__)
   SERIAL_OUT.println(F_STR("Using STM32U585 hardware RNG (Zephyr)"));
   #else
-  SERIAL_OUT.println(F_STR("Using STM32U585 RNG"));
+  SERIAL_OUT.println(F_STR("Using STM32U585 pseudo RNG (Arduino random)"));
   #endif
 #endif
 
@@ -2932,7 +2936,11 @@ void benchmarkHardwareRNG() {
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println(rngSum);
 
+#if defined(ESP32) || (defined(BOARD_STM32U5) && defined(__ZEPHYR__))
   SERIAL_OUT.print(F_STR("Hardware RNG (1000 values): "));
+#else
+  SERIAL_OUT.print(F_STR("Pseudo RNG (1000 values): "));
+#endif
   SERIAL_OUT.print(rngTime);
   SERIAL_OUT.print(F_STR(" μs ("));
   SERIAL_OUT.print(1000.0f / rngTime * 1000, 2);

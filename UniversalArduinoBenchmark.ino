@@ -1813,10 +1813,10 @@ void benchmarkWiFi() {
   SERIAL_OUT.print(F_STR("MAC Address: "));
   byte mac[6];
   WiFi.macAddress(mac);
-  for (int i = 5; i >= 0; i--) {
+  for (int i = 0; i <= 5; i++) {
     if (mac[i] < 16) SERIAL_OUT.print("0");
     SERIAL_OUT.print(mac[i], HEX);
-    if (i > 0) SERIAL_OUT.print(":");
+    if (i < 5) SERIAL_OUT.print(":");
   }
   SERIAL_OUT.println();
 #else
@@ -1824,10 +1824,10 @@ void benchmarkWiFi() {
   byte mac[6];
   WiFi.macAddress(mac);
   SERIAL_OUT.print(F_STR("MAC Address: "));
-  for (int i = 5; i >= 0; i--) {
+  for (int i = 0; i <= 5; i++) {
     if (mac[i] < 16) SERIAL_OUT.print("0");
     SERIAL_OUT.print(mac[i], HEX);
-    if (i > 0) SERIAL_OUT.print(":");
+    if (i < 5) SERIAL_OUT.print(":");
   }
   SERIAL_OUT.println();
 #endif

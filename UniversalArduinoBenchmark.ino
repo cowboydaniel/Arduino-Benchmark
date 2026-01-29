@@ -216,12 +216,8 @@
 #include <EEPROM.h>
 #include <Wire.h>
 #include <RTClib.h>  // Adafruit RTClib for DS1307
-#include <SD.h>
-#include <SPI.h>
 #define BOARD_AVR
 #define HAS_RTC
-#define HAS_SD_CARD
-#define SD_CS_PIN 10  // Adjust to your actual SD card CS pin
 #define RTC_I2C_ADDRESS 0x68  // Standard DS1307 I2C address
 
 // Arduino Uno
@@ -411,12 +407,6 @@ const uint8_t kJitterTrials = 5;
 RTC_DS1307 rtc;
 #endif
 
-#ifdef HAS_SD_CARD
-File testFile;
-const char* TEST_FILENAME = "bench.dat";
-const size_t SD_BUFFER_SIZE = 512;  // Standard SD block size
-uint8_t sdBuffer[SD_BUFFER_SIZE];
-#endif
 
 // ==================== HELPER FUNCTIONS ====================
 
@@ -3548,263 +3538,6 @@ void benchmarkRTC() {
 }
 #endif  // HAS_RTC
 
-#ifdef HAS_SD_CARD
-void benchmarkSDCard() {
-  printHeader("SD CARD BENCHMARK");
-  
-  // Initialize SD card
-  Serial.print(F("Initializing SD card on CS pin "));
-  Serial.print(SD_CS_PIN);
-  Serial.println(F("..."));
-  
-  if (!SD.begin(SD_CS_PIN)) {
-    Serial.println(F("ERROR: SD card initialization failed!"));
-    Serial.println(F("Check:"));
-    Serial.println(F("  - SD card is inserted"));
-    Serial.println(F("  - CS pin is correct"));
-    Serial.println(F("  - Wiring: MOSI->11, MISO->12, SCK->13"));
-    Serial.println();
-    return;
-  }
-  
-  Serial.println(F("SD card initialized successfully"));
-  Serial.println();
-  
-  // Detailed volume info and file listing (SD utility classes)
-  Sd2Card card;
-  SdVolume volume;
-  SdFile root;
-
-  if (card.init(SPI_HALF_SPEED, SD_CS_PIN)) {
-    Serial.println(F("Card Information:"));
-    Serial.print(F("  Type: "));
-    switch(card.type()) {
-      case SD_CARD_TYPE_SD1:
-        Serial.println(F("SD1"));
-        break;
-      case SD_CARD_TYPE_SD2:
-        Serial.println(F("SD2"));
-        break;
-      case SD_CARD_TYPE_SDHC:
-        Serial.println(F("SDHC"));
-        break;
-      default:
-        Serial.println(F("Unknown"));
-    }
-
-    uint32_t cardBlocks = card.cardSize();
-    uint32_t cardSizeMb = cardBlocks / 2048;  // 2048 blocks of 512 bytes per MB
-    Serial.print(F("  Size: "));
-    Serial.print(cardSizeMb);
-    Serial.println(F(" MB"));
-    Serial.println();
-
-    if (volume.init(card)) {
-      Serial.println(F("Filesystem Information:"));
-      Serial.print(F("  Clusters: "));
-      Serial.println(volume.clusterCount());
-      Serial.print(F("  Blocks x Cluster: "));
-      Serial.println(volume.blocksPerCluster());
-      Serial.print(F("  Total Blocks: "));
-      Serial.println(volume.blocksPerCluster() * volume.clusterCount());
-      Serial.print(F("  Volume type is: FAT"));
-      Serial.println(volume.fatType(), DEC);
-
-      uint32_t volumesize = volume.blocksPerCluster();
-      volumesize *= volume.clusterCount();
-      volumesize /= 2;  // 512 bytes per block
-      Serial.print(F("  Volume size (KB): "));
-      Serial.println(volumesize);
-      Serial.print(F("  Volume size (MB): "));
-      Serial.println(volumesize / 1024);
-      Serial.print(F("  Volume size (GB): "));
-      Serial.println((float)volumesize / 1024.0f / 1024.0f);
-      Serial.println();
-
-      Serial.println(F("Files found on the card (name, date and size in bytes):"));
-      root.openRoot(volume);
-      root.ls(LS_R | LS_DATE | LS_SIZE);
-      root.close();
-      Serial.println();
-    } else {
-      Serial.println(F("WARNING: Could not find FAT16/FAT32 partition."));
-      Serial.println(F("Make sure the card is formatted."));
-      Serial.println();
-    }
-  } else {
-    Serial.println(F("WARNING: Could not read SD card details via Sd2Card."));
-    Serial.println();
-  }
-  
-  // Initialize test buffer with pattern
-  for (size_t i = 0; i < SD_BUFFER_SIZE; i++) {
-    sdBuffer[i] = (uint8_t)(i & 0xFF);
-  }
-  
-  // Benchmark 1: Sequential Write
-  Serial.println(F("Test: Sequential Write (512-byte blocks)"));
-  
-  // Remove old test file if exists
-  if (SD.exists(TEST_FILENAME)) {
-    SD.remove(TEST_FILENAME);
-  }
-  
-  testFile = SD.open(TEST_FILENAME, FILE_WRITE);
-  if (!testFile) {
-    Serial.println(F("ERROR: Could not create test file"));
-    return;
-  }
-  
-  const uint32_t writeBlocks = 100;  // 51.2 KB total
-  unsigned long startTime = micros();
-  
-  for (uint32_t i = 0; i < writeBlocks; i++) {
-    testFile.write(sdBuffer, SD_BUFFER_SIZE);
-  }
-  testFile.flush();  // Ensure data is written
-  
-  unsigned long elapsed = micros() - startTime;
-  testFile.close();
-  
-  uint32_t bytesWritten = writeBlocks * SD_BUFFER_SIZE;
-  float writeSpeed = (bytesWritten / 1024.0f) / (elapsed / 1000000.0f);
-  
-  Serial.print(F("  Wrote: "));
-  Serial.print(bytesWritten / 1024.0f, 2);
-  Serial.print(F(" KB in "));
-  Serial.print(elapsed / 1000.0f, 2);
-  Serial.println(F(" ms"));
-  Serial.print(F("  Speed: "));
-  Serial.print(writeSpeed, 2);
-  Serial.println(F(" KB/s"));
-  Serial.println();
-  
-  // Benchmark 2: Sequential Read
-  Serial.println(F("Test: Sequential Read (512-byte blocks)"));
-  
-  testFile = SD.open(TEST_FILENAME, FILE_READ);
-  if (!testFile) {
-    Serial.println(F("ERROR: Could not open test file for reading"));
-    return;
-  }
-  
-  const uint32_t readBlocks = 100;
-  volatile uint32_t readChecksum = 0;
-  startTime = micros();
-  
-  for (uint32_t i = 0; i < readBlocks; i++) {
-    size_t bytesRead = testFile.read(sdBuffer, SD_BUFFER_SIZE);
-    for (size_t j = 0; j < bytesRead; j++) {
-      readChecksum += sdBuffer[j];
-    }
-  }
-  
-  elapsed = micros() - startTime;
-  testFile.close();
-  
-  uint32_t bytesRead = readBlocks * SD_BUFFER_SIZE;
-  float readSpeed = (bytesRead / 1024.0f) / (elapsed / 1000000.0f);
-  
-  Serial.print(F("  Read: "));
-  Serial.print(bytesRead / 1024.0f, 2);
-  Serial.print(F(" KB in "));
-  Serial.print(elapsed / 1000.0f, 2);
-  Serial.println(F(" ms"));
-  Serial.print(F("  Speed: "));
-  Serial.print(readSpeed, 2);
-  Serial.println(F(" KB/s"));
-  Serial.print(F("  Checksum: 0x"));
-  Serial.println((unsigned long)readChecksum, HEX);
-  Serial.println();
-  
-  // Benchmark 3: Random Access (Seek)
-  Serial.println(F("Test: Random Access (Seek)"));
-  
-  testFile = SD.open(TEST_FILENAME, FILE_READ);
-  if (!testFile) {
-    Serial.println(F("ERROR: Could not open test file"));
-    return;
-  }
-  
-  const uint32_t seekCount = 100;
-  volatile uint32_t seekChecksum = 0;
-  startTime = micros();
-  
-  for (uint32_t i = 0; i < seekCount; i++) {
-    // Seek to random position
-    uint32_t pos = (i * 123) % (bytesWritten - SD_BUFFER_SIZE);
-    testFile.seek(pos);
-    
-    // Read a block
-    size_t read = testFile.read(sdBuffer, SD_BUFFER_SIZE);
-    seekChecksum += sdBuffer[0];  // Just check first byte
-  }
-  
-  elapsed = micros() - startTime;
-  testFile.close();
-  
-  float seeksPerMs = (seekCount * 1000.0f) / elapsed;
-  Serial.print(F("  Seeks: "));
-  Serial.print(seekCount);
-  Serial.print(F(" in "));
-  Serial.print(elapsed / 1000.0f, 2);
-  Serial.println(F(" ms"));
-  Serial.print(F("  Speed: "));
-  Serial.print(seeksPerMs, 2);
-  Serial.println(F(" seeks/ms"));
-  Serial.print(F("  Time per seek: "));
-  Serial.print((float)elapsed / seekCount / 1000.0f, 2);
-  Serial.println(F(" ms"));
-  Serial.print(F("  Checksum: 0x"));
-  Serial.println((unsigned long)seekChecksum, HEX);
-  Serial.println();
-  
-  // Benchmark 4: File Operations (Create/Delete)
-  Serial.println(F("Test: File Operations"));
-  
-  const uint32_t fileOpCount = 50;
-  startTime = micros();
-  
-  for (uint32_t i = 0; i < fileOpCount; i++) {
-    // Create file
-    char filename[16];
-    sprintf(filename, "test%lu.tmp", (unsigned long)i);
-    
-    File f = SD.open(filename, FILE_WRITE);
-    if (f) {
-      f.println("Test data");
-      f.close();
-    }
-    
-    // Delete file
-    SD.remove(filename);
-  }
-  
-  elapsed = micros() - startTime;
-  
-  float fileOpsPerMs = (fileOpCount * 2 * 1000.0f) / elapsed;  // *2 for create+delete
-  Serial.print(F("  Operations: "));
-  Serial.print(fileOpCount * 2);
-  Serial.print(F(" ("));
-  Serial.print(fileOpCount);
-  Serial.print(F(" creates + "));
-  Serial.print(fileOpCount);
-  Serial.println(F(" deletes)"));
-  Serial.print(F("  Time: "));
-  Serial.print(elapsed / 1000.0f, 2);
-  Serial.println(F(" ms"));
-  Serial.print(F("  Speed: "));
-  Serial.print(fileOpsPerMs, 2);
-  Serial.println(F(" ops/ms"));
-  Serial.println();
-  
-  // Clean up test file
-  SD.remove(TEST_FILENAME);
-  
-  Serial.println(F("SD card benchmarks complete"));
-}
-#endif  // HAS_SD_CARD
-
 // ==================== SYSTEM INFO ====================
 
 void printSystemInfo() {
@@ -4070,9 +3803,6 @@ void setup() {
   // Multiduino-specific benchmarks
 #ifdef HAS_RTC
   benchmarkRTC();
-#endif
-#ifdef HAS_SD_CARD
-  benchmarkSDCard();
 #endif
 
   // Final summary

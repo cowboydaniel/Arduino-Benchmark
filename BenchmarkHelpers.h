@@ -5,6 +5,7 @@
 // Works with Arduino Uno (AVR), Uno Q (Zephyr/STM32U585), and other boards
 
 #include <Arduino.h>
+#include <type_traits>
 
 struct MinDurationResult {
   uint32_t ops;
@@ -47,16 +48,32 @@ void runFuncNonVoid(Func& func, bool& shouldBreak) {
   shouldBreak = !func();
 }
 
-// Simple type trait replacement for older C++
+template<typename Func>
+bool runFuncAndCheck(Func& func, std::true_type) {
+  func();
+  return true;
+}
+
+template<typename Func>
+bool runFuncAndCheck(Func& func, std::false_type) {
+  return func();
+}
+
 template<typename Func>
 TimedLoopResult runTimedLoop(uint32_t minDurationMs, uint32_t opsPerIteration, Func func) {
   TimedLoopResult result = {};
   unsigned long start = micros();
   unsigned long elapsed = 0;
   do {
-    // Just call the function - works for both void and non-void returns
-    func();
-    result.iterations++;
+    bool shouldContinue = runFuncAndCheck(
+      func,
+      typename std::is_same<decltype(func()), void>::type()
+    );
+    if (!shouldContinue) {
+      elapsed = micros() - start;
+      break;
+    }
+    result.iterations += 1;
     result.totalOps += opsPerIteration;
 #if defined(ESP32) || defined(ESP8266) || defined(ARDUINO_ARCH_RP2040)
     yield();

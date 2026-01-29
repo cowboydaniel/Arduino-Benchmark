@@ -275,44 +275,19 @@
 #define BOARD_AVR
 
 // Arduino Uno Q (Dual-processor: STM32U585 MCU + Qualcomm QRB2210 Linux MPU)
-// Uno Q can be detected via multiple defines depending on the core used
-#elif defined(ARDUINO_UNO_Q) || (defined(__ZEPHYR__) && defined(CONFIG_BOARD_ARDUINO_UNO_Q)) || defined(ARDUINO_ARDUINO_UNO_Q)
+#elif defined(ARDUINO_UNO_Q)
 #define BOARD_NAME "Arduino Uno Q (MCU)"
 #define BOARD_STM32U5
 #define BOARD_SRAM_KB 786
 #define BOARD_FLASH_KB 2048
 #define HAS_DUAL_PROCESSOR  // MCU + Linux MPU
-#if defined(__FPU_PRESENT) && (__FPU_PRESENT == 1)
 #define HAS_FPU
-#endif
 #define HAS_DSP
-// For Zephyr-based Uno Q, use Zephyr APIs
-#if defined(__ZEPHYR__)
-// Zephyr RTOS is being used
-#define USING_ZEPHYR
-#else
-// Standard STM32 HAL (if using STM32duino core)
-#if __has_include("stm32u5xx_hal.h")
-#include "stm32u5xx_hal.h"
-#endif
-#if __has_include("stm32u5xx_hal_rng.h")
-#include "stm32u5xx_hal_rng.h"
-#endif
-#if defined(RNG) || defined(RNG_BASE)
 #define HAS_RNG
-#endif
-#endif
-// Arduino Bridge RPC for MCU<->Linux communication
-// Supports both RouterBridge (higher-level) and RPClite (lower-level)
-#if __has_include("Arduino_RouterBridge.h")
-#include "Arduino_RouterBridge.h"
+#define USING_ZEPHYR
 #define HAS_ROUTER_BRIDGE
 #define HAS_RPC_BRIDGE
-#elif __has_include("Arduino_RPClite.h")
-#include "Arduino_RPClite.h"
-#define HAS_RPCLITE
-#define HAS_RPC_BRIDGE
-#endif
+#include "Arduino_RouterBridge.h"
 
 // STM32 Family (Blue Pill, Black Pill, Nucleo)
 #elif defined(ARDUINO_ARCH_STM32)
@@ -387,7 +362,7 @@
 // ==================== CONFIGURATION ====================
 #define BENCHMARK_ITERATIONS 10000
 #define MEMORY_TEST_SIZE 1024
-#define SERIAL_BAUD 115200
+
 
 #if defined(ARDUINO_ARCH_RP2040)
 #include <Hash.h>
@@ -397,6 +372,19 @@
 #if defined(ESP32)
 #include <HEXBuilder.h>
 #endif
+
+// ==================== SERIAL OUTPUT ABSTRACTION ====================
+// Uno Q uses Monitor instead of Serial for output
+#if defined(ARDUINO_UNO_Q)
+  #define SERIAL_OUT Monitor
+  #define F_STR(x) x  // Monitor doesn't support F() macro
+#else
+  #define SERIAL_OUT Serial
+  #define F_STR(x) F(x)  // Use F() macro for flash storage on other boards
+#endif
+
+// Serial baud rate
+#define SERIAL_BAUD 115200
 
 // ==================== GLOBAL VARIABLES ====================
 uint8_t testBuffer[256];
@@ -411,13 +399,13 @@ RTC_DS1307 rtc;
 // ==================== HELPER FUNCTIONS ====================
 
 void printDivider() {
-  Serial.println(F("========================================"));
+  SERIAL_OUT.println(F_STR("========================================"));
 }
 
-void printHeader(const char* title) {
-  Serial.println();
+void printHeader(const char *title) {
+  SERIAL_OUT.println();
   printDivider();
-  Serial.println(title);
+  SERIAL_OUT.println(title);
   printDivider();
 }
 
@@ -509,32 +497,32 @@ void benchmarkCPUStress() {
 #endif
 
   if (!hasTempSensor) {
-    Serial.println(F("Temperature sensor not available on this board"));
-    Serial.println(F("Running stress test without temperature monitoring..."));
-    Serial.println();
+    SERIAL_OUT.println(F_STR("Temperature sensor not available on this board"));
+    SERIAL_OUT.println(F_STR("Running stress test without temperature monitoring..."));
+    SERIAL_OUT.println();
   }
 
   // Initial temperature reading
   float startTemp = 0;
 #if defined(ESP32)
   startTemp = temperatureRead();
-  Serial.print(F("Start Temperature: "));
-  Serial.print(startTemp);
-  Serial.println(F(" °C"));
+  SERIAL_OUT.print(F_STR("Start Temperature: "));
+  SERIAL_OUT.print(startTemp);
+  SERIAL_OUT.println(F_STR(" °C"));
 #elif defined(ARDUINO_ARCH_RP2040)
   startTemp = analogReadTemp(3.3f);
-  Serial.print(F("Start Temperature: "));
-  Serial.print(startTemp);
-  Serial.println(F(" °C"));
+  SERIAL_OUT.print(F_STR("Start Temperature: "));
+  SERIAL_OUT.print(startTemp);
+  SERIAL_OUT.println(F_STR(" °C"));
 #elif defined(BOARD_TEENSY) && defined(__IMXRT1062__)
   startTemp = tempmonGetTemp();
-  Serial.print(F("Start Temperature: "));
-  Serial.print(startTemp);
-  Serial.println(F(" °C"));
+  SERIAL_OUT.print(F_STR("Start Temperature: "));
+  SERIAL_OUT.print(startTemp);
+  SERIAL_OUT.println(F_STR(" °C"));
 #endif
 
-  Serial.print(F("Running intensive computation for 10 seconds..."));
-  Serial.println();
+  SERIAL_OUT.print(F_STR("Running intensive computation for 10 seconds..."));
+  SERIAL_OUT.println();
 
   // CPU stress test - run all cores
   unsigned long stressStart = millis();
@@ -560,15 +548,25 @@ void benchmarkCPUStress() {
       result = result * 1.0001f + f1;
       result = result * 0.9999f + f2;
 #else
+  #if defined(ARDUINO_UNO_Q) || defined(ARDUINO_UNO_Q_MCU)
+      // Keep it deterministic and heavy without libm (no sin/cos/fmod/sqrt)
+      // Mix float + integer-ish noise
+      uint32_t x = (uint32_t)iterations * 1664525u + 1013904223u;
+      float f1 = (float)(x & 0xFFFFu) * 0.0001f;
+      float f2 = (float)((x >> 16) & 0xFFFFu) * 0.00005f;
+      result = result * 1.00013f + f1;
+      result = result * 0.99991f + f2;
+  #else
       result = result * 1.0001f + sqrtf((float)i);
-#if defined(__ZEPHYR__) || defined(BOARD_STM32U5)
+    #if defined(__ZEPHYR__) || defined(BOARD_STM32U5)
       // Manual fmod implementation for Zephyr (avoids libm linking issues)
       float divisor = twoPi;
       result = result - ((int)(result / divisor)) * divisor;
-#else
+    #else
       result = fmodf(result, twoPi);
-#endif
+    #endif
       result = sinf(result) + cosf(result);
+  #endif
 #endif
       iterations++;
     }
@@ -586,7 +584,7 @@ void benchmarkCPUStress() {
 
 #if defined(ARDUINO_ARCH_RP2040)
     if (millis() - lastIo >= 250) {
-      Serial.write('.');
+      SERIAL_OUT.write('.');
       lastIo = millis();
     }
 #endif
@@ -594,16 +592,16 @@ void benchmarkCPUStress() {
 
   unsigned long stressDuration = millis() - stressStart;
 
-  Serial.println();
-  Serial.print(F("Stress test complete: "));
-  Serial.print(iterations);
-  Serial.print(F(" iterations in "));
-  Serial.print(stressDuration);
-  Serial.println(F(" ms"));
+  SERIAL_OUT.println();
+  SERIAL_OUT.print(F_STR("Stress test complete: "));
+  SERIAL_OUT.print(iterations);
+  SERIAL_OUT.print(F_STR(" iterations in "));
+  SERIAL_OUT.print(stressDuration);
+  SERIAL_OUT.println(F_STR(" ms"));
 
-  Serial.print(F("Performance: "));
-  Serial.print((float)iterations / stressDuration);
-  Serial.println(F(" iterations/ms"));
+  SERIAL_OUT.print(F_STR("Performance: "));
+  SERIAL_OUT.print((float)iterations / stressDuration);
+  SERIAL_OUT.println(F_STR(" iterations/ms"));
 
   // Final temperature reading
   if (hasTempSensor) {
@@ -617,21 +615,21 @@ void benchmarkCPUStress() {
     endTemp = tempmonGetTemp();
 #endif
 
-    Serial.println();
-    Serial.print(F("Final Temperature: "));
-    Serial.print(endTemp);
-    Serial.println(F(" °C"));
+    SERIAL_OUT.println();
+    SERIAL_OUT.print(F_STR("Final Temperature: "));
+    SERIAL_OUT.print(endTemp);
+    SERIAL_OUT.println(F_STR(" °C"));
 
-    Serial.print(F("Total Temperature Gain: +"));
-    Serial.print(endTemp - startTemp);
-    Serial.println(F(" °C"));
+    SERIAL_OUT.print(F_STR("Total Temperature Gain: +"));
+    SERIAL_OUT.print(endTemp - startTemp);
+    SERIAL_OUT.println(F_STR(" °C"));
 
     if (endTemp - startTemp > 10) {
-      Serial.println(F("⚠️  Significant heating detected - ensure adequate cooling"));
+      SERIAL_OUT.println(F_STR("⚠️  Significant heating detected - ensure adequate cooling"));
     } else if (endTemp - startTemp > 5) {
-      Serial.println(F("ℹ️  Normal temperature increase under load"));
+      SERIAL_OUT.println(F_STR("ℹ️  Normal temperature increase under load"));
     } else {
-      Serial.println(F("✓ Minimal temperature increase - good thermal performance"));
+      SERIAL_OUT.println(F_STR("✓ Minimal temperature increase - good thermal performance"));
     }
   }
 }
@@ -648,8 +646,8 @@ void benchmarkIntegerOps() {
     acc += i;
   }
   unsigned long addTime = endBenchmark();
-  Serial.print(F("Checksum: "));
-  Serial.println((uint32_t)(acc & 0xFFFFFFFF));
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println((uint32_t)(acc & 0xFFFFFFFF));
 
   // Multiplication - use LCG-style updates to prevent optimization
   acc = 1;
@@ -658,8 +656,8 @@ void benchmarkIntegerOps() {
       acc = (acc * (i | 1)) & 0xFFFFFFFF;  // Ensure odd multiplier, prevent overflow
     }
   });
-  Serial.print(F("Checksum: "));
-  Serial.println((uint32_t)acc);
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println((uint32_t)acc);
 
   // Division - vary both dividend and divisor
   acc = 0xFFFFFFFFULL;
@@ -669,38 +667,38 @@ void benchmarkIntegerOps() {
       acc = (acc / divisor) + i;         // Accumulate to prevent optimization
     }
   });
-  Serial.print(F("Checksum: "));
-  Serial.println((uint32_t)acc);
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println((uint32_t)acc);
 
-  Serial.print(F("Addition ("));
-  Serial.print(BENCHMARK_ITERATIONS);
-  Serial.print(F(" ops): "));
-  Serial.print(addTime);
-  Serial.print(F(" μs ("));
-  Serial.print((float)BENCHMARK_ITERATIONS / addTime * 1000);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("Addition ("));
+  SERIAL_OUT.print(BENCHMARK_ITERATIONS);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(addTime);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print((float)BENCHMARK_ITERATIONS / addTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  Serial.print(F("Multiplication ("));
-  Serial.print(mulResult.totalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(mulResult.elapsedMicros);
-  Serial.print(F(" μs ("));
-  Serial.print(mulResult.opsPerMs);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("Multiplication ("));
+  SERIAL_OUT.print(mulResult.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(mulResult.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(mulResult.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  Serial.print(F("Division ("));
-  Serial.print(divResult.totalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(divResult.elapsedMicros);
-  Serial.print(F(" μs ("));
-  Serial.print(divResult.opsPerMs);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("Division ("));
+  SERIAL_OUT.print(divResult.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(divResult.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(divResult.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 
 #if defined(BOARD_STM32U5) || defined(HAS_DSP)
   // Enhanced tests for Cortex-M33 with DSP extensions
-  Serial.println();
-  Serial.println(F("--- DSP-Enhanced Integer Tests (Cortex-M33) ---"));
-  
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("--- DSP-Enhanced Integer Tests (Cortex-M33) ---"));
+
   // 64-bit integer operations (emulated on 32-bit MCU)
   volatile uint64_t acc64 = 0x123456789ABCDEFULL;
   TimedLoopResult mul64Result = runTimedLoop(minDurationMs, 50, [&]() {
@@ -708,12 +706,12 @@ void benchmarkIntegerOps() {
       acc64 = (acc64 * (i | 1));  // 64-bit multiply
     }
   });
-  Serial.print(F("64-bit Multiply ("));
-  Serial.print(mul64Result.totalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(mul64Result.opsPerMs);
-  Serial.println(F(" ops/ms"));
-  
+  SERIAL_OUT.print(F_STR("64-bit Multiply ("));
+  SERIAL_OUT.print(mul64Result.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(mul64Result.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms"));
+
   // 64-bit division (expensive on 32-bit MCU)
   acc64 = 0xFFFFFFFFFFFFFFFFULL;
   TimedLoopResult div64Result = runTimedLoop(minDurationMs, 50, [&]() {
@@ -722,15 +720,15 @@ void benchmarkIntegerOps() {
       acc64 = (acc64 / divisor) + i;
     }
   });
-  Serial.print(F("64-bit Divide ("));
-  Serial.print(div64Result.totalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(div64Result.opsPerMs);
-  Serial.println(F(" ops/ms"));
-  
+  SERIAL_OUT.print(F_STR("64-bit Divide ("));
+  SERIAL_OUT.print(div64Result.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(div64Result.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms"));
+
   // MAC (Multiply-Accumulate) style operations - DSP strength
   volatile int32_t macAcc = 0;
-  volatile int32_t macResult[4] = {0, 0, 0, 0};
+  volatile int32_t macResult[4] = { 0, 0, 0, 0 };
   startBenchmark();
   for (uint32_t i = 0; i < 1000; i++) {
     // Simulate DSP-style MAC operations
@@ -740,14 +738,14 @@ void benchmarkIntegerOps() {
     macResult[i % 4] += macAcc;
   }
   unsigned long macTime = endBenchmark();
-  Serial.print(F("MAC Operations (1000 ops): "));
-  Serial.print(macTime);
-  Serial.print(F(" μs ("));
-  Serial.print(1000000.0 / macTime);
-  Serial.println(F(" ops/ms)"));
-  Serial.print(F("MAC Checksum: "));
-  Serial.println(macAcc);
-  
+  SERIAL_OUT.print(F_STR("MAC Operations (1000 ops): "));
+  SERIAL_OUT.print(macTime);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(1000000.0 / macTime);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("MAC Checksum: "));
+  SERIAL_OUT.println(macAcc);
+
   // Saturating arithmetic (DSP-style)
   volatile int32_t satAcc = 0;
   startBenchmark();
@@ -761,11 +759,11 @@ void benchmarkIntegerOps() {
     }
   }
   unsigned long satTime = endBenchmark();
-  Serial.print(F("Saturating Add (1000 ops): "));
-  Serial.print(satTime);
-  Serial.print(F(" μs ("));
-  Serial.print(1000000.0 / satTime);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("Saturating Add (1000 ops): "));
+  SERIAL_OUT.print(satTime);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(1000000.0 / satTime);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 #endif
 }
 
@@ -781,8 +779,8 @@ void benchmarkFloatOps() {
     fresult += 3.14159f;
   }
   unsigned long faddTime = endBenchmark();
-  Serial.print(F("Checksum: "));
-  Serial.println(fresult);
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println(fresult);
 
   // Float multiplication
   fresult = 1.0f;
@@ -791,60 +789,66 @@ void benchmarkFloatOps() {
     fresult *= 1.0001f;
   }
   unsigned long fmulTime = endBenchmark();
-  Serial.print(F("Checksum: "));
-  Serial.println(fresult);
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println(fresult);
 
-  // Sqrt - accumulate to prevent optimization
+#if !defined(ARDUINO_UNO_Q) && !defined(ARDUINO_UNO_Q_MCU)
+  // Sqrt - accumulate to prevent optimization (skipped on Uno Q - no libm)
   fresult = 0.0f;
   TimedLoopResult sqrtResult = runTimedLoop(minDurationMs, 100, [&]() {
     for (uint32_t i = 0; i < 100; i++) {
       fresult += sqrt((float)i);
     }
   });
-  Serial.print(F("Checksum: "));
-  Serial.println(fresult);
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println(fresult);
 
-  // Sin/Cos - accumulate to prevent optimization
+  // Sin/Cos - accumulate to prevent optimization (skipped on Uno Q - no libm)
   fresult = 0.0f;
   TimedLoopResult trigResult = runTimedLoop(minDurationMs, 100, [&]() {
     for (uint32_t i = 0; i < 100; i++) {
       fresult += sin((float)i / 100.0f) + cos((float)i / 100.0f);
     }
   });
-  Serial.print(F("Checksum: "));
-  Serial.println(fresult);
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println(fresult);
+#endif
 
-  Serial.print(F("Float Addition ("));
-  Serial.print(BENCHMARK_ITERATIONS / 10);
-  Serial.print(F(" ops): "));
-  Serial.print(faddTime);
-  Serial.print(F(" μs ("));
-  Serial.print((float)(BENCHMARK_ITERATIONS / 10) / faddTime * 1000);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("Float Addition ("));
+  SERIAL_OUT.print(BENCHMARK_ITERATIONS / 10);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(faddTime);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print((float)(BENCHMARK_ITERATIONS / 10) / faddTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  Serial.print(F("Float Multiply ("));
-  Serial.print(BENCHMARK_ITERATIONS / 10);
-  Serial.print(F(" ops): "));
-  Serial.print(fmulTime);
-  Serial.print(F(" μs ("));
-  Serial.print((float)(BENCHMARK_ITERATIONS / 10) / fmulTime * 1000);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("Float Multiply ("));
+  SERIAL_OUT.print(BENCHMARK_ITERATIONS / 10);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(fmulTime);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print((float)(BENCHMARK_ITERATIONS / 10) / fmulTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  Serial.print(F("Square Root ("));
-  Serial.print(sqrtResult.totalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(sqrtResult.elapsedMicros);
-  Serial.print(F(" μs ("));
-  Serial.print(sqrtResult.opsPerMs);
-  Serial.println(F(" ops/ms)"));
+#if !defined(ARDUINO_UNO_Q) && !defined(ARDUINO_UNO_Q_MCU)
+  SERIAL_OUT.print(F_STR("Square Root ("));
+  SERIAL_OUT.print(sqrtResult.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(sqrtResult.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(sqrtResult.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  Serial.print(F("Sin/Cos ("));
-  Serial.print(trigResult.totalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(trigResult.elapsedMicros);
-  Serial.print(F(" μs ("));
-  Serial.print(trigResult.opsPerMs);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("Sin/Cos ("));
+  SERIAL_OUT.print(trigResult.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(trigResult.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(trigResult.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+#else
+  SERIAL_OUT.println(F_STR("Sqrt/Sin/Cos: Skipped (Uno Q - no libm)"));
+#endif
 }
 
 void benchmarkStringOps() {
@@ -888,37 +892,37 @@ void benchmarkStringOps() {
     }
   });
 
-  Serial.print(F("Arduino String (heap stress) - Concatenation ("));
-  Serial.print(concatResult.totalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(concatResult.elapsedMicros);
-  Serial.print(F(" μs ("));
-  Serial.print(concatResult.opsPerMs);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("Arduino String (heap stress) - Concatenation ("));
+  SERIAL_OUT.print(concatResult.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(concatResult.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(concatResult.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  Serial.print(F("Arduino String (heap stress) - Comparison ("));
-  Serial.print(cmpResultData.totalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(cmpResultData.elapsedMicros);
-  Serial.print(F(" μs ("));
-  Serial.print(cmpResultData.opsPerMs);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("Arduino String (heap stress) - Comparison ("));
+  SERIAL_OUT.print(cmpResultData.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(cmpResultData.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(cmpResultData.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  Serial.print(F("Arduino String (heap stress) - Int to String ("));
-  Serial.print(toStrResult.totalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(toStrResult.elapsedMicros);
-  Serial.print(F(" μs ("));
-  Serial.print(toStrResult.opsPerMs);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("Arduino String (heap stress) - Int to String ("));
+  SERIAL_OUT.print(toStrResult.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(toStrResult.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(toStrResult.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  Serial.print(F("snprintf (fixed buffer, "));
-  Serial.print(snprintfResult.totalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(snprintfResult.elapsedMicros);
-  Serial.print(F(" μs ("));
-  Serial.print(snprintfResult.opsPerMs);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("snprintf (fixed buffer, "));
+  SERIAL_OUT.print(snprintfResult.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(snprintfResult.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(snprintfResult.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 }
 
 // ==================== MEMORY BENCHMARKS ====================
@@ -942,8 +946,8 @@ void benchmarkSRAM() {
       checksum += testBuffer[i];
     }
   });
-  Serial.print(F("Read checksum: "));
-  Serial.println((uint32_t)checksum);
+  SERIAL_OUT.print(F_STR("Read checksum: "));
+  SERIAL_OUT.println((uint32_t)checksum);
 
   // Random access - accumulate to prevent optimization
   MedianCollector<float, kJitterTrials> randomOpsMedian = {};
@@ -964,73 +968,73 @@ void benchmarkSRAM() {
   float randomOpsPerMs = randomOpsMedian.median();
   unsigned long randomElapsedMicros = randomElapsedMedian.median();
   uint32_t randomTotalOps = randomTotalOpsMedian.median();
-  Serial.print(F("Random checksum: "));
-  Serial.println((uint32_t)checksum);
+  SERIAL_OUT.print(F_STR("Random checksum: "));
+  SERIAL_OUT.println((uint32_t)checksum);
 
-  Serial.print(F("Sequential Write ("));
-  Serial.print(writeResult.totalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(writeResult.elapsedMicros);
-  Serial.print(F(" μs ("));
-  Serial.print(writeResult.opsPerMs);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("Sequential Write ("));
+  SERIAL_OUT.print(writeResult.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(writeResult.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(writeResult.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  Serial.print(F("Sequential Read ("));
-  Serial.print(readResult.totalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(readResult.elapsedMicros);
-  Serial.print(F(" μs ("));
-  Serial.print(readResult.opsPerMs);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("Sequential Read ("));
+  SERIAL_OUT.print(readResult.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(readResult.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(readResult.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  Serial.print(F("Random Access ("));
-  Serial.print(randomTotalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(randomElapsedMicros);
-  Serial.print(F(" μs (median "));
-  Serial.print(randomOpsPerMs);
-  Serial.print(F(" ops/ms, "));
-  Serial.print(kJitterTrials);
-  Serial.println(F(" trials)"));
+  SERIAL_OUT.print(F_STR("Random Access ("));
+  SERIAL_OUT.print(randomTotalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(randomElapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs (median "));
+  SERIAL_OUT.print(randomOpsPerMs);
+  SERIAL_OUT.print(F_STR(" ops/ms, "));
+  SERIAL_OUT.print(kJitterTrials);
+  SERIAL_OUT.println(F_STR(" trials)"));
 
   // Enhanced memory tests - scaled by available RAM
-  Serial.println();
-  Serial.println(F("--- Memory Bandwidth Tests ---"));
-  
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("--- Memory Bandwidth Tests ---"));
+
   // Scale buffer size based on available RAM
   size_t bufSize;
 #if defined(BOARD_STM32U5)
   bufSize = 8192;  // 8 KB for 786 KB RAM
-  Serial.println(F("Using 8 KB buffers (786 KB SRAM)"));
+  SERIAL_OUT.println(F_STR("Using 8 KB buffers (786 KB SRAM)"));
 #elif defined(ESP32)
   bufSize = 8192;  // 8 KB
-  Serial.println(F("Using 8 KB buffers (large heap)"));
+  SERIAL_OUT.println(F_STR("Using 8 KB buffers (large heap)"));
 #elif defined(ARDUINO_ARCH_RP2040)
   bufSize = 4096;  // 4 KB for 264 KB RAM
-  Serial.println(F("Using 4 KB buffers (264 KB RAM)"));
+  SERIAL_OUT.println(F_STR("Using 4 KB buffers (264 KB RAM)"));
 #elif defined(ARDUINO_SAM_DUE)
-  bufSize = 2048;  // 2 KB for 96 KB RAM
-  Serial.println(F("Using 2 KB buffers (96 KB RAM)"));
+  bufSize = 2048;        // 2 KB for 96 KB RAM
+  SERIAL_OUT.println(F_STR("Using 2 KB buffers (96 KB RAM)"));
 #elif defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
   bufSize = 1024;  // 1 KB for 32 KB RAM
-  Serial.println(F("Using 1 KB buffers (32 KB RAM)"));
+  SERIAL_OUT.println(F_STR("Using 1 KB buffers (32 KB RAM)"));
 #elif defined(__AVR_ATmega2560__)
-  bufSize = 512;   // 512 bytes for 8 KB RAM
-  Serial.println(F("Using 512 byte buffers (8 KB RAM)"));
+  bufSize = 512;  // 512 bytes for 8 KB RAM
+  SERIAL_OUT.println(F_STR("Using 512 byte buffers (8 KB RAM)"));
 #elif defined(__AVR__)
-  bufSize = 256;   // 256 bytes for 2 KB RAM (already tested above)
-  Serial.println(F("Using 256 byte buffers (2 KB RAM)"));
+  bufSize = 256;  // 256 bytes for 2 KB RAM (already tested above)
+  SERIAL_OUT.println(F_STR("Using 256 byte buffers (2 KB RAM)"));
 #else
-  bufSize = 512;   // Conservative default
-  Serial.println(F("Using 512 byte buffers"));
+  bufSize = 512;  // Conservative default
+  SERIAL_OUT.println(F_STR("Using 512 byte buffers"));
 #endif
 
   // Allocate buffers on heap for safety
-  uint8_t* largeSrc = (uint8_t*)malloc(bufSize);
-  uint8_t* largeDst = (uint8_t*)malloc(bufSize);
-  
+  uint8_t *largeSrc = (uint8_t *)malloc(bufSize);
+  uint8_t *largeDst = (uint8_t *)malloc(bufSize);
+
   if (largeSrc == NULL || largeDst == NULL) {
-    Serial.println(F("ERROR: Could not allocate test buffers"));
+    SERIAL_OUT.println(F_STR("ERROR: Could not allocate test buffers"));
     if (largeSrc) free(largeSrc);
     if (largeDst) free(largeDst);
   } else {
@@ -1038,7 +1042,7 @@ void benchmarkSRAM() {
     for (size_t i = 0; i < bufSize; i++) {
       largeSrc[i] = (uint8_t)(i & 0xFF);
     }
-    
+
     // memcpy throughput test
     int iterations = (bufSize >= 1024) ? 100 : 200;  // More iterations for small buffers
     startBenchmark();
@@ -1046,34 +1050,34 @@ void benchmarkSRAM() {
       memcpy(largeDst, largeSrc, bufSize);
     }
     unsigned long memcpyTime = endBenchmark();
-    
-    Serial.print(F("memcpy ("));
-    Serial.print(bufSize * iterations);
-    Serial.print(F(" bytes): "));
-    Serial.print(memcpyTime);
-    Serial.print(F(" μs ("));
-    Serial.print((bufSize * iterations * 1.0) / memcpyTime);
-    Serial.println(F(" MB/s)"));
-    
+
+    SERIAL_OUT.print(F_STR("memcpy ("));
+    SERIAL_OUT.print(bufSize * iterations);
+    SERIAL_OUT.print(F_STR(" bytes): "));
+    SERIAL_OUT.print(memcpyTime);
+    SERIAL_OUT.print(F_STR(" μs ("));
+    SERIAL_OUT.print((bufSize * iterations * 1.0) / memcpyTime);
+    SERIAL_OUT.println(F_STR(" MB/s)"));
+
     // memset throughput test
     startBenchmark();
     for (int iter = 0; iter < iterations; iter++) {
       memset(largeDst, 0xAA, bufSize);
     }
     unsigned long memsetTime = endBenchmark();
-    
-    Serial.print(F("memset ("));
-    Serial.print(bufSize * iterations);
-    Serial.print(F(" bytes): "));
-    Serial.print(memsetTime);
-    Serial.print(F(" μs ("));
-    Serial.print((bufSize * iterations * 1.0) / memsetTime);
-    Serial.println(F(" MB/s)"));
-    
+
+    SERIAL_OUT.print(F_STR("memset ("));
+    SERIAL_OUT.print(bufSize * iterations);
+    SERIAL_OUT.print(F_STR(" bytes): "));
+    SERIAL_OUT.print(memsetTime);
+    SERIAL_OUT.print(F_STR(" μs ("));
+    SERIAL_OUT.print((bufSize * iterations * 1.0) / memsetTime);
+    SERIAL_OUT.println(F_STR(" MB/s)"));
+
     // Memory bandwidth test - tight loop
-    volatile uint32_t* ramPtr = (volatile uint32_t*)largeDst;
+    volatile uint32_t *ramPtr = (volatile uint32_t *)largeDst;
     const size_t numWords = bufSize / 4;
-    
+
     startBenchmark();
     for (int iter = 0; iter < iterations; iter++) {
       for (size_t i = 0; i < numWords; i++) {
@@ -1081,7 +1085,7 @@ void benchmarkSRAM() {
       }
     }
     unsigned long bandwidthWriteTime = endBenchmark();
-    
+
     startBenchmark();
     volatile uint32_t sum = 0;
     for (int iter = 0; iter < iterations; iter++) {
@@ -1090,15 +1094,15 @@ void benchmarkSRAM() {
       }
     }
     unsigned long bandwidthReadTime = endBenchmark();
-    
-    Serial.print(F("RAM Write Bandwidth: "));
-    Serial.print((bufSize * iterations * 1.0) / bandwidthWriteTime);
-    Serial.println(F(" MB/s"));
-    
-    Serial.print(F("RAM Read Bandwidth: "));
-    Serial.print((bufSize * iterations * 1.0) / bandwidthReadTime);
-    Serial.println(F(" MB/s"));
-    
+
+    SERIAL_OUT.print(F_STR("RAM Write Bandwidth: "));
+    SERIAL_OUT.print((bufSize * iterations * 1.0) / bandwidthWriteTime);
+    SERIAL_OUT.println(F_STR(" MB/s"));
+
+    SERIAL_OUT.print(F_STR("RAM Read Bandwidth: "));
+    SERIAL_OUT.print((bufSize * iterations * 1.0) / bandwidthReadTime);
+    SERIAL_OUT.println(F_STR(" MB/s"));
+
     // Clean up
     free(largeSrc);
     free(largeDst);
@@ -1121,9 +1125,9 @@ void benchmarkEEPROM() {
 #endif
 
   if (eepromSize > 0) {
-    Serial.print(F("EEPROM Size: "));
-    Serial.print(eepromSize);
-    Serial.println(F(" bytes"));
+    SERIAL_OUT.print(F_STR("EEPROM Size: "));
+    SERIAL_OUT.print(eepromSize);
+    SERIAL_OUT.println(F_STR(" bytes"));
 
     // Write test (smaller sample)
     int testSize = min(64, eepromSize);
@@ -1136,16 +1140,16 @@ void benchmarkEEPROM() {
     }
     unsigned long ramWriteTime = endBenchmark();
 
-    Serial.print(F("RAM Buffer Write ("));
-    Serial.print(testSize);
-    Serial.print(F(" bytes): "));
-    Serial.print(ramWriteTime);
-    Serial.print(F(" μs ("));
-    Serial.print((float)testSize / ramWriteTime * 1000);
-    Serial.println(F(" ops/ms)"));
+    SERIAL_OUT.print(F_STR("RAM Buffer Write ("));
+    SERIAL_OUT.print(testSize);
+    SERIAL_OUT.print(F_STR(" bytes): "));
+    SERIAL_OUT.print(ramWriteTime);
+    SERIAL_OUT.print(F_STR(" μs ("));
+    SERIAL_OUT.print((float)testSize / ramWriteTime * 1000);
+    SERIAL_OUT.println(F_STR(" ops/ms)"));
 
     // Commit multiple times to measure min/median/max (captures erase events)
-    Serial.println(F("Flash Commit Test (10 commits):"));
+    SERIAL_OUT.println(F_STR("Flash Commit Test (10 commits):"));
     unsigned long commitTimes[10];
 
     for (int trial = 0; trial < 10; trial++) {
@@ -1175,23 +1179,23 @@ void benchmarkEEPROM() {
     unsigned long medianCommit = commitTimes[5];
     unsigned long maxCommit = commitTimes[9];
 
-    Serial.print(F("  Min: "));
-    Serial.print(minCommit);
-    Serial.print(F(" μs ("));
-    Serial.print(minCommit / 1000.0);
-    Serial.println(F(" ms)"));
+    SERIAL_OUT.print(F_STR("  Min: "));
+    SERIAL_OUT.print(minCommit);
+    SERIAL_OUT.print(F_STR(" μs ("));
+    SERIAL_OUT.print(minCommit / 1000.0);
+    SERIAL_OUT.println(F_STR(" ms)"));
 
-    Serial.print(F("  Median: "));
-    Serial.print(medianCommit);
-    Serial.print(F(" μs ("));
-    Serial.print(medianCommit / 1000.0);
-    Serial.println(F(" ms)"));
+    SERIAL_OUT.print(F_STR("  Median: "));
+    SERIAL_OUT.print(medianCommit);
+    SERIAL_OUT.print(F_STR(" μs ("));
+    SERIAL_OUT.print(medianCommit / 1000.0);
+    SERIAL_OUT.println(F_STR(" ms)"));
 
-    Serial.print(F("  Max: "));
-    Serial.print(maxCommit);
-    Serial.print(F(" μs ("));
-    Serial.print(maxCommit / 1000.0);
-    Serial.println(F(" ms) ← Includes erase"));
+    SERIAL_OUT.print(F_STR("  Max: "));
+    SERIAL_OUT.print(maxCommit);
+    SERIAL_OUT.print(F_STR(" μs ("));
+    SERIAL_OUT.print(maxCommit / 1000.0);
+    SERIAL_OUT.println(F_STR(" ms) ← Includes erase"));
 #else
     // AVR/native EEPROM: each write goes to hardware
     startBenchmark();
@@ -1200,13 +1204,13 @@ void benchmarkEEPROM() {
     }
     unsigned long writeTime = endBenchmark();
 
-    Serial.print(F("Hardware Write ("));
-    Serial.print(testSize);
-    Serial.print(F(" bytes): "));
-    Serial.print(writeTime);
-    Serial.print(F(" μs ("));
-    Serial.print((float)testSize / writeTime * 1000);
-    Serial.println(F(" ops/ms)"));
+    SERIAL_OUT.print(F_STR("Hardware Write ("));
+    SERIAL_OUT.print(testSize);
+    SERIAL_OUT.print(F_STR(" bytes): "));
+    SERIAL_OUT.print(writeTime);
+    SERIAL_OUT.print(F_STR(" μs ("));
+    SERIAL_OUT.print((float)testSize / writeTime * 1000);
+    SERIAL_OUT.println(F_STR(" ops/ms)"));
 #endif
 
     // Read test - measure actual reads with checksum
@@ -1218,17 +1222,17 @@ void benchmarkEEPROM() {
     }
     unsigned long readTime = endBenchmark();
 
-    Serial.print(F("Read ("));
-    Serial.print(testSize);
-    Serial.print(F(" bytes): "));
-    Serial.print(readTime);
-    Serial.print(F(" μs ("));
-    Serial.print((float)testSize / readTime * 1000);
-    Serial.println(F(" ops/ms)"));
-    Serial.print(F("Read checksum: "));
-    Serial.println((uint32_t)checksum);
+    SERIAL_OUT.print(F_STR("Read ("));
+    SERIAL_OUT.print(testSize);
+    SERIAL_OUT.print(F_STR(" bytes): "));
+    SERIAL_OUT.print(readTime);
+    SERIAL_OUT.print(F_STR(" μs ("));
+    SERIAL_OUT.print((float)testSize / readTime * 1000);
+    SERIAL_OUT.println(F_STR(" ops/ms)"));
+    SERIAL_OUT.print(F_STR("Read checksum: "));
+    SERIAL_OUT.println((uint32_t)checksum);
   } else {
-    Serial.println(F("EEPROM not available"));
+    SERIAL_OUT.println(F_STR("EEPROM not available"));
   }
 
 #if defined(ESP32) || defined(ESP8266)
@@ -1242,16 +1246,16 @@ void benchmarkPSRAM() {
   printHeader("MEMORY: PSRAM");
 
   if (psramFound()) {
-    Serial.print(F("PSRAM Size: "));
-    Serial.print(ESP.getPsramSize() / 1024);
-    Serial.println(F(" KB"));
+    SERIAL_OUT.print(F_STR("PSRAM Size: "));
+    SERIAL_OUT.print(ESP.getPsramSize() / 1024);
+    SERIAL_OUT.println(F_STR(" KB"));
 
-    Serial.print(F("Free PSRAM: "));
-    Serial.print(ESP.getFreePsram() / 1024);
-    Serial.println(F(" KB"));
+    SERIAL_OUT.print(F_STR("Free PSRAM: "));
+    SERIAL_OUT.print(ESP.getFreePsram() / 1024);
+    SERIAL_OUT.println(F_STR(" KB"));
 
     // Allocate test buffer in PSRAM
-    uint8_t* psramBuffer = (uint8_t*)ps_malloc(4096);
+    uint8_t *psramBuffer = (uint8_t *)ps_malloc(4096);
     if (psramBuffer != NULL) {
       // Write test
       startBenchmark();
@@ -1268,27 +1272,27 @@ void benchmarkPSRAM() {
       }
       unsigned long readTime = endBenchmark();
 
-      Serial.print(F("Write (4096 bytes): "));
-      Serial.print(writeTime);
-      Serial.print(F(" μs ("));
-      Serial.print(4096.0 / writeTime * 1000);
-      Serial.println(F(" ops/ms)"));
+      SERIAL_OUT.print(F_STR("Write (4096 bytes): "));
+      SERIAL_OUT.print(writeTime);
+      SERIAL_OUT.print(F_STR(" μs ("));
+      SERIAL_OUT.print(4096.0 / writeTime * 1000);
+      SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-      Serial.print(F("Read (4096 bytes): "));
-      Serial.print(readTime);
-      Serial.print(F(" μs ("));
-      Serial.print(4096.0 / readTime * 1000);
-      Serial.println(F(" ops/ms)"));
+      SERIAL_OUT.print(F_STR("Read (4096 bytes): "));
+      SERIAL_OUT.print(readTime);
+      SERIAL_OUT.print(F_STR(" μs ("));
+      SERIAL_OUT.print(4096.0 / readTime * 1000);
+      SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-      Serial.print(F("Read checksum: "));
-      Serial.println((uint32_t)checksum);
+      SERIAL_OUT.print(F_STR("Read checksum: "));
+      SERIAL_OUT.println((uint32_t)checksum);
 
       free(psramBuffer);
     } else {
-      Serial.println(F("Failed to allocate PSRAM"));
+      SERIAL_OUT.println(F_STR("Failed to allocate PSRAM"));
     }
   } else {
-    Serial.println(F("PSRAM not found"));
+    SERIAL_OUT.println(F_STR("PSRAM not found"));
   }
 }
 #endif
@@ -1340,7 +1344,7 @@ void benchmarkDigitalIO() {
 
 // Direct port manipulation (AVR only)
 #ifdef __AVR__
-  volatile uint8_t* out = portOutputRegister(digitalPinToPort(testPin));
+  volatile uint8_t *out = portOutputRegister(digitalPinToPort(testPin));
   uint8_t mask = digitalPinToBitMask(testPin);
   MedianCollector<float, kJitterTrials> portOpsMedian = {};
   MedianCollector<unsigned long, kJitterTrials> portElapsedMedian = {};
@@ -1413,44 +1417,44 @@ void benchmarkDigitalIO() {
   uint32_t regTotalOps = regTotalOpsMedian.median();
 #endif
 
-  Serial.print(F("digitalWrite() ("));
-  Serial.print(dwOpsPerTrial);
-  Serial.print(F(" ops): "));
-  Serial.print(writeTime);
-  Serial.print(F(" μs (median "));
-  Serial.print(writeOpsPerMs);
-  Serial.print(F(" ops/ms, "));
-  Serial.print(kJitterTrials);
-  Serial.println(F(" trials)"));
+  SERIAL_OUT.print(F_STR("digitalWrite() ("));
+  SERIAL_OUT.print(dwOpsPerTrial);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(writeTime);
+  SERIAL_OUT.print(F_STR(" μs (median "));
+  SERIAL_OUT.print(writeOpsPerMs);
+  SERIAL_OUT.print(F_STR(" ops/ms, "));
+  SERIAL_OUT.print(kJitterTrials);
+  SERIAL_OUT.println(F_STR(" trials)"));
 
 #ifdef __AVR__
-  Serial.print(F("Direct Port ("));
-  Serial.print(portTotalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(portElapsedMicros);
-  Serial.print(F(" μs (median "));
-  Serial.print(portOpsPerMs);
-  Serial.print(F(" ops/ms, "));
-  Serial.print(kJitterTrials);
-  Serial.println(F(" trials)"));
-  Serial.print(F("Speedup: "));
-  Serial.print(portOpsPerMs / writeOpsPerMs);
-  Serial.println(F("x faster"));
+  SERIAL_OUT.print(F_STR("Direct Port ("));
+  SERIAL_OUT.print(portTotalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(portElapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs (median "));
+  SERIAL_OUT.print(portOpsPerMs);
+  SERIAL_OUT.print(F_STR(" ops/ms, "));
+  SERIAL_OUT.print(kJitterTrials);
+  SERIAL_OUT.println(F_STR(" trials)"));
+  SERIAL_OUT.print(F_STR("Speedup: "));
+  SERIAL_OUT.print(portOpsPerMs / writeOpsPerMs);
+  SERIAL_OUT.println(F_STR("x faster"));
 #endif
 
 #if defined(ESP32) || defined(ARDUINO_ARCH_RP2040)
-  Serial.print(F("Direct Register ("));
-  Serial.print(regTotalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(regElapsedMicros);
-  Serial.print(F(" μs (median "));
-  Serial.print(regOpsPerMs);
-  Serial.print(F(" ops/ms, "));
-  Serial.print(kJitterTrials);
-  Serial.println(F(" trials)"));
-  Serial.print(F("Speedup: "));
-  Serial.print(regOpsPerMs / writeOpsPerMs);
-  Serial.println(F("x faster"));
+  SERIAL_OUT.print(F_STR("Direct Register ("));
+  SERIAL_OUT.print(regTotalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(regElapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs (median "));
+  SERIAL_OUT.print(regOpsPerMs);
+  SERIAL_OUT.print(F_STR(" ops/ms, "));
+  SERIAL_OUT.print(kJitterTrials);
+  SERIAL_OUT.println(F_STR(" trials)"));
+  SERIAL_OUT.print(F_STR("Speedup: "));
+  SERIAL_OUT.print(regOpsPerMs / writeOpsPerMs);
+  SERIAL_OUT.println(F_STR("x faster"));
 #endif
 }
 
@@ -1459,122 +1463,147 @@ void benchmarkAnalogIO() {
 
   const uint32_t minDurationMs = max(5UL, (gMinBenchUs + 999UL) / 1000UL);
 
-// Find analog pins
+  // Find analog pins
 #if defined(ESP32)
-#if defined(ARDUINO_NANO_ESP32)
-  int analogInPin = A0;
-#elif defined(CONFIG_IDF_TARGET_ESP32S3)
-  int analogInPin = 1;    // ADC1 channel
-#elif defined(CONFIG_IDF_TARGET_ESP32S2)
-  int analogInPin = 1;  // ADC1 channel
-#elif defined(CONFIG_IDF_TARGET_ESP32C3)
-  int analogInPin = 0;  // ADC1 channel
-#elif defined(CONFIG_IDF_TARGET_ESP32C6)
-  int analogInPin = 0;  // ADC1 channel
-#elif defined(CONFIG_IDF_TARGET_ESP32H2)
-  int analogInPin = 0;  // ADC1 channel
-#else
-  int analogInPin = 36;  // VP (ESP32 ADC1)
-#endif
-#if defined(CONFIG_IDF_TARGET_ESP32)
-  int analogOutPin = 25;  // DAC1
-#else
-  int analogOutPin = -1;  // No DAC on these variants
-#endif
+  #if defined(ARDUINO_NANO_ESP32)
+    int analogInPin = A0;
+  #elif defined(CONFIG_IDF_TARGET_ESP32S3)
+    int analogInPin = 1;
+  #elif defined(CONFIG_IDF_TARGET_ESP32S2)
+    int analogInPin = 1;
+  #elif defined(CONFIG_IDF_TARGET_ESP32C3)
+    int analogInPin = 0;
+  #elif defined(CONFIG_IDF_TARGET_ESP32C6)
+    int analogInPin = 0;
+  #elif defined(CONFIG_IDF_TARGET_ESP32H2)
+    int analogInPin = 0;
+  #else
+    int analogInPin = 36;
+  #endif
+  #if defined(CONFIG_IDF_TARGET_ESP32)
+    int analogOutPin = 25;   // DAC1
+  #else
+    int analogOutPin = -1;
+  #endif
+
 #elif defined(ESP8266)
   int analogInPin = A0;
-  int analogOutPin = -1;  // No DAC
+  int analogOutPin = -1;
+
+#elif defined(ARDUINO_UNO_Q) || defined(ARDUINO_UNO_Q_MCU)
+  // UNO Q does have A0..A5 on the header. Keep output format identical to other boards:
+  // single analogRead benchmark on a representative pin.
+  int analogInPin = A0;
+  int analogOutPin = -1; // no DAC; treat PWM separately elsewhere
+
+  // Make ADC resolution deterministic if the core supports it.
+  #if defined(analogReadResolution)
+    analogReadResolution(12);
+  #endif
+
 #elif defined(__AVR__)
   int analogInPin = A0;
-  int analogOutPin = 9;  // PWM
+  int analogOutPin = 9;      // PWM
+
 #elif defined(ARDUINO_ARCH_RP2040)
-  int analogInPin = 26;   // A0
-  int analogOutPin = 15;  // PWM
+  int analogInPin = 26;      // A0
+  int analogOutPin = 15;     // PWM
+
 #else
   int analogInPin = A0;
   int analogOutPin = 3;
 #endif
 
-  // analogRead benchmark - accumulate to prevent optimization
+  // ------------------------------
+  // analogRead benchmark
+  // ------------------------------
   if (analogInPin >= 0) {
+    // Some cores behave better with explicit INPUT and a short warm-up.
+    pinMode(analogInPin, INPUT);
+    for (int i = 0; i < 8; i++) (void)analogRead(analogInPin);
+
     volatile uint32_t sum = 0;
     bool allZero = true;
+
     TimedLoopResult readResult = runTimedLoop(minDurationMs, 1, [&]() {
       int value = analogRead(analogInPin);
-      sum += value;
-      if (value != 0) {
-        allZero = false;
-      }
+      sum += (uint32_t)((value < 0) ? 0 : value);
+      if (value != 0) allZero = false;
     });
 
-    Serial.print(F("analogRead() ("));
-    Serial.print(readResult.totalOps);
-    Serial.print(F(" ops): "));
-    Serial.print(readResult.elapsedMicros);
-    Serial.print(F(" μs ("));
-    Serial.print(readResult.opsPerMs);
-    Serial.println(F(" ops/ms)"));
-    Serial.print(F("ADC average: "));
-    Serial.println((uint32_t)(sum / readResult.totalOps));
+    SERIAL_OUT.print(F_STR("analogRead() ("));
+    SERIAL_OUT.print(readResult.totalOps);
+    SERIAL_OUT.print(F_STR(" ops): "));
+    SERIAL_OUT.print(readResult.elapsedMicros);
+    SERIAL_OUT.print(F_STR(" μs ("));
+    SERIAL_OUT.print(readResult.opsPerMs);
+    SERIAL_OUT.println(F_STR(" ops/ms)"));
+
+    SERIAL_OUT.print(F_STR("ADC average: "));
+    SERIAL_OUT.println((uint32_t)(sum / readResult.totalOps));
+
     if (allZero) {
-      Serial.println(F("Warning: ADC reads were all zero; ADC pin may be invalid or floating."));
+      SERIAL_OUT.println(F_STR("Warning: ADC reads were all zero; ADC pin may be invalid or tied low."));
     }
   }
 
+  // ------------------------------
   // analogWrite/PWM benchmark
+  // ------------------------------
   if (analogOutPin >= 0) {
 #if defined(ESP32)
     const int pwmFreq = 5000;
     const int pwmResolution = 8;
 
     startBenchmark();
-#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
-    int pwmChannel = ledcAttach(analogOutPin, pwmFreq, pwmResolution);
-#else
+  #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+    (void)ledcAttach(analogOutPin, pwmFreq, pwmResolution);
+  #else
     const int pwmChannel = 0;
     ledcSetup(pwmChannel, pwmFreq, pwmResolution);
     ledcAttachPin(analogOutPin, pwmChannel);
-#endif
+  #endif
     unsigned long setupTime = endBenchmark();
 
     uint32_t pwmValue = 0;
     TimedLoopResult updateResult = runTimedLoop(minDurationMs, 1, [&]() {
-#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+  #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
       ledcWrite(analogOutPin, pwmValue % 256);
-#else
-        ledcWrite(pwmChannel, pwmValue % 256);
-#endif
+  #else
+      ledcWrite(pwmChannel, pwmValue % 256);
+  #endif
       pwmValue++;
     });
 
-    Serial.print(F("PWM setup: "));
-    Serial.print(setupTime);
-    Serial.print(F(" μs ("));
-    Serial.print(1000.0 / setupTime);
-    Serial.println(F(" ops/ms)"));
+    SERIAL_OUT.print(F_STR("PWM setup: "));
+    SERIAL_OUT.print(setupTime);
+    SERIAL_OUT.print(F_STR(" μs ("));
+    SERIAL_OUT.print(1000.0 / (double)setupTime);
+    SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-    Serial.print(F("PWM duty update ("));
-    Serial.print(updateResult.totalOps);
-    Serial.print(F(" ops): "));
-    Serial.print(updateResult.elapsedMicros);
-    Serial.print(F(" μs ("));
-    Serial.print(updateResult.opsPerMs);
-    Serial.println(F(" ops/ms)"));
+    SERIAL_OUT.print(F_STR("PWM duty update ("));
+    SERIAL_OUT.print(updateResult.totalOps);
+    SERIAL_OUT.print(F_STR(" ops): "));
+    SERIAL_OUT.print(updateResult.elapsedMicros);
+    SERIAL_OUT.print(F_STR(" μs ("));
+    SERIAL_OUT.print(updateResult.opsPerMs);
+    SERIAL_OUT.println(F_STR(" ops/ms)"));
 #else
     pinMode(analogOutPin, OUTPUT);
+
     uint32_t pwmValue = 0;
     TimedLoopResult writeResult = runTimedLoop(minDurationMs, 1, [&]() {
       analogWrite(analogOutPin, pwmValue % 256);
       pwmValue++;
     });
 
-    Serial.print(F("analogWrite() ("));
-    Serial.print(writeResult.totalOps);
-    Serial.print(F(" ops): "));
-    Serial.print(writeResult.elapsedMicros);
-    Serial.print(F(" μs ("));
-    Serial.print(writeResult.opsPerMs);
-    Serial.println(F(" ops/ms)"));
+    SERIAL_OUT.print(F_STR("analogWrite() ("));
+    SERIAL_OUT.print(writeResult.totalOps);
+    SERIAL_OUT.print(F_STR(" ops): "));
+    SERIAL_OUT.print(writeResult.elapsedMicros);
+    SERIAL_OUT.print(F_STR(" μs ("));
+    SERIAL_OUT.print(writeResult.opsPerMs);
+    SERIAL_OUT.println(F_STR(" ops/ms)"));
 #endif
   }
 }
@@ -1593,10 +1622,10 @@ void benchmarkSerial() {
   MedianCollector<unsigned long, kJitterTrials> enqueueTimeMedian = {};
   MedianCollector<float, kJitterTrials> enqueueRateMedian = {};
   for (uint8_t trial = 0; trial < kJitterTrials; trial++) {
-    Serial.flush();
+    SERIAL_OUT.flush();
     startBenchmark();
     for (int i = 0; i < 100; i++) {
-      Serial.print(i);
+      SERIAL_OUT.print(i);
     }
     unsigned long enqueueTime = endBenchmark();
     enqueueTimeMedian.add(enqueueTime);
@@ -1607,7 +1636,7 @@ void benchmarkSerial() {
 
   // Measure what flush() actually does
   unsigned long flushStart = micros();
-  Serial.flush();  // Wait for TX buffer to drain to UART FIFO
+  SERIAL_OUT.flush();  // Wait for TX buffer to drain to UART FIFO
   unsigned long flushTime = micros() - flushStart;
 
   // Calculate theoretical wire time (10 bits per byte: start + 8 data + stop)
@@ -1615,42 +1644,42 @@ void benchmarkSerial() {
   // Each byte = 10 bits = 86.8 μs
   unsigned long theoreticalWireTime = (unsigned long)(expectedBytes * 10 * 1000000.0 / SERIAL_BAUD);
 
-  Serial.println();
-  Serial.print(F("Serial Enqueue ("));
-  Serial.print(expectedBytes);
-  Serial.print(F(" bytes): "));
-  Serial.print(enqueueTime);
-  Serial.print(F(" μs (median "));
-  Serial.print(enqueueRate);
-  Serial.print(F(" bytes/ms CPU, "));
-  Serial.print(kJitterTrials);
-  Serial.println(F(" trials)"));
+  SERIAL_OUT.println();
+  SERIAL_OUT.print(F_STR("Serial Enqueue ("));
+  SERIAL_OUT.print(expectedBytes);
+  SERIAL_OUT.print(F_STR(" bytes): "));
+  SERIAL_OUT.print(enqueueTime);
+  SERIAL_OUT.print(F_STR(" μs (median "));
+  SERIAL_OUT.print(enqueueRate);
+  SERIAL_OUT.print(F_STR(" bytes/ms CPU, "));
+  SERIAL_OUT.print(kJitterTrials);
+  SERIAL_OUT.println(F_STR(" trials)"));
 
-  Serial.print(F("flush() time (implementation-dependent): "));
-  Serial.print(flushTime);
-  Serial.print(F(" μs"));
-  Serial.println();
+  SERIAL_OUT.print(F_STR("flush() time (implementation-dependent): "));
+  SERIAL_OUT.print(flushTime);
+  SERIAL_OUT.print(F_STR(" μs"));
+  SERIAL_OUT.println();
 
-  Serial.print(F("Theoretical Wire Time: "));
-  Serial.print(theoreticalWireTime);
-  Serial.print(F(" μs ("));
-  Serial.print(theoreticalWireTime / 1000.0);
-  Serial.println(F(" ms)"));
+  SERIAL_OUT.print(F_STR("Theoretical Wire Time: "));
+  SERIAL_OUT.print(theoreticalWireTime);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(theoreticalWireTime / 1000.0);
+  SERIAL_OUT.println(F_STR(" ms)"));
 
-  Serial.print(F("Wire Throughput: "));
-  Serial.print(expectedBytes * 1000.0 / theoreticalWireTime);
-  Serial.print(F(" bytes/ms ("));
-  Serial.print(SERIAL_BAUD / 10);  // 8N1 = 10 bits per byte
-  Serial.println(F(" bytes/sec theoretical)"));
+  SERIAL_OUT.print(F_STR("Wire Throughput: "));
+  SERIAL_OUT.print(expectedBytes * 1000.0 / theoreticalWireTime);
+  SERIAL_OUT.print(F_STR(" bytes/ms ("));
+  SERIAL_OUT.print(SERIAL_BAUD / 10);  // 8N1 = 10 bits per byte
+  SERIAL_OUT.println(F_STR(" bytes/sec theoretical)"));
 
   // Compare enqueue vs wire
-  Serial.print(F("Enqueue/Wire Ratio: "));
-  Serial.print((float)enqueueTime / theoreticalWireTime * 100);
-  Serial.print(F("% ("));
+  SERIAL_OUT.print(F_STR("Enqueue/Wire Ratio: "));
+  SERIAL_OUT.print((float)enqueueTime / theoreticalWireTime * 100);
+  SERIAL_OUT.print(F_STR("% ("));
   if (enqueueTime < theoreticalWireTime) {
-    Serial.println(F("buffered, won't block)"));
+    SERIAL_OUT.println(F_STR("buffered, won't block)"));
   } else {
-    Serial.println(F("CPU-bound)"));
+    SERIAL_OUT.println(F_STR("CPU-bound)"));
   }
 }
 
@@ -1660,8 +1689,8 @@ void benchmarkSerial() {
 void benchmarkLEDMatrix() {
   printHeader("DISPLAY: LED Matrix (Uno R4)");
 
-  Serial.println(F("12x8 LED Matrix Available: YES"));
-  Serial.println(F("Running LED animation test..."));
+  SERIAL_OUT.println(F_STR("12x8 LED Matrix Available: YES"));
+  SERIAL_OUT.println(F_STR("Running LED animation test..."));
 
   ArduinoLEDMatrix matrix;
   matrix.begin();
@@ -1725,21 +1754,21 @@ void benchmarkLEDMatrix() {
 
   matrix.loadFrame(frameOff);
 
-  Serial.print(F("Blink animation (20 cycles): "));
-  Serial.print(blinkTime);
-  Serial.println(F(" ms"));
+  SERIAL_OUT.print(F_STR("Blink animation (20 cycles): "));
+  SERIAL_OUT.print(blinkTime);
+  SERIAL_OUT.println(F_STR(" ms"));
 
-  Serial.print(F("Pattern switching (100 frames): "));
-  Serial.print(patternTime);
-  Serial.print(F(" μs ("));
-  Serial.print(100.0 / patternTime * 1000);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("Pattern switching (100 frames): "));
+  SERIAL_OUT.print(patternTime);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(100.0 / patternTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  Serial.print(F("Bitmap rendering (50 frames): "));
-  Serial.print(bitmapTime);
-  Serial.print(F(" μs ("));
-  Serial.print(50.0 / bitmapTime * 1000);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("Bitmap rendering (50 frames): "));
+  SERIAL_OUT.print(bitmapTime);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(50.0 / bitmapTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 }
 #endif
 
@@ -1747,21 +1776,21 @@ void benchmarkLEDMatrix() {
 void benchmarkWiFi() {
   printHeader("WIRELESS: WiFi CAPABILITIES");
 
-  Serial.print(F("WiFi Available: YES"));
+  SERIAL_OUT.print(F_STR("WiFi Available: YES"));
 
 // Identify WiFi chip/library
 #if defined(ARDUINO_UNOR4_WIFI)
-  Serial.println(F(" (ESP32-S3 via WiFiS3)"));
+  SERIAL_OUT.println(F_STR(" (ESP32-S3 via WiFiS3)"));
 #elif defined(ARDUINO_SAMD_MKRWIFI1010) || defined(ARDUINO_SAMD_NANO_33_IOT) || defined(ARDUINO_NANO_RP2040_CONNECT)
-  Serial.println(F(" (Nina W102 via WiFiNINA)"));
+  SERIAL_OUT.println(F_STR(" (Nina W102 via WiFiNINA)"));
 #elif defined(ARDUINO_SAMD_MKR1000)
-  Serial.println(F(" (WINC1500 via WiFi101)"));
+  SERIAL_OUT.println(F_STR(" (WINC1500 via WiFi101)"));
 #elif defined(ESP32) || defined(ESP8266)
-  Serial.println(F(" (Native)"));
+  SERIAL_OUT.println(F_STR(" (Native)"));
 #elif defined(ARDUINO_RASPBERRY_PI_PICO_W)
-  Serial.println(F(" (CYW43439)"));
+  SERIAL_OUT.println(F_STR(" (CYW43439)"));
 #else
-  Serial.println();
+  SERIAL_OUT.println();
 #endif
 
 // MAC Address - different methods for different libraries
@@ -1769,48 +1798,48 @@ void benchmarkWiFi() {
   // ESP and Pico W need mode set first
   WiFi.mode(WIFI_STA);
   delay(100);
-  Serial.print(F("MAC Address: "));
-  Serial.println(WiFi.macAddress());
+  SERIAL_OUT.print(F_STR("MAC Address: "));
+  SERIAL_OUT.println(WiFi.macAddress());
 #elif defined(ARDUINO_UNOR4_WIFI)
   // Uno R4 WiFi - no mode setting needed
-  Serial.print(F("MAC Address: "));
+  SERIAL_OUT.print(F_STR("MAC Address: "));
   byte mac[6];
   WiFi.macAddress(mac);
   for (int i = 5; i >= 0; i--) {
-    if (mac[i] < 16) Serial.print("0");
-    Serial.print(mac[i], HEX);
-    if (i > 0) Serial.print(":");
+    if (mac[i] < 16) SERIAL_OUT.print("0");
+    SERIAL_OUT.print(mac[i], HEX);
+    if (i > 0) SERIAL_OUT.print(":");
   }
-  Serial.println();
+  SERIAL_OUT.println();
 #else
   // WiFiNINA/WiFi101 - need to get MAC as byte array
   byte mac[6];
   WiFi.macAddress(mac);
-  Serial.print(F("MAC Address: "));
+  SERIAL_OUT.print(F_STR("MAC Address: "));
   for (int i = 5; i >= 0; i--) {
-    if (mac[i] < 16) Serial.print("0");
-    Serial.print(mac[i], HEX);
-    if (i > 0) Serial.print(":");
+    if (mac[i] < 16) SERIAL_OUT.print("0");
+    SERIAL_OUT.print(mac[i], HEX);
+    if (i > 0) SERIAL_OUT.print(":");
   }
-  Serial.println();
+  SERIAL_OUT.println();
 #endif
 
   // Scan networks
-  Serial.print(F("Scanning networks... "));
+  SERIAL_OUT.print(F_STR("Scanning networks... "));
   int n = WiFi.scanNetworks();
-  Serial.print(n);
-  Serial.println(F(" networks found"));
+  SERIAL_OUT.print(n);
+  SERIAL_OUT.println(F_STR(" networks found"));
 
   if (n > 0) {
-    Serial.println(F("Strongest 3 networks:"));
+    SERIAL_OUT.println(F_STR("Strongest 3 networks:"));
     for (int i = 0; i < min(3, n); i++) {
-      Serial.print(F("  "));
-      Serial.print(i + 1);
-      Serial.print(F(": "));
-      Serial.print(WiFi.SSID(i));
-      Serial.print(F(" ("));
-      Serial.print(WiFi.RSSI(i));
-      Serial.println(F(" dBm)"));
+      SERIAL_OUT.print(F_STR("  "));
+      SERIAL_OUT.print(i + 1);
+      SERIAL_OUT.print(F_STR(": "));
+      SERIAL_OUT.print(WiFi.SSID(i));
+      SERIAL_OUT.print(F_STR(" ("));
+      SERIAL_OUT.print(WiFi.RSSI(i));
+      SERIAL_OUT.println(F_STR(" dBm)"));
     }
   }
 
@@ -1831,40 +1860,40 @@ void benchmarkWiFi() {
 #ifdef HAS_BLE
 void benchmarkBLE() {
   printHeader("WIRELESS: Bluetooth LE");
-  Serial.println(F("BLE Available: YES"));
+  SERIAL_OUT.println(F_STR("BLE Available: YES"));
 
 #if defined(ESP32)
-  Serial.println(F("Initializing BLE..."));
+  SERIAL_OUT.println(F_STR("Initializing BLE..."));
   BLEDevice::init("");
 
-  BLEScan* pBLEScan = BLEDevice::getScan();
+  BLEScan *pBLEScan = BLEDevice::getScan();
   pBLEScan->setActiveScan(true);
   pBLEScan->setInterval(100);
   pBLEScan->setWindow(99);
 
-  Serial.print(F("Scanning for BLE devices (5 sec)... "));
-  BLEScanResults* foundDevices = pBLEScan->start(5, false);
+  SERIAL_OUT.print(F_STR("Scanning for BLE devices (5 sec)... "));
+  BLEScanResults *foundDevices = pBLEScan->start(5, false);
   int deviceCount = foundDevices->getCount();
-  Serial.print(deviceCount);
-  Serial.println(F(" devices found"));
+  SERIAL_OUT.print(deviceCount);
+  SERIAL_OUT.println(F_STR(" devices found"));
 
   if (deviceCount > 0) {
-    Serial.println(F("Discovered devices:"));
+    SERIAL_OUT.println(F_STR("Discovered devices:"));
     for (int i = 0; i < min(5, deviceCount); i++) {
       BLEAdvertisedDevice device = foundDevices->getDevice(i);
-      Serial.print(F("  "));
-      Serial.print(i + 1);
-      Serial.print(F(": "));
+      SERIAL_OUT.print(F_STR("  "));
+      SERIAL_OUT.print(i + 1);
+      SERIAL_OUT.print(F_STR(": "));
       if (device.haveName()) {
-        Serial.print(device.getName().c_str());
+        SERIAL_OUT.print(device.getName().c_str());
       } else {
-        Serial.print(F("Unknown"));
+        SERIAL_OUT.print(F_STR("Unknown"));
       }
-      Serial.print(F(" ["));
-      Serial.print(device.getAddress().toString().c_str());
-      Serial.print(F("] RSSI: "));
-      Serial.print(device.getRSSI());
-      Serial.println(F(" dBm"));
+      SERIAL_OUT.print(F_STR(" ["));
+      SERIAL_OUT.print(device.getAddress().toString().c_str());
+      SERIAL_OUT.print(F_STR("] RSSI: "));
+      SERIAL_OUT.print(device.getRSSI());
+      SERIAL_OUT.println(F_STR(" dBm"));
     }
   }
 
@@ -1873,12 +1902,12 @@ void benchmarkBLE() {
 
 #elif defined(BOARD_NRF52) || defined(ARDUINO_NANO_RP2040_CONNECT) || defined(ARDUINO_SAMD_NANO_33_IOT)
   // For boards using ArduinoBLE library
-  Serial.println(F("BLE scan requires ArduinoBLE library"));
-  Serial.println(F("Install via Library Manager: 'ArduinoBLE'"));
-  Serial.println(F("Scan example:"));
-  Serial.println(F("  BLE.begin() → BLE.scan() → check BLE.available()"));
+  SERIAL_OUT.println(F_STR("BLE scan requires ArduinoBLE library"));
+  SERIAL_OUT.println(F_STR("Install via Library Manager: 'ArduinoBLE'"));
+  SERIAL_OUT.println(F_STR("Scan example:"));
+  SERIAL_OUT.println(F_STR("  BLE.begin() → BLE.scan() → check BLE.available()"));
 #else
-  Serial.println(F("BLE hardware detected but scan not implemented"));
+  SERIAL_OUT.println(F_STR("BLE hardware detected but scan not implemented"));
 #endif
 }
 #endif
@@ -1887,39 +1916,39 @@ void benchmarkFlash() {
   printHeader("STORAGE: Flash Information");
 
 #if defined(ESP32)
-  Serial.print(F("Flash Size: "));
-  Serial.print(ESP.getFlashChipSize() / 1024);
-  Serial.println(F(" KB"));
+  SERIAL_OUT.print(F_STR("Flash Size: "));
+  SERIAL_OUT.print(ESP.getFlashChipSize() / 1024);
+  SERIAL_OUT.println(F_STR(" KB"));
 
-  Serial.print(F("Flash Speed: "));
-  Serial.print(ESP.getFlashChipSpeed() / 1000000);
-  Serial.println(F(" MHz"));
+  SERIAL_OUT.print(F_STR("Flash Speed: "));
+  SERIAL_OUT.print(ESP.getFlashChipSpeed() / 1000000);
+  SERIAL_OUT.println(F_STR(" MHz"));
 
-  Serial.print(F("Sketch Size: "));
-  Serial.print(ESP.getSketchSize() / 1024);
-  Serial.println(F(" KB"));
+  SERIAL_OUT.print(F_STR("Sketch Size: "));
+  SERIAL_OUT.print(ESP.getSketchSize() / 1024);
+  SERIAL_OUT.println(F_STR(" KB"));
 
-  Serial.print(F("Free Sketch Space: "));
-  Serial.print(ESP.getFreeSketchSpace() / 1024);
-  Serial.println(F(" KB"));
+  SERIAL_OUT.print(F_STR("Free Sketch Space: "));
+  SERIAL_OUT.print(ESP.getFreeSketchSpace() / 1024);
+  SERIAL_OUT.println(F_STR(" KB"));
 #elif defined(ESP8266)
-  Serial.print(F("Flash Size: "));
-  Serial.print(ESP.getFlashChipSize() / 1024);
-  Serial.println(F(" KB"));
+  SERIAL_OUT.print(F_STR("Flash Size: "));
+  SERIAL_OUT.print(ESP.getFlashChipSize() / 1024);
+  SERIAL_OUT.println(F_STR(" KB"));
 
-  Serial.print(F("Flash Speed: "));
-  Serial.print(ESP.getFlashChipSpeed() / 1000000);
-  Serial.println(F(" MHz"));
+  SERIAL_OUT.print(F_STR("Flash Speed: "));
+  SERIAL_OUT.print(ESP.getFlashChipSpeed() / 1000000);
+  SERIAL_OUT.println(F_STR(" MHz"));
 
-  Serial.print(F("Sketch Size: "));
-  Serial.print(ESP.getSketchSize() / 1024);
-  Serial.println(F(" KB"));
+  SERIAL_OUT.print(F_STR("Sketch Size: "));
+  SERIAL_OUT.print(ESP.getSketchSize() / 1024);
+  SERIAL_OUT.println(F_STR(" KB"));
 
-  Serial.print(F("Free Sketch Space: "));
-  Serial.print(ESP.getFreeSketchSpace() / 1024);
-  Serial.println(F(" KB"));
+  SERIAL_OUT.print(F_STR("Free Sketch Space: "));
+  SERIAL_OUT.print(ESP.getFreeSketchSpace() / 1024);
+  SERIAL_OUT.println(F_STR(" KB"));
 #else
-  Serial.println(F("Flash info not available on this platform"));
+  SERIAL_OUT.println(F_STR("Flash info not available on this platform"));
 #endif
 }
 
@@ -1927,6 +1956,12 @@ void benchmarkFlash() {
 
 void benchmarkAdvancedMath() {
   printHeader("ADVANCED MATH: Transcendental Functions");
+
+#if defined(ARDUINO_UNO_Q) || defined(ARDUINO_UNO_Q_MCU)
+  SERIAL_OUT.println(F_STR("Uno Q: libm not available (sin/cos/log/exp/pow/atan2)"));
+  SERIAL_OUT.println(F_STR("Skipping advanced math benchmark"));
+  return;
+#endif
 
   volatile float checksum = 0;
 
@@ -1972,55 +2007,55 @@ void benchmarkAdvancedMath() {
   }
   unsigned long fmodTime = endBenchmark();
 
-  Serial.print(F("Checksum: "));
-  Serial.println(checksum);
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println(checksum);
 
-  Serial.print(F("atan2() (100 ops): "));
-  Serial.print(atan2Time);
-  Serial.print(F(" μs ("));
-  Serial.print(100.0 / atan2Time * 1000);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("atan2() (100 ops): "));
+  SERIAL_OUT.print(atan2Time);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(100.0 / atan2Time * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  Serial.print(F("log() (100 ops): "));
-  Serial.print(logTime);
-  Serial.print(F(" μs ("));
-  Serial.print(100.0 / logTime * 1000);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("log() (100 ops): "));
+  SERIAL_OUT.print(logTime);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(100.0 / logTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  Serial.print(F("exp() (100 ops): "));
-  Serial.print(expTime);
-  Serial.print(F(" μs ("));
-  Serial.print(100.0 / expTime * 1000);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("exp() (100 ops): "));
+  SERIAL_OUT.print(expTime);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(100.0 / expTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  Serial.print(F("pow() (100 ops): "));
-  Serial.print(powTime);
-  Serial.print(F(" μs ("));
-  Serial.print(100.0 / powTime * 1000);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("pow() (100 ops): "));
+  SERIAL_OUT.print(powTime);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(100.0 / powTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  Serial.print(F("fmod() (1000 ops): "));
-  Serial.print(fmodTime);
-  Serial.print(F(" μs ("));
-  Serial.print(1000.0 / fmodTime * 1000);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("fmod() (1000 ops): "));
+  SERIAL_OUT.print(fmodTime);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(1000.0 / fmodTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 }
 
 #if defined(ARDUINO_ARCH_RP2040)
 void benchmarkSHA1() {
   printHeader("CRYPTO: SHA1");
 
-  Serial.println(F("Example digests:"));
-  Serial.print(F("SHA1:"));
-  Serial.println(sha1("abc"));
+  SERIAL_OUT.println(F_STR("Example digests:"));
+  SERIAL_OUT.print(F_STR("SHA1:"));
+  SERIAL_OUT.println(sha1("abc"));
 
   uint8_t hash[20];
   sha1("test", &hash[0]);
-  Serial.print(F("SHA1:"));
+  SERIAL_OUT.print(F_STR("SHA1:"));
   for (uint16_t i = 0; i < 20; i++) {
-    Serial.printf("%02x", hash[i]);
+    SERIAL_OUT.printf("%02x", hash[i]);
   }
-  Serial.println();
+  SERIAL_OUT.println();
 
   const uint32_t minDurationMs = max(5UL, (gMinBenchUs + 999UL) / 1000UL);
   volatile uint32_t checksum = 0;
@@ -2039,24 +2074,24 @@ void benchmarkSHA1() {
     }
   });
 
-  Serial.print(F("Checksum: "));
-  Serial.println(checksum);
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println(checksum);
 
-  Serial.print(F("SHA1 String ("));
-  Serial.print(stringResult.totalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(stringResult.elapsedMicros);
-  Serial.print(F(" μs ("));
-  Serial.print(stringResult.opsPerMs);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("SHA1 String ("));
+  SERIAL_OUT.print(stringResult.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(stringResult.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(stringResult.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  Serial.print(F("SHA1 Buffer ("));
-  Serial.print(bufferResult.totalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(bufferResult.elapsedMicros);
-  Serial.print(F(" μs ("));
-  Serial.print(bufferResult.opsPerMs);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("SHA1 Buffer ("));
+  SERIAL_OUT.print(bufferResult.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(bufferResult.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(bufferResult.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 }
 #endif
 
@@ -2118,14 +2153,14 @@ void benchmarkESP32Crypto() {
   };
   auto checkCryptoTimeout = [&]() -> bool {
     if (!cryptoTimedOut && (millis() - cryptoStartMs > maxCryptoMs)) {
-      Serial.println(F("Warning: crypto benchmark timed out."));
+      SERIAL_OUT.println(F_STR("Warning: crypto benchmark timed out."));
       cryptoTimedOut = true;
     }
     return cryptoTimedOut;
   };
   auto abortCryptoIfTimedOut = [&]() -> bool {
     if (cryptoTimedOut && !cryptoAbortPrinted) {
-      Serial.println(F("Crypto benchmark aborted due to timeout."));
+      SERIAL_OUT.println(F_STR("Crypto benchmark aborted due to timeout."));
       cryptoAbortPrinted = true;
     }
     return cryptoTimedOut;
@@ -2153,38 +2188,38 @@ void benchmarkESP32Crypto() {
 
   const uint32_t minDurationMs = max(5UL, (gMinBenchUs + 999UL) / 1000UL);
 
-  Serial.println(F("Example digests:"));
+  SERIAL_OUT.println(F_STR("Example digests:"));
   benchmarkMd5(input, inputSize, digest);
   if (!toHex(digest, 16, hexDigest, sizeof(hexDigest))) {
-    Serial.println(F("MD5 hex buffer too small."));
+    SERIAL_OUT.println(F_STR("MD5 hex buffer too small."));
     return;
   }
-  Serial.print(F("MD5: "));
-  Serial.println(hexDigest);
+  SERIAL_OUT.print(F_STR("MD5: "));
+  SERIAL_OUT.println(hexDigest);
 
   benchmarkSha1(input, inputSize, digest);
   if (!toHex(digest, 20, hexDigest, sizeof(hexDigest))) {
-    Serial.println(F("SHA1 hex buffer too small."));
+    SERIAL_OUT.println(F_STR("SHA1 hex buffer too small."));
     return;
   }
-  Serial.print(F("SHA1: "));
-  Serial.println(hexDigest);
+  SERIAL_OUT.print(F_STR("SHA1: "));
+  SERIAL_OUT.println(hexDigest);
 
   benchmarkSha256(input, inputSize, digest);
   if (!toHex(digest, 32, hexDigest, sizeof(hexDigest))) {
-    Serial.println(F("SHA256 hex buffer too small."));
+    SERIAL_OUT.println(F_STR("SHA256 hex buffer too small."));
     return;
   }
-  Serial.print(F("SHA256: "));
-  Serial.println(hexDigest);
+  SERIAL_OUT.print(F_STR("SHA256: "));
+  SERIAL_OUT.println(hexDigest);
 
   benchmarkSha512(input, inputSize, digest);
   if (!toHex(digest, 64, hexDigest, sizeof(hexDigest))) {
-    Serial.println(F("SHA512 hex buffer too small."));
+    SERIAL_OUT.println(F_STR("SHA512 hex buffer too small."));
     return;
   }
-  Serial.print(F("SHA512: "));
-  Serial.println(hexDigest);
+  SERIAL_OUT.print(F_STR("SHA512: "));
+  SERIAL_OUT.println(hexDigest);
 
 #if defined(MBEDTLS_SHA3_C)
   {
@@ -2195,24 +2230,24 @@ void benchmarkESP32Crypto() {
     mbedtls_sha3_finish(&sha3, digest);
     mbedtls_sha3_free(&sha3);
     if (!toHex(digest, 32, hexDigest, sizeof(hexDigest))) {
-      Serial.println(F("SHA3-256 hex buffer too small."));
+      SERIAL_OUT.println(F_STR("SHA3-256 hex buffer too small."));
       return;
     }
-    Serial.print(F("SHA3-256: "));
-    Serial.println(hexDigest);
+    SERIAL_OUT.print(F_STR("SHA3-256: "));
+    SERIAL_OUT.println(hexDigest);
   }
 #else
-  Serial.println(F("SHA3-256: not available in this build"));
+  SERIAL_OUT.println(F_STR("SHA3-256: not available in this build"));
 #endif
 
-  Serial.println(F("...running HEX encode"));
+  SERIAL_OUT.println(F_STR("...running HEX encode"));
   TimedLoopResult hexResult = runTimedLoop(minDurationMs, 20, [&]() -> bool {
     for (uint8_t i = 0; i < 20; i++) {
       if (checkCryptoTimeout()) {
         return false;
       }
       if (!toHex(input, inputSize, hexInput, sizeof(hexInput))) {
-        Serial.println(F("HEX encode buffer too small."));
+        SERIAL_OUT.println(F_STR("HEX encode buffer too small."));
         return false;
       }
       checksum += hexInput[0];
@@ -2225,7 +2260,7 @@ void benchmarkESP32Crypto() {
   if (abortCryptoIfTimedOut()) {
     return;
   }
-  Serial.println(F("...running MD5"));
+  SERIAL_OUT.println(F_STR("...running MD5"));
   TimedLoopResult md5Result = runTimedLoop(minDurationMs, 10, [&]() -> bool {
     for (uint8_t i = 0; i < 10; i++) {
       if (checkCryptoTimeout()) {
@@ -2242,7 +2277,7 @@ void benchmarkESP32Crypto() {
   if (abortCryptoIfTimedOut()) {
     return;
   }
-  Serial.println(F("...running SHA1"));
+  SERIAL_OUT.println(F_STR("...running SHA1"));
   TimedLoopResult sha1Result = runTimedLoop(minDurationMs, 10, [&]() -> bool {
     for (uint8_t i = 0; i < 10; i++) {
       if (checkCryptoTimeout()) {
@@ -2259,7 +2294,7 @@ void benchmarkESP32Crypto() {
   if (abortCryptoIfTimedOut()) {
     return;
   }
-  Serial.println(F("...running SHA256"));
+  SERIAL_OUT.println(F_STR("...running SHA256"));
   TimedLoopResult sha256Result = runTimedLoop(minDurationMs, 10, [&]() -> bool {
     for (uint8_t i = 0; i < 10; i++) {
       if (checkCryptoTimeout()) {
@@ -2276,7 +2311,7 @@ void benchmarkESP32Crypto() {
   if (abortCryptoIfTimedOut()) {
     return;
   }
-  Serial.println(F("...running SHA512"));
+  SERIAL_OUT.println(F_STR("...running SHA512"));
   TimedLoopResult sha512Result = runTimedLoop(minDurationMs, 10, [&]() -> bool {
     for (uint8_t i = 0; i < 10; i++) {
       if (checkCryptoTimeout()) {
@@ -2294,7 +2329,7 @@ void benchmarkESP32Crypto() {
     return;
   }
 #if defined(MBEDTLS_SHA3_C)
-  Serial.println(F("...running SHA3-256"));
+  SERIAL_OUT.println(F_STR("...running SHA3-256"));
   TimedLoopResult sha3Result = runTimedLoop(minDurationMs, 5, [&]() -> bool {
     for (uint8_t i = 0; i < 5; i++) {
       if (checkCryptoTimeout()) {
@@ -2324,109 +2359,111 @@ void benchmarkESP32Crypto() {
   const char *password = "esp32-benchmark";
   const uint32_t pbkdf2Iterations = 500;
 
-  Serial.println(F("...running PBKDF2-HMAC-SHA256"));
+  SERIAL_OUT.println(F_STR("...running PBKDF2-HMAC-SHA256"));
   TimedLoopResult pbkdf2Result = runTimedLoop(minDurationMs, 1, [&]() -> bool {
     if (checkCryptoTimeout()) {
       return false;
     }
 #if defined(MBEDTLS_VERSION_NUMBER) && MBEDTLS_VERSION_NUMBER >= 0x03000000
     if (mbedtls_pkcs5_pbkdf2_hmac_ext(MBEDTLS_MD_SHA256,
-                                     reinterpret_cast<const unsigned char *>(password),
-                                     strlen(password),
-                                     salt,
-                                     saltSize,
-                                     pbkdf2Iterations,
-                                     32,
-                                     digest) == 0) {
+                                      reinterpret_cast<const unsigned char *>(password),
+                                      strlen(password),
+                                      salt,
+                                      saltSize,
+                                      pbkdf2Iterations,
+                                      32,
+                                      digest)
+        == 0) {
       checksum += digest[0];
     }
 #else
-    mbedtls_md_context_t ctx;
-    mbedtls_md_init(&ctx);
-    const mbedtls_md_info_t *info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
-    if (info != nullptr && mbedtls_md_setup(&ctx, info, 1) == 0) {
-      if (mbedtls_pkcs5_pbkdf2_hmac(&ctx,
-                                   reinterpret_cast<const unsigned char *>(password),
-                                   strlen(password),
-                                   salt,
-                                   saltSize,
-                                   pbkdf2Iterations,
-                                   32,
-                                   digest) == 0) {
-        checksum += digest[0];
+      mbedtls_md_context_t ctx;
+      mbedtls_md_init(&ctx);
+      const mbedtls_md_info_t *info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+      if (info != nullptr && mbedtls_md_setup(&ctx, info, 1) == 0) {
+        if (mbedtls_pkcs5_pbkdf2_hmac(&ctx,
+                                      reinterpret_cast<const unsigned char *>(password),
+                                      strlen(password),
+                                      salt,
+                                      saltSize,
+                                      pbkdf2Iterations,
+                                      32,
+                                      digest)
+            == 0) {
+          checksum += digest[0];
+        }
       }
-    }
-    mbedtls_md_free(&ctx);
+      mbedtls_md_free(&ctx);
 #endif
     if (millis() - lastProgressMs > 1000) {
-      Serial.print('.');
+      SERIAL_OUT.print('.');
       lastProgressMs = millis();
     }
     benchYield();
     return !checkCryptoTimeout();
   });
-  Serial.print(F("Checksum: "));
-  Serial.println(checksum);
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println(checksum);
 
-  Serial.print(F("HEX encode ("));
-  Serial.print(hexResult.totalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(hexResult.elapsedMicros);
-  Serial.print(F(" μs ("));
-  Serial.print(hexResult.opsPerMs);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("HEX encode ("));
+  SERIAL_OUT.print(hexResult.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(hexResult.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(hexResult.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  Serial.print(F("MD5 ("));
-  Serial.print(md5Result.totalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(md5Result.elapsedMicros);
-  Serial.print(F(" μs ("));
-  Serial.print(md5Result.opsPerMs);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("MD5 ("));
+  SERIAL_OUT.print(md5Result.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(md5Result.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(md5Result.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  Serial.print(F("SHA1 ("));
-  Serial.print(sha1Result.totalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(sha1Result.elapsedMicros);
-  Serial.print(F(" μs ("));
-  Serial.print(sha1Result.opsPerMs);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("SHA1 ("));
+  SERIAL_OUT.print(sha1Result.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(sha1Result.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(sha1Result.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  Serial.print(F("SHA256 ("));
-  Serial.print(sha256Result.totalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(sha256Result.elapsedMicros);
-  Serial.print(F(" μs ("));
-  Serial.print(sha256Result.opsPerMs);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("SHA256 ("));
+  SERIAL_OUT.print(sha256Result.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(sha256Result.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(sha256Result.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  Serial.print(F("SHA512 ("));
-  Serial.print(sha512Result.totalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(sha512Result.elapsedMicros);
-  Serial.print(F(" μs ("));
-  Serial.print(sha512Result.opsPerMs);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("SHA512 ("));
+  SERIAL_OUT.print(sha512Result.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(sha512Result.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(sha512Result.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 
 #if defined(MBEDTLS_SHA3_C)
-  Serial.print(F("SHA3-256 ("));
-  Serial.print(sha3Result.totalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(sha3Result.elapsedMicros);
-  Serial.print(F(" μs ("));
-  Serial.print(sha3Result.opsPerMs);
-  Serial.println(F(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("SHA3-256 ("));
+  SERIAL_OUT.print(sha3Result.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(sha3Result.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(sha3Result.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
 #endif
 
-  Serial.print(F("PBKDF2-HMAC-SHA256 ("));
-  Serial.print(pbkdf2Result.totalOps);
-  Serial.print(F(" ops): "));
-  Serial.print(pbkdf2Result.elapsedMicros);
-  Serial.print(F(" μs ("));
-  Serial.print(pbkdf2Result.opsPerMs);
-  Serial.println(F(" ops/ms)"));
-  Serial.print(F("  Iterations per op: "));
-  Serial.println(pbkdf2Iterations);
+  SERIAL_OUT.print(F_STR("PBKDF2-HMAC-SHA256 ("));
+  SERIAL_OUT.print(pbkdf2Result.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(pbkdf2Result.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(pbkdf2Result.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+  SERIAL_OUT.print(F_STR("  Iterations per op: "));
+  SERIAL_OUT.println(pbkdf2Iterations);
 }
 #endif
 
@@ -2441,36 +2478,36 @@ void benchmarkTimingPrecision() {
   unsigned long endMillis = millis();
   long millisError = abs((long)(endMillis - startMillis) - 1000);
 
-  Serial.print(F("millis() 1-second test: "));
-  Serial.print(endMillis - startMillis);
-  Serial.print(F(" ms (±"));
-  Serial.print(millisError);
-  Serial.println(F(" ms error)"));
+  SERIAL_OUT.print(F_STR("millis() 1-second test: "));
+  SERIAL_OUT.print(endMillis - startMillis);
+  SERIAL_OUT.print(F_STR(" ms (±"));
+  SERIAL_OUT.print(millisError);
+  SERIAL_OUT.println(F_STR(" ms error)"));
 
   // Test micros() resolution - wait for value to change to measure granularity
   unsigned long micro1 = micros();
   unsigned long micro2 = micro1;
   uint16_t iterations = 0;
   const uint16_t maxIterations = 10000;
-  
+
   // Wait for micros() to increment
   while (micro2 == micro1 && iterations < maxIterations) {
     micro2 = micros();
     iterations++;
   }
-  
+
   unsigned long microResolution = micro2 - micro1;
-  
-  Serial.print(F("micros() resolution: "));
+
+  SERIAL_OUT.print(F_STR("micros() resolution: "));
   if (iterations >= maxIterations) {
-    Serial.println(F("TIMEOUT (timer may not be running)"));
+    SERIAL_OUT.println(F_STR("TIMEOUT (timer may not be running)"));
   } else {
-    Serial.print(microResolution);
-    Serial.print(F(" μs (detected after "));
-    Serial.print(iterations);
-    Serial.println(F(" reads)"));
+    SERIAL_OUT.print(microResolution);
+    SERIAL_OUT.print(F_STR(" μs (detected after "));
+    SERIAL_OUT.print(iterations);
+    SERIAL_OUT.println(F_STR(" reads)"));
   }
-  
+
   // Additional resolution test - measure minimum measurable difference
   unsigned long minDiff = 0xFFFFFFFF;
   for (int i = 0; i < 100; i++) {
@@ -2484,13 +2521,13 @@ void benchmarkTimingPrecision() {
       minDiff = diff;
     }
   }
-  
-  Serial.print(F("Minimum step size (100 samples): "));
-  Serial.print(minDiff);
-  Serial.println(F(" μs"));
-  
+
+  SERIAL_OUT.print(F_STR("Minimum step size (100 samples): "));
+  SERIAL_OUT.print(minDiff);
+  SERIAL_OUT.println(F_STR(" μs"));
+
 #if defined(__AVR__)
-  Serial.println(F("Note: AVR micros() typically advances in 4 μs steps"));
+  SERIAL_OUT.println(F_STR("Note: AVR micros() typically advances in 4 μs steps"));
 #endif
 
   // Test micros() consistency over short period
@@ -2499,22 +2536,22 @@ void benchmarkTimingPrecision() {
   unsigned long endMicros = micros();
   long microsError = abs((long)(endMicros - startMicros) - 1000);
 
-  Serial.print(F("micros() 1ms test: "));
-  Serial.print(endMicros - startMicros);
-  Serial.print(F(" μs (±"));
-  Serial.print(microsError);
-  Serial.println(F(" μs error)"));
+  SERIAL_OUT.print(F_STR("micros() 1ms test: "));
+  SERIAL_OUT.print(endMicros - startMicros);
+  SERIAL_OUT.print(F_STR(" μs (±"));
+  SERIAL_OUT.print(microsError);
+  SERIAL_OUT.println(F_STR(" μs error)"));
 
 // ESP32: CPU cycle counter cross-check
 #ifdef ESP32
-  Serial.println();
-  Serial.println(F("ESP32 CPU Cycle Counter:"));
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("ESP32 CPU Cycle Counter:"));
 
   // Get CPU frequency
   uint32_t cpuFreqMHz = ESP.getCpuFreqMHz();
-  Serial.print(F("CPU Frequency: "));
-  Serial.print(cpuFreqMHz);
-  Serial.println(F(" MHz"));
+  SERIAL_OUT.print(F_STR("CPU Frequency: "));
+  SERIAL_OUT.print(cpuFreqMHz);
+  SERIAL_OUT.println(F_STR(" MHz"));
 
   // Test cycle counter vs micros()
   uint32_t cycleStart = ESP.getCycleCount();
@@ -2529,30 +2566,30 @@ void benchmarkTimingPrecision() {
   uint32_t cycleDelta = cycleEnd - cycleStart;
   unsigned long microsDelta = microsEnd - microsStart;
 
-  Serial.print(F("Cycles elapsed: "));
-  Serial.println(cycleDelta);
-  Serial.print(F("micros() elapsed: "));
-  Serial.print(microsDelta);
-  Serial.println(F(" μs"));
+  SERIAL_OUT.print(F_STR("Cycles elapsed: "));
+  SERIAL_OUT.println(cycleDelta);
+  SERIAL_OUT.print(F_STR("micros() elapsed: "));
+  SERIAL_OUT.print(microsDelta);
+  SERIAL_OUT.println(F_STR(" μs"));
 
   // Calculate expected cycles
   float expectedCycles = microsDelta * cpuFreqMHz;
-  Serial.print(F("Expected cycles: "));
-  Serial.println((uint32_t)expectedCycles);
+  SERIAL_OUT.print(F_STR("Expected cycles: "));
+  SERIAL_OUT.println((uint32_t)expectedCycles);
 
   // Calculate jitter
   float jitterPercent = abs((float)cycleDelta - expectedCycles) / expectedCycles * 100.0f;
-  Serial.print(F("Timing jitter: "));
-  Serial.print(jitterPercent, 2);
-  Serial.println(F("%"));
+  SERIAL_OUT.print(F_STR("Timing jitter: "));
+  SERIAL_OUT.print(jitterPercent, 2);
+  SERIAL_OUT.println(F_STR("%"));
 #endif
 
   // Clock frequency estimate
-  Serial.println();
-  Serial.print(F("Clock accuracy: "));
+  SERIAL_OUT.println();
+  SERIAL_OUT.print(F_STR("Clock accuracy: "));
   float accuracy = 100.0f - ((float)millisError / 10.0f);
-  Serial.print(accuracy);
-  Serial.println(F("%"));
+  SERIAL_OUT.print(accuracy);
+  SERIAL_OUT.println(F_STR("%"));
 }
 
 // ==================== STACK DEPTH BENCHMARK ====================
@@ -2575,34 +2612,34 @@ void benchmarkStackDepth() {
 
   // Scale test depth based on available RAM to avoid overflow
   int testDepth;
-  
+
 #if defined(BOARD_STM32U5)
   testDepth = 500;  // 786 KB RAM - can go deep
-  Serial.println(F("Testing deep recursion (786 KB SRAM)"));
+  SERIAL_OUT.println(F_STR("Testing deep recursion (786 KB SRAM)"));
 #elif defined(ESP32)
   testDepth = 500;  // ESP32 has plenty of RAM
-  Serial.println(F("Testing deep recursion (large heap)"));
+  SERIAL_OUT.println(F_STR("Testing deep recursion (large heap)"));
 #elif defined(ARDUINO_ARCH_RP2040)
   testDepth = 300;  // 264 KB RAM
-  Serial.println(F("Testing deep recursion (264 KB RAM)"));
+  SERIAL_OUT.println(F_STR("Testing deep recursion (264 KB RAM)"));
 #elif defined(ARDUINO_SAM_DUE)
-  testDepth = 200;  // 96 KB RAM
-  Serial.println(F("Testing moderate recursion (96 KB RAM)"));
+  testDepth = 200;        // 96 KB RAM
+  SERIAL_OUT.println(F_STR("Testing moderate recursion (96 KB RAM)"));
 #elif defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
   testDepth = 100;  // 32 KB RAM - be conservative
-  Serial.println(F("Testing moderate recursion (32 KB RAM)"));
+  SERIAL_OUT.println(F_STR("Testing moderate recursion (32 KB RAM)"));
 #elif defined(BOARD_SAMD) || defined(BOARD_NRF52)
   testDepth = 100;  // Typically 32-256 KB
-  Serial.println(F("Testing moderate recursion (ARM)"));
+  SERIAL_OUT.println(F_STR("Testing moderate recursion (ARM)"));
 #elif defined(__AVR_ATmega2560__)
-  testDepth = 40;   // 8 KB RAM - deeper than Uno
-  Serial.println(F("Testing shallow recursion (8 KB RAM)"));
+  testDepth = 40;  // 8 KB RAM - deeper than Uno
+  SERIAL_OUT.println(F_STR("Testing shallow recursion (8 KB RAM)"));
 #elif defined(__AVR__)
-  testDepth = 20;   // 2-2.5 KB RAM - very conservative
-  Serial.println(F("Testing shallow recursion (2 KB RAM)"));
+  testDepth = 20;  // 2-2.5 KB RAM - very conservative
+  SERIAL_OUT.println(F_STR("Testing shallow recursion (2 KB RAM)"));
 #else
-  testDepth = 50;   // Conservative default
-  Serial.println(F("Testing moderate recursion (unknown RAM)"));
+  testDepth = 50;  // Conservative default
+  SERIAL_OUT.println(F_STR("Testing moderate recursion (unknown RAM)"));
 #endif
 
   // Test safe recursion depth
@@ -2610,32 +2647,32 @@ void benchmarkStackDepth() {
   int result = testRecursion(testDepth);
   (void)result;
 
-  Serial.print(F("Recursion test ("));
-  Serial.print(testDepth);
-  Serial.print(F(" deep): "));
+  SERIAL_OUT.print(F_STR("Recursion test ("));
+  SERIAL_OUT.print(testDepth);
+  SERIAL_OUT.print(F_STR(" deep): "));
   if (recursionCounter == testDepth + 1) {
-    Serial.println(F("PASS"));
-    Serial.print(F("Successfully executed "));
-    Serial.print(testDepth);
-    Serial.println(F(" nested function calls"));
+    SERIAL_OUT.println(F_STR("PASS"));
+    SERIAL_OUT.print(F_STR("Successfully executed "));
+    SERIAL_OUT.print(testDepth);
+    SERIAL_OUT.println(F_STR(" nested function calls"));
   } else {
-    Serial.print(F("FAIL - reached depth "));
-    Serial.println(recursionCounter);
+    SERIAL_OUT.print(F_STR("FAIL - reached depth "));
+    SERIAL_OUT.println(recursionCounter);
   }
-  
+
   // Estimate stack usage per call (very rough)
   // Each recursive call typically uses 20-50 bytes on ARM, more on some platforms
 #if defined(BOARD_STM32U5) || defined(ESP32) || defined(ARDUINO_ARCH_RP2040)
-  Serial.print(F("Estimated stack usage: ~"));
-  Serial.print(testDepth * 40);  // Rough estimate: 40 bytes/call
-  Serial.println(F(" bytes"));
+  SERIAL_OUT.print(F_STR("Estimated stack usage: ~"));
+  SERIAL_OUT.print(testDepth * 40);  // Rough estimate: 40 bytes/call
+  SERIAL_OUT.println(F_STR(" bytes"));
 #elif defined(__AVR__)
-  Serial.print(F("Estimated stack usage: ~"));
-  Serial.print(testDepth * 30);  // AVR: ~30 bytes/call typical
-  Serial.println(F(" bytes"));
+  SERIAL_OUT.print(F_STR("Estimated stack usage: ~"));
+  SERIAL_OUT.print(testDepth * 30);  // AVR: ~30 bytes/call typical
+  SERIAL_OUT.println(F_STR(" bytes"));
 #endif
-  
-  Serial.println(F("Note: Actual stack usage varies by compiler and optimization."));
+
+  SERIAL_OUT.println(F_STR("Note: Actual stack usage varies by compiler and optimization."));
 }
 
 // ==================== MULTI-CORE BENCHMARKS ====================
@@ -2649,7 +2686,7 @@ volatile unsigned long core0Count = 0;
 volatile unsigned long core1Count = 0;
 volatile bool testRunning = false;
 
-void core0Task(void* parameter) {
+void core0Task(void *parameter) {
   volatile uint32_t accumulator = 0;
   while (true) {
     if (testRunning) {
@@ -2660,7 +2697,7 @@ void core0Task(void* parameter) {
   }
 }
 
-void core1Task(void* parameter) {
+void core1Task(void *parameter) {
   volatile uint32_t accumulator = 0;
   while (true) {
     if (testRunning) {
@@ -2695,7 +2732,7 @@ void benchmarkMultiCore() {
   printHeader("MULTI-CORE: Parallel Performance");
 
 #ifdef ESP32
-  Serial.println(F("ESP32 Dual-Core Test"));
+  SERIAL_OUT.println(F_STR("ESP32 Dual-Core Test"));
 
   // Create tasks on both cores
   xTaskCreatePinnedToCore(
@@ -2725,25 +2762,25 @@ void benchmarkMultiCore() {
   delay(1000);
   testRunning = false;
 
-  Serial.print(F("Core 0 iterations: "));
-  Serial.println(core0Count);
-  Serial.print(F("Core 1 iterations: "));
-  Serial.println(core1Count);
-  Serial.print(F("Total iterations: "));
-  Serial.println(core0Count + core1Count);
-  Serial.print(F("Core balance: "));
+  SERIAL_OUT.print(F_STR("Core 0 iterations: "));
+  SERIAL_OUT.println(core0Count);
+  SERIAL_OUT.print(F_STR("Core 1 iterations: "));
+  SERIAL_OUT.println(core1Count);
+  SERIAL_OUT.print(F_STR("Total iterations: "));
+  SERIAL_OUT.println(core0Count + core1Count);
+  SERIAL_OUT.print(F_STR("Core balance: "));
   float balance = (float)min(core0Count, core1Count) / (float)max(core0Count, core1Count) * 100.0f;
-  Serial.print(balance);
-  Serial.println(F("%"));
+  SERIAL_OUT.print(balance);
+  SERIAL_OUT.println(F_STR("%"));
 
   // Clean up
   vTaskDelete(Task1);
   vTaskDelete(Task2);
 
 #elif defined(ARDUINO_ARCH_RP2040)
-  Serial.println(F("RP2040 Dual-Core Test"));
+  SERIAL_OUT.println(F_STR("RP2040 Dual-Core Test"));
 #if defined(HAS_PICO_MULTICORE)
-  Serial.println(F("Running dual-core workload for 1 second..."));
+  SERIAL_OUT.println(F_STR("Running dual-core workload for 1 second..."));
 
   rp2040Core0Count = 0;
   rp2040Core1Count = 0;
@@ -2772,17 +2809,17 @@ void benchmarkMultiCore() {
   unsigned long dominant = max(rp2040Core0Count, rp2040Core1Count);
   float scaling = dominant > 0 ? (float)total / (float)dominant : 0.0f;
 
-  Serial.print(F("Core 0 iterations: "));
-  Serial.println(rp2040Core0Count);
-  Serial.print(F("Core 1 iterations: "));
-  Serial.println(rp2040Core1Count);
-  Serial.print(F("Total iterations: "));
-  Serial.println(total);
-  Serial.print(F("Scaling efficiency: "));
-  Serial.print(scaling, 2);
-  Serial.println(F("x"));
+  SERIAL_OUT.print(F_STR("Core 0 iterations: "));
+  SERIAL_OUT.println(rp2040Core0Count);
+  SERIAL_OUT.print(F_STR("Core 1 iterations: "));
+  SERIAL_OUT.println(rp2040Core1Count);
+  SERIAL_OUT.print(F_STR("Total iterations: "));
+  SERIAL_OUT.println(total);
+  SERIAL_OUT.print(F_STR("Scaling efficiency: "));
+  SERIAL_OUT.print(scaling, 2);
+  SERIAL_OUT.println(F_STR("x"));
 #else
-  Serial.println(F("Single core performance:"));
+  SERIAL_OUT.println(F_STR("Single core performance:"));
 
   volatile unsigned long count = 0;
   unsigned long start = millis();
@@ -2790,9 +2827,9 @@ void benchmarkMultiCore() {
     count++;
   }
 
-  Serial.print(F("Iterations in 1 second: "));
-  Serial.println(count);
-  Serial.println(F("Note: Full dual-core requires multicore library"));
+  SERIAL_OUT.print(F_STR("Iterations in 1 second: "));
+  SERIAL_OUT.println(count);
+  SERIAL_OUT.println(F_STR("Note: Full dual-core requires multicore library"));
 #endif
 #endif
 }
@@ -2809,56 +2846,65 @@ void benchmarkSerialBaudRates() {
   const long baudRates[] = {9600, 57600, 115200, 230400, 460800, 921600};
   const int numRates = 6;
   
-  Serial.println(F("Testing throughput at different baud rates..."));
+  SERIAL_OUT.println(F_STR("Testing throughput at different baud rates..."));
   delay(100);
   
   for (int i = 0; i < numRates; i++) {
-    Serial.end();
+    SERIAL_OUT.end();
     delay(100);
-    Serial.begin(baudRates[i]);
+    SERIAL_OUT.begin(baudRates[i]);
     delay(100);
     
     // Test throughput at this baud rate
     const char testData[] = "0123456789";
     startBenchmark();
     for (int j = 0; j < 19; j++) {
-      Serial.print(testData);
+      SERIAL_OUT.print(testData);
     }
-    Serial.flush();
+    SERIAL_OUT.flush();
     unsigned long baudTime = endBenchmark();
     
-    Serial.print(F("Baud "));
-    Serial.print(baudRates[i]);
-    Serial.print(F(": "));
-    Serial.print(baudTime);
-    Serial.print(F(" μs ("));
+    SERIAL_OUT.print(F_STR("Baud "));
+    SERIAL_OUT.print(baudRates[i]);
+    SERIAL_OUT.print(F_STR(": "));
+    SERIAL_OUT.print(baudTime);
+    SERIAL_OUT.print(F_STR(" μs ("));
     float bytesPerSec = 190000000.0f / baudTime;
-    Serial.print(bytesPerSec, 0);
-    Serial.println(F(" bytes/sec)"));
+    SERIAL_OUT.print(bytesPerSec, 0);
+    SERIAL_OUT.println(F_STR(" bytes/sec)"));
     
     delay(50);
   }
   
   // Return to standard baud
-  Serial.end();
+  SERIAL_OUT.end();
   delay(100);
-  Serial.begin(115200);
+  SERIAL_OUT.begin(115200);
   delay(500);
-  Serial.println();
-  Serial.println(F("Returned to 115200 baud"));
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("Returned to 115200 baud"));
 }
 */
 
 // ==================== HARDWARE RNG BENCHMARK ====================
+
+// Include Zephyr RNG for STM32U5 boards
+#if defined(BOARD_STM32U5) && defined(__ZEPHYR__)
+#include <zephyr/random/random.h>
+#endif
 
 #if defined(ESP32) || defined(BOARD_STM32U5)
 void benchmarkHardwareRNG() {
   printHeader("CRYPTO: Hardware RNG");
 
 #if defined(ESP32)
-  Serial.println(F("Using ESP32 hardware RNG"));
+  SERIAL_OUT.println(F_STR("Using ESP32 hardware RNG"));
 #elif defined(BOARD_STM32U5)
-  Serial.println(F("Using STM32U585 RNG"));
+  #if defined(__ZEPHYR__)
+  SERIAL_OUT.println(F_STR("Using STM32U585 hardware RNG (Zephyr)"));
+  #else
+  SERIAL_OUT.println(F_STR("Using STM32U585 RNG"));
+  #endif
 #endif
 
   // Test RNG speed
@@ -2867,49 +2913,47 @@ void benchmarkHardwareRNG() {
   for (int i = 0; i < 1000; i++) {
 #if defined(ESP32)
     rngSum += esp_random();
+#elif defined(BOARD_STM32U5) && defined(__ZEPHYR__)
+    rngSum += sys_rand32_get();  // True hardware RNG via Zephyr
 #elif defined(BOARD_STM32U5)
-    rngSum += random(0, 0xFFFFFFFF);  // May use hardware RNG on Zephyr
+    rngSum += random(0, 0xFFFFFFFF);  // Fallback to Arduino random
 #endif
   }
   unsigned long rngTime = endBenchmark();
 
-  Serial.print(F("Checksum: "));
-  Serial.println(rngSum);
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println(rngSum);
 
-  Serial.print(F("Hardware RNG (1000 values): "));
-  Serial.print(rngTime);
-  Serial.print(F(" μs ("));
-  Serial.print(1000.0f / rngTime * 1000, 2);
-  Serial.println(F(" values/ms)"));
+  SERIAL_OUT.print(F_STR("Hardware RNG (1000 values): "));
+  SERIAL_OUT.print(rngTime);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(1000.0f / rngTime * 1000, 2);
+  SERIAL_OUT.println(F_STR(" values/ms)"));
 
   // Test randomness distribution
   uint32_t bins[4] = { 0, 0, 0, 0 };
   for (int i = 0; i < 10000; i++) {
 #if defined(ESP32)
     uint32_t val = esp_random();
+#elif defined(BOARD_STM32U5) && defined(__ZEPHYR__)
+    uint32_t val = sys_rand32_get();
 #elif defined(BOARD_STM32U5)
     uint32_t val = random(0, 0xFFFFFFFF);
 #endif
     bins[val % 4]++;
   }
 
-  Serial.println(F("Distribution (10000 samples):"));
+  SERIAL_OUT.println(F_STR("Distribution (10000 samples):"));
   for (int i = 0; i < 4; i++) {
-    Serial.print(F("  Bin "));
-    Serial.print(i);
-    Serial.print(F(": "));
-    Serial.print(bins[i]);
-    Serial.print(F(" ("));
-    Serial.print(bins[i] / 100.0f, 1);
-    Serial.println(F("%)"));
+    SERIAL_OUT.print(F_STR("  Bin "));
+    SERIAL_OUT.print(i);
+    SERIAL_OUT.print(F_STR(": "));
+    SERIAL_OUT.print(bins[i]);
+    SERIAL_OUT.print(F_STR(" ("));
+    SERIAL_OUT.print(bins[i] / 100.0f, 1);
+    SERIAL_OUT.println(F_STR("%)"));
   }
-  Serial.println(F("(Ideal: 25% each bin)"));
-  
-#if defined(BOARD_STM32U5)
-  Serial.println();
-  Serial.println(F("NOTE: Using Arduino random(). For true hardware RNG,"));
-  Serial.println(F("      use Zephyr sys_rand32_get() if available."));
-#endif
+  SERIAL_OUT.println(F_STR("(Ideal: 25% each bin)"));
 }
 #endif
 
@@ -2921,153 +2965,153 @@ void benchmarkHardwareRNG() {
 
 #include <SoftwareATSE.h>
 
-constexpr int kAtseKeyId = 999; // Reserved for benchmark use to avoid clobbering other keys.
+constexpr int kAtseKeyId = 999;  // Reserved for benchmark use to avoid clobbering other keys.
 
 void benchmarkSoftwareATSE() {
   printHeader("CRYPTO: SoftwareATSE (Uno R4 WiFi)");
-  
-  Serial.println(F("Initializing SoftwareATSE..."));
-  
+
+  SERIAL_OUT.println(F_STR("Initializing SoftwareATSE..."));
+
   // Initialize SoftwareATSE
   if (!SATSE.begin()) {
-    Serial.println(F("SoftwareATSE initialization failed"));
-    Serial.println(F("The WiFi module may not be responding or"));
-    Serial.println(F("secure element features may not be available."));
+    SERIAL_OUT.println(F_STR("SoftwareATSE initialization failed"));
+    SERIAL_OUT.println(F_STR("The WiFi module may not be responding or"));
+    SERIAL_OUT.println(F_STR("secure element features may not be available."));
     return;
   }
-  
-  Serial.println(F("SoftwareATSE initialized successfully!"));
-  Serial.println();
-  
+
+  SERIAL_OUT.println(F_STR("SoftwareATSE initialized successfully!"));
+  SERIAL_OUT.println();
+
   // ===== Public Key Generation Benchmark =====
-  Serial.println(F("--- Public Key Generation ---"));
-  
+  SERIAL_OUT.println(F_STR("--- Public Key Generation ---"));
+
   bool keyGenSupported = false;
   const uint16_t keySlot = kAtseKeyId;
   unsigned long keyGenStart = millis();
-  byte publicKey[64];  // Buffer for public key
-  byte privateKey[32]; // Buffer for private key
-  
+  byte publicKey[64];   // Buffer for public key
+  byte privateKey[32];  // Buffer for private key
+
   if (SATSE.generatePrivateKey(keySlot, privateKey) == 1) {
     // Try to generate public key in the same slot
     if (SATSE.generatePublicKey(kAtseKeyId, publicKey) == 1) {
       unsigned long keyGenTime = millis() - keyGenStart;
       keyGenSupported = true;
-      
-      Serial.print(F("SoftwareATSE: Public key generation (ms): "));
-      Serial.println(keyGenTime);
-      
-      Serial.print(F("  Rate: "));
+
+      SERIAL_OUT.print(F_STR("SoftwareATSE: Public key generation (ms): "));
+      SERIAL_OUT.println(keyGenTime);
+
+      SERIAL_OUT.print(F_STR("  Rate: "));
       if (keyGenTime > 0) {
-        Serial.print(1000.0f / keyGenTime, 3);
-        Serial.println(F(" keys/sec"));
+        SERIAL_OUT.print(1000.0f / keyGenTime, 3);
+        SERIAL_OUT.println(F_STR(" keys/sec"));
       } else {
-        Serial.println(F("N/A (too fast)"));
+        SERIAL_OUT.println(F_STR("N/A (too fast)"));
       }
     } else {
-      Serial.println(F("SoftwareATSE: Public key generation - not supported"));
+      SERIAL_OUT.println(F_STR("SoftwareATSE: Public key generation - not supported"));
     }
   } else {
-    Serial.println(F("SoftwareATSE: Private key generation failed; skipping public key test"));
+    SERIAL_OUT.println(F_STR("SoftwareATSE: Private key generation failed; skipping public key test"));
   }
-  
-  Serial.println();
-  
+
+  SERIAL_OUT.println();
+
   // ===== Configuration Write Benchmark =====
-  Serial.println(F("--- Secure Storage Operations ---"));
-  
+  SERIAL_OUT.println(F_STR("--- Secure Storage Operations ---"));
+
   uint8_t testConfig[256];
   for (int i = 0; i < 256; i++) {
     testConfig[i] = i & 0xFF;
   }
-  
+
   unsigned long writeStart = micros();
   bool writeSuccess = false;
-  
+
   if (SATSE.writeConfiguration(testConfig) == 1) {
     unsigned long writeTime = micros() - writeStart;
     writeSuccess = true;
-    
-    Serial.print(F("Config write (\xC2\xB5s): "));
-    Serial.println(writeTime);
-    Serial.print(F("  (ms): "));
-    Serial.println(writeTime / 1000.0f, 3);
-    
-    Serial.print(F("  Write speed: "));
+
+    SERIAL_OUT.print(F_STR("Config write (\xC2\xB5s): "));
+    SERIAL_OUT.println(writeTime);
+    SERIAL_OUT.print(F_STR("  (ms): "));
+    SERIAL_OUT.println(writeTime / 1000.0f, 3);
+
+    SERIAL_OUT.print(F_STR("  Write speed: "));
     if (writeTime > 0) {
-      Serial.print(256.0f * 1000000.0f / writeTime, 2);
-      Serial.println(F(" bytes/sec"));
+      SERIAL_OUT.print(256.0f * 1000000.0f / writeTime, 2);
+      SERIAL_OUT.println(F_STR(" bytes/sec"));
     } else {
-      Serial.println(F("N/A (too fast)"));
+      SERIAL_OUT.println(F_STR("N/A (too fast)"));
     }
   } else {
-    Serial.println(F("Config write - not supported"));
+    SERIAL_OUT.println(F_STR("Config write - not supported"));
   }
-  
-  Serial.println();
-  
+
+  SERIAL_OUT.println();
+
   // ===== Signing Benchmark =====
-  Serial.println(F("--- EC Signing ---"));
-  
+  SERIAL_OUT.println(F_STR("--- EC Signing ---"));
+
   if (keyGenSupported) {
     uint8_t testData[32];
     for (int i = 0; i < 32; i++) {
       testData[i] = (uint8_t)(i * 7 + 13);
     }
-    
+
     uint8_t signature[64];
-    
+
     // Signing benchmark
     const int NUM_SIGN_OPS = 10;
     unsigned long signStart = micros();
     int successfulSigns = 0;
-    
+
     for (int i = 0; i < NUM_SIGN_OPS; i++) {
       if (SATSE.ecSign(kAtseKeyId, testData, signature)) {
         successfulSigns++;
       }
       yield();
     }
-    
+
     unsigned long signTime = micros() - signStart;
-    
+
     if (successfulSigns > 0) {
       float avgSignTimeMs = (signTime / 1000.0f) / successfulSigns;
-      Serial.print(F("EC signing (avg ms/op): "));
-      Serial.println(avgSignTimeMs, 3);
-      
-      Serial.print(F("  Rate: "));
-      Serial.print(1000.0f / avgSignTimeMs, 2);
-      Serial.println(F(" ops/sec"));
-      
-      Serial.print(F("  Successful operations: "));
-      Serial.print(successfulSigns);
-      Serial.print(F("/"));
-      Serial.println(NUM_SIGN_OPS);
+      SERIAL_OUT.print(F_STR("EC signing (avg ms/op): "));
+      SERIAL_OUT.println(avgSignTimeMs, 3);
+
+      SERIAL_OUT.print(F_STR("  Rate: "));
+      SERIAL_OUT.print(1000.0f / avgSignTimeMs, 2);
+      SERIAL_OUT.println(F_STR(" ops/sec"));
+
+      SERIAL_OUT.print(F_STR("  Successful operations: "));
+      SERIAL_OUT.print(successfulSigns);
+      SERIAL_OUT.print(F_STR("/"));
+      SERIAL_OUT.println(NUM_SIGN_OPS);
     } else {
-      Serial.println(F("EC signing - not supported"));
+      SERIAL_OUT.println(F_STR("EC signing - not supported"));
     }
   } else {
-    Serial.println(F("Signing tests skipped (key generation not supported)"));
+    SERIAL_OUT.println(F_STR("Signing tests skipped (key generation not supported)"));
   }
-  
-  Serial.println();
-  
+
+  SERIAL_OUT.println();
+
   // ===== Secure RNG Benchmark =====
-  Serial.println(F("--- Secure Random Number Generator ---"));
-  
+  SERIAL_OUT.println(F_STR("--- Secure Random Number Generator ---"));
+
   uint8_t rngTest[16];
   if (SATSE.random(rngTest, 16)) {
-    
+
     // Benchmark RNG throughput
     const int RNG_BUFFER_SIZE = 256;
     const int RNG_ITERATIONS = 20;
     uint8_t rngBuffer[RNG_BUFFER_SIZE];
-    
+
     unsigned long rngStart = micros();
     int successfulReads = 0;
     uint32_t rngChecksum = 0;
-    
+
     for (int i = 0; i < RNG_ITERATIONS; i++) {
       if (SATSE.random(rngBuffer, RNG_BUFFER_SIZE)) {
         successfulReads++;
@@ -3077,62 +3121,62 @@ void benchmarkSoftwareATSE() {
       }
       yield();
     }
-    
+
     unsigned long rngTime = micros() - rngStart;
-    
-    Serial.print(F("RNG checksum: "));
-    Serial.println(rngChecksum);
-    
+
+    SERIAL_OUT.print(F_STR("RNG checksum: "));
+    SERIAL_OUT.println(rngChecksum);
+
     if (successfulReads > 0) {
       unsigned long totalBytes = successfulReads * RNG_BUFFER_SIZE;
       float bytesPerSec = (totalBytes * 1000000.0f) / rngTime;
-      
-      Serial.print(F("Secure RNG throughput: "));
-      Serial.print(bytesPerSec, 2);
-      Serial.println(F(" bytes/sec"));
-      
-      Serial.print(F("  Total bytes generated: "));
-      Serial.println(totalBytes);
-      
-      Serial.print(F("  Time: "));
-      Serial.print(rngTime / 1000.0f, 2);
-      Serial.println(F(" ms"));
-      
-      Serial.print(F("  Successful reads: "));
-      Serial.print(successfulReads);
-      Serial.print(F("/"));
-      Serial.println(RNG_ITERATIONS);
-      
+
+      SERIAL_OUT.print(F_STR("Secure RNG throughput: "));
+      SERIAL_OUT.print(bytesPerSec, 2);
+      SERIAL_OUT.println(F_STR(" bytes/sec"));
+
+      SERIAL_OUT.print(F_STR("  Total bytes generated: "));
+      SERIAL_OUT.println(totalBytes);
+
+      SERIAL_OUT.print(F_STR("  Time: "));
+      SERIAL_OUT.print(rngTime / 1000.0f, 2);
+      SERIAL_OUT.println(F_STR(" ms"));
+
+      SERIAL_OUT.print(F_STR("  Successful reads: "));
+      SERIAL_OUT.print(successfulReads);
+      SERIAL_OUT.print(F_STR("/"));
+      SERIAL_OUT.println(RNG_ITERATIONS);
+
       // Distribution test
-      Serial.println(F("Distribution test (first 1000 bytes):"));
-      uint32_t byteBins[4] = {0, 0, 0, 0};
-      
+      SERIAL_OUT.println(F_STR("Distribution test (first 1000 bytes):"));
+      uint32_t byteBins[4] = { 0, 0, 0, 0 };
+
       for (int i = 0; i < 1000; i++) {
         uint8_t randomByte;
         if (SATSE.random(&randomByte, 1)) {
           byteBins[randomByte % 4]++;
         }
       }
-      
+
       for (int i = 0; i < 4; i++) {
-        Serial.print(F("  Bin "));
-        Serial.print(i);
-        Serial.print(F(": "));
-        Serial.print(byteBins[i]);
-        Serial.print(F(" ("));
-        Serial.print(byteBins[i] / 10.0f, 1);
-        Serial.println(F("%)"));
+        SERIAL_OUT.print(F_STR("  Bin "));
+        SERIAL_OUT.print(i);
+        SERIAL_OUT.print(F_STR(": "));
+        SERIAL_OUT.print(byteBins[i]);
+        SERIAL_OUT.print(F_STR(" ("));
+        SERIAL_OUT.print(byteBins[i] / 10.0f, 1);
+        SERIAL_OUT.println(F_STR("%)"));
       }
-      Serial.println(F("  (Ideal: 25% each bin)"));
+      SERIAL_OUT.println(F_STR("  (Ideal: 25% each bin)"));
     } else {
-      Serial.println(F("Secure RNG - read operations failed"));
+      SERIAL_OUT.println(F_STR("Secure RNG - read operations failed"));
     }
   } else {
-    Serial.println(F("Secure RNG - not supported"));
+    SERIAL_OUT.println(F_STR("Secure RNG - not supported"));
   }
-  
-  Serial.println();
-  Serial.println(F("SoftwareATSE benchmarks complete"));
+
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("SoftwareATSE benchmarks complete"));
 }
 
 #else  // !ARDUINO_UNOR4_WIFI
@@ -3151,94 +3195,94 @@ void benchmarkSoftwareATSE() {
 
 void benchmarkArduinoBridge() {
   printHeader("ARDUINO BRIDGE (MCU<->LINUX RPC)");
-  
+
 #ifdef HAS_RPC_BRIDGE
-  Serial.println(F("Testing MCU<->Linux RPC communication..."));
-  Serial.println(F("Using MessagePack RPC over Serial1"));
-  Serial.println();
-  
+  SERIAL_OUT.println(F_STR("Testing MCU<->Linux RPC communication..."));
+  SERIAL_OUT.println(F_STR("Using MessagePack RPC over Serial1"));
+  SERIAL_OUT.println();
+
   // Note: For RouterBridge, Bridge object is pre-initialized
   // For RPClite, we need to create transport and client
-  
+
 #ifdef HAS_ROUTER_BRIDGE
   // Using Arduino_RouterBridge high-level API
-  Serial.println(F("Bridge Type: RouterBridge (high-level API)"));
-  Serial.println();
-  
+  SERIAL_OUT.println(F_STR("Bridge Type: RouterBridge (high-level API)"));
+  SERIAL_OUT.println();
+
   // Test 1: Simple RPC call latency
-  Serial.println(F("1. RPC Call Latency Test"));
+  SERIAL_OUT.println(F_STR("1. RPC Call Latency Test"));
   const int PING_COUNT = 50;
   unsigned long totalLatency = 0;
   int successfulCalls = 0;
-  
+
   for (int i = 0; i < PING_COUNT; i++) {
     unsigned long start = micros();
-    
+
     // Call a simple echo/ping function on Linux side
     // Assumes Linux has registered an "echo" or "ping" method
     String result;
     bool ok = Bridge.call("echo", result, "ping").result(result);
-    
+
     unsigned long elapsed = micros() - start;
-    
+
     if (ok) {
       totalLatency += elapsed;
       successfulCalls++;
     }
-    
+
     if (i % 10 == 0) {
       yield();
     }
   }
-  
+
   if (successfulCalls > 0) {
-    Serial.print(F("  Successful calls: "));
-    Serial.print(successfulCalls);
-    Serial.print(F("/"));
-    Serial.println(PING_COUNT);
-    Serial.print(F("  Average latency: "));
-    Serial.print(totalLatency / successfulCalls);
-    Serial.println(F(" µs"));
-    Serial.print(F("  Calls per second: "));
-    Serial.println((successfulCalls * 1000000.0) / totalLatency, 0);
+    SERIAL_OUT.print(F_STR("  Successful calls: "));
+    SERIAL_OUT.print(successfulCalls);
+    SERIAL_OUT.print(F_STR("/"));
+    SERIAL_OUT.println(PING_COUNT);
+    SERIAL_OUT.print(F_STR("  Average latency: "));
+    SERIAL_OUT.print(totalLatency / successfulCalls);
+    SERIAL_OUT.println(F_STR(" µs"));
+    SERIAL_OUT.print(F_STR("  Calls per second: "));
+    SERIAL_OUT.println((successfulCalls * 1000000.0) / totalLatency, 0);
   } else {
-    Serial.println(F("  ERROR: No successful RPC calls"));
-    Serial.println(F("  Make sure Linux side has 'echo' method registered"));
+    SERIAL_OUT.println(F_STR("  ERROR: No successful RPC calls"));
+    SERIAL_OUT.println(F_STR("  Make sure Linux side has 'echo' method registered"));
   }
-  Serial.println();
-  
+  SERIAL_OUT.println();
+
   // Test 2: Integer arithmetic RPC
-  Serial.println(F("2. Integer Arithmetic RPC Test"));
+  SERIAL_OUT.println(F_STR("2. Integer Arithmetic RPC Test"));
   int mathTests = 0;
   int mathSuccess = 0;
   unsigned long mathTime = micros();
-  
+
   for (int i = 0; i < 20; i++) {
     int sum;
-    if (Bridge.call("add", sum, i, i+1).result(sum)) {
+    if (Bridge.call("add", sum, i, i + 1).result(sum)) {
       if (sum == (i + i + 1)) {
         mathSuccess++;
       }
       mathTests++;
     }
   }
-  
+
   mathTime = micros() - mathTime;
-  Serial.print(F("  Tests: "));
-  Serial.print(mathSuccess);
-  Serial.print(F("/"));
-  Serial.println(mathTests);
-  Serial.print(F("  Average time: "));
-  Serial.print(mathTime / mathTests);
-  Serial.println(F(" µs"));
-  Serial.println();
-  
+  SERIAL_OUT.print(F_STR("  Tests: "));
+  SERIAL_OUT.print(mathSuccess);
+  SERIAL_OUT.print(F_STR("/"));
+  SERIAL_OUT.println(mathTests);
+  SERIAL_OUT.print(F_STR("  Average time: "));
+  SERIAL_OUT.print(mathTime / mathTests);
+  SERIAL_OUT.println(F_STR(" µs"));
+  SERIAL_OUT.println();
+
   // Test 3: String operations
-  Serial.println(F("3. String RPC Test"));
+  SERIAL_OUT.println(F_STR("3. String RPC Test"));
   int strTests = 0;
   int strSuccess = 0;
   unsigned long strTime = micros();
-  
+
   for (int i = 0; i < 10; i++) {
     String message = "Test_" + String(i);
     String response;
@@ -3249,112 +3293,112 @@ void benchmarkArduinoBridge() {
       strTests++;
     }
   }
-  
+
   strTime = micros() - strTime;
-  Serial.print(F("  Tests: "));
-  Serial.print(strSuccess);
-  Serial.print(F("/"));
-  Serial.println(strTests);
-  Serial.print(F("  Average time: "));
-  Serial.print(strTime / strTests);
-  Serial.println(F(" µs"));
-  Serial.println();
-  
+  SERIAL_OUT.print(F_STR("  Tests: "));
+  SERIAL_OUT.print(strSuccess);
+  SERIAL_OUT.print(F_STR("/"));
+  SERIAL_OUT.println(strTests);
+  SERIAL_OUT.print(F_STR("  Average time: "));
+  SERIAL_OUT.print(strTime / strTests);
+  SERIAL_OUT.println(F_STR(" µs"));
+  SERIAL_OUT.println();
+
   // Test 4: Async call test
-  Serial.println(F("4. Async RPC Call Test"));
+  SERIAL_OUT.println(F_STR("4. Async RPC Call Test"));
   unsigned long asyncStart = micros();
-  
+
   // Make multiple async calls
   RpcCall call1 = Bridge.call("add", 10, 20);
   RpcCall call2 = Bridge.call("add", 30, 40);
   RpcCall call3 = Bridge.call("add", 50, 60);
-  
+
   // Now wait for results
   int result1, result2, result3;
   bool ok1 = call1.result(result1);
   bool ok2 = call2.result(result2);
   bool ok3 = call3.result(result3);
-  
+
   unsigned long asyncTime = micros() - asyncStart;
-  
-  Serial.print(F("  3 async calls completed in: "));
-  Serial.print(asyncTime);
-  Serial.println(F(" µs"));
+
+  SERIAL_OUT.print(F_STR("  3 async calls completed in: "));
+  SERIAL_OUT.print(asyncTime);
+  SERIAL_OUT.println(F_STR(" µs"));
   if (ok1 && ok2 && ok3) {
-    Serial.print(F("  Results: "));
-    Serial.print(result1);
-    Serial.print(F(", "));
-    Serial.print(result2);
-    Serial.print(F(", "));
-    Serial.println(result3);
+    SERIAL_OUT.print(F_STR("  Results: "));
+    SERIAL_OUT.print(result1);
+    SERIAL_OUT.print(F_STR(", "));
+    SERIAL_OUT.print(result2);
+    SERIAL_OUT.print(F_STR(", "));
+    SERIAL_OUT.println(result3);
   }
-  Serial.println();
-  
-  Serial.println(F("NOTE: These tests require corresponding RPC methods"));
-  Serial.println(F("      registered on the Linux side (echo, add, loopback)."));
-  Serial.println(F("      See Arduino_RouterBridge examples for Linux setup."));
-  
+  SERIAL_OUT.println();
+
+  SERIAL_OUT.println(F_STR("NOTE: These tests require corresponding RPC methods"));
+  SERIAL_OUT.println(F_STR("      registered on the Linux side (echo, add, loopback)."));
+  SERIAL_OUT.println(F_STR("      See Arduino_RouterBridge examples for Linux setup."));
+
 #elif defined(HAS_RPCLITE)
   // Using Arduino_RPClite low-level API
-  Serial.println(F("Bridge Type: RPClite (low-level API)"));
-  Serial.println();
-  
+  SERIAL_OUT.println(F_STR("Bridge Type: RPClite (low-level API)"));
+  SERIAL_OUT.println();
+
   SerialTransport transport(Serial1);
   RPCClient client(transport);
-  
-  Serial.println(F("1. RPC Call Latency Test"));
+
+  SERIAL_OUT.println(F_STR("1. RPC Call Latency Test"));
   const int PING_COUNT = 50;
   unsigned long totalLatency = 0;
   int successfulCalls = 0;
-  
+
   for (int i = 0; i < PING_COUNT; i++) {
     unsigned long start = micros();
-    
+
     String result;
     bool ok = client.call("echo", result, "ping");
-    
+
     unsigned long elapsed = micros() - start;
-    
+
     if (ok) {
       totalLatency += elapsed;
       successfulCalls++;
     }
-    
+
     if (i % 10 == 0) {
       yield();
     }
   }
-  
+
   if (successfulCalls > 0) {
-    Serial.print(F("  Successful calls: "));
-    Serial.print(successfulCalls);
-    Serial.print(F("/"));
-    Serial.println(PING_COUNT);
-    Serial.print(F("  Average latency: "));
-    Serial.print(totalLatency / successfulCalls);
-    Serial.println(F(" µs"));
+    SERIAL_OUT.print(F_STR("  Successful calls: "));
+    SERIAL_OUT.print(successfulCalls);
+    SERIAL_OUT.print(F_STR("/"));
+    SERIAL_OUT.println(PING_COUNT);
+    SERIAL_OUT.print(F_STR("  Average latency: "));
+    SERIAL_OUT.print(totalLatency / successfulCalls);
+    SERIAL_OUT.println(F_STR(" µs"));
   }
-  Serial.println();
-  
-  Serial.println(F("NOTE: RPClite requires manual transport setup."));
-  Serial.println(F("      Ensure Serial1 is properly initialized."));
+  SERIAL_OUT.println();
+
+  SERIAL_OUT.println(F_STR("NOTE: RPClite requires manual transport setup."));
+  SERIAL_OUT.println(F_STR("      Ensure Serial1 is properly initialized."));
 #endif
-  
+
 #else
-  Serial.println(F("Arduino RPC Bridge library not detected."));
-  Serial.println();
-  Serial.println(F("To enable Bridge/RPC benchmarks:"));
-  Serial.println(F("  1. Install Arduino_RouterBridge or Arduino_RPClite"));
-  Serial.println(F("  2. Ensure Linux side has RPC server running"));
-  Serial.println(F("  3. Register test methods (echo, add, loopback)"));
-  Serial.println(F("  4. Re-compile and upload sketch"));
-  Serial.println();
-  Serial.println(F("Library: github.com/arduino-libraries/Arduino_RouterBridge"));
-  Serial.println(F("Library: github.com/arduino-libraries/Arduino_RPClite"));
+  SERIAL_OUT.println(F_STR("Arduino RPC Bridge library not detected."));
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("To enable Bridge/RPC benchmarks:"));
+  SERIAL_OUT.println(F_STR("  1. Install Arduino_RouterBridge or Arduino_RPClite"));
+  SERIAL_OUT.println(F_STR("  2. Ensure Linux side has RPC server running"));
+  SERIAL_OUT.println(F_STR("  3. Register test methods (echo, add, loopback)"));
+  SERIAL_OUT.println(F_STR("  4. Re-compile and upload sketch"));
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("Library: github.com/arduino-libraries/Arduino_RouterBridge"));
+  SERIAL_OUT.println(F_STR("Library: github.com/arduino-libraries/Arduino_RPClite"));
 #endif
-  
-  Serial.println();
-  Serial.println(F("Arduino Bridge benchmarks complete"));
+
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("Arduino Bridge benchmarks complete"));
 }
 
 #else  // !BOARD_STM32U5 || !HAS_DUAL_PROCESSOR
@@ -3372,120 +3416,120 @@ void benchmarkArduinoBridge() {
 #ifdef HAS_RTC
 void benchmarkRTC() {
   printHeader("RTC BENCHMARK (DS1307)");
-  
+
   // Initialize RTC
   if (!rtc.begin()) {
-    Serial.println(F("ERROR: RTC not found!"));
-    Serial.println(F("Check wiring: SDA->A4, SCL->A5"));
-    Serial.println();
+    SERIAL_OUT.println(F_STR("ERROR: RTC not found!"));
+    SERIAL_OUT.println(F_STR("Check wiring: SDA->A4, SCL->A5"));
+    SERIAL_OUT.println();
     return;
   }
-  
-  Serial.println(F("RTC initialized successfully"));
-  
+
+  SERIAL_OUT.println(F_STR("RTC initialized successfully"));
+
   // Check if RTC is running
   if (!rtc.isrunning()) {
-    Serial.println(F("WARNING: RTC is not running!"));
-    Serial.println(F("Starting RTC and setting time..."));
+    SERIAL_OUT.println(F_STR("WARNING: RTC is not running!"));
+    SERIAL_OUT.println(F_STR("Starting RTC and setting time..."));
     // Set to compile time as default
-    rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
+    rtc.adjust(DateTime(F_STR(__DATE__), F_STR(__TIME__)));
   }
-  
+
   // Display current time
   DateTime now = rtc.now();
-  Serial.print(F("Current Time: "));
-  Serial.print(now.year(), DEC);
-  Serial.print('/');
-  if (now.month() < 10) Serial.print('0');
-  Serial.print(now.month(), DEC);
-  Serial.print('/');
-  if (now.day() < 10) Serial.print('0');
-  Serial.print(now.day(), DEC);
-  Serial.print(" ");
-  if (now.hour() < 10) Serial.print('0');
-  Serial.print(now.hour(), DEC);
-  Serial.print(':');
-  if (now.minute() < 10) Serial.print('0');
-  Serial.print(now.minute(), DEC);
-  Serial.print(':');
-  if (now.second() < 10) Serial.print('0');
-  Serial.println(now.second(), DEC);
-  Serial.println();
-  
+  SERIAL_OUT.print(F_STR("Current Time: "));
+  SERIAL_OUT.print(now.year(), DEC);
+  SERIAL_OUT.print('/');
+  if (now.month() < 10) SERIAL_OUT.print('0');
+  SERIAL_OUT.print(now.month(), DEC);
+  SERIAL_OUT.print('/');
+  if (now.day() < 10) SERIAL_OUT.print('0');
+  SERIAL_OUT.print(now.day(), DEC);
+  SERIAL_OUT.print(" ");
+  if (now.hour() < 10) SERIAL_OUT.print('0');
+  SERIAL_OUT.print(now.hour(), DEC);
+  SERIAL_OUT.print(':');
+  if (now.minute() < 10) SERIAL_OUT.print('0');
+  SERIAL_OUT.print(now.minute(), DEC);
+  SERIAL_OUT.print(':');
+  if (now.second() < 10) SERIAL_OUT.print('0');
+  SERIAL_OUT.println(now.second(), DEC);
+  SERIAL_OUT.println();
+
   // Benchmark 1: RTC Read Speed
-  Serial.println(F("Test: RTC Read Speed"));
+  SERIAL_OUT.println(F_STR("Test: RTC Read Speed"));
   volatile uint32_t readChecksum = 0;
   unsigned long startTime = micros();
   uint32_t reads = 0;
-  
-  unsigned long testDuration = 1000000UL; // 1 second
+
+  unsigned long testDuration = 1000000UL;  // 1 second
   while (micros() - startTime < testDuration) {
     DateTime reading = rtc.now();
     readChecksum += reading.unixtime();
     reads++;
   }
   unsigned long elapsed = micros() - startTime;
-  
+
   float readsPerMs = (reads * 1000.0f) / elapsed;
-  Serial.print(F("  Reads: "));
-  Serial.print(reads);
-  Serial.print(F(" in "));
-  Serial.print(elapsed / 1000.0f, 2);
-  Serial.println(F(" ms"));
-  Serial.print(F("  Speed: "));
-  Serial.print(readsPerMs, 2);
-  Serial.println(F(" reads/ms"));
-  Serial.print(F("  Time per read: "));
-  Serial.print((float)elapsed / reads, 2);
-  Serial.println(F(" μs"));
-  Serial.print(F("  Checksum: 0x"));
-  Serial.println((unsigned long)readChecksum, HEX);
-  Serial.println();
-  
+  SERIAL_OUT.print(F_STR("  Reads: "));
+  SERIAL_OUT.print(reads);
+  SERIAL_OUT.print(F_STR(" in "));
+  SERIAL_OUT.print(elapsed / 1000.0f, 2);
+  SERIAL_OUT.println(F_STR(" ms"));
+  SERIAL_OUT.print(F_STR("  Speed: "));
+  SERIAL_OUT.print(readsPerMs, 2);
+  SERIAL_OUT.println(F_STR(" reads/ms"));
+  SERIAL_OUT.print(F_STR("  Time per read: "));
+  SERIAL_OUT.print((float)elapsed / reads, 2);
+  SERIAL_OUT.println(F_STR(" μs"));
+  SERIAL_OUT.print(F_STR("  Checksum: 0x"));
+  SERIAL_OUT.println((unsigned long)readChecksum, HEX);
+  SERIAL_OUT.println();
+
   // Benchmark 2: RTC Write Speed (Using adjust - time setting)
-  Serial.println(F("Test: RTC Write Speed (Time Adjust)"));
+  SERIAL_OUT.println(F_STR("Test: RTC Write Speed (Time Adjust)"));
   startTime = micros();
   uint32_t writes = 0;
-  
-  testDuration = 1000000UL; // 1 second
+
+  testDuration = 1000000UL;  // 1 second
   DateTime testTime = DateTime(2025, 1, 1, 12, 0, 0);
   while (micros() - startTime < testDuration) {
     rtc.adjust(testTime);
     writes++;
   }
   elapsed = micros() - startTime;
-  
+
   // Restore current time
   rtc.adjust(now);
-  
+
   float writesPerMs = (writes * 1000.0f) / elapsed;
-  Serial.print(F("  Writes: "));
-  Serial.print(writes);
-  Serial.print(F(" in "));
-  Serial.print(elapsed / 1000.0f, 2);
-  Serial.println(F(" ms"));
-  Serial.print(F("  Speed: "));
-  Serial.print(writesPerMs, 2);
-  Serial.println(F(" writes/ms"));
-  Serial.print(F("  Time per write: "));
-  Serial.print((float)elapsed / writes, 2);
-  Serial.println(F(" μs"));
-  Serial.println();
-  
+  SERIAL_OUT.print(F_STR("  Writes: "));
+  SERIAL_OUT.print(writes);
+  SERIAL_OUT.print(F_STR(" in "));
+  SERIAL_OUT.print(elapsed / 1000.0f, 2);
+  SERIAL_OUT.println(F_STR(" ms"));
+  SERIAL_OUT.print(F_STR("  Speed: "));
+  SERIAL_OUT.print(writesPerMs, 2);
+  SERIAL_OUT.println(F_STR(" writes/ms"));
+  SERIAL_OUT.print(F_STR("  Time per write: "));
+  SERIAL_OUT.print((float)elapsed / writes, 2);
+  SERIAL_OUT.println(F_STR(" μs"));
+  SERIAL_OUT.println();
+
   // Benchmark 3: NVRAM Read/Write Speed (DS1307 has 56 bytes of NVRAM)
-  Serial.println(F("Test: NVRAM Read/Write (56 bytes)"));
+  SERIAL_OUT.println(F_STR("Test: NVRAM Read/Write (56 bytes)"));
   const uint8_t nvramSize = 56;
   uint8_t nvramData[nvramSize];
-  
+
   // Write test
   for (uint8_t i = 0; i < nvramSize; i++) {
     nvramData[i] = i;
   }
-  
+
   startTime = micros();
   uint32_t nvramWrites = 0;
-  testDuration = 1000000UL; // 1 second
-  
+  testDuration = 1000000UL;  // 1 second
+
   while (micros() - startTime < testDuration) {
     for (uint8_t addr = 0; addr < nvramSize; addr++) {
       rtc.writenvram(addr, nvramData[addr]);
@@ -3493,24 +3537,24 @@ void benchmarkRTC() {
     nvramWrites++;
   }
   elapsed = micros() - startTime;
-  
+
   uint32_t totalBytesWritten = nvramWrites * nvramSize;
   float nvramWriteSpeed = (totalBytesWritten * 1000.0f) / elapsed;
-  
-  Serial.print(F("  NVRAM Writes: "));
-  Serial.print(totalBytesWritten);
-  Serial.print(F(" bytes in "));
-  Serial.print(elapsed / 1000.0f, 2);
-  Serial.println(F(" ms"));
-  Serial.print(F("  Speed: "));
-  Serial.print(nvramWriteSpeed, 2);
-  Serial.println(F(" bytes/ms"));
-  
+
+  SERIAL_OUT.print(F_STR("  NVRAM Writes: "));
+  SERIAL_OUT.print(totalBytesWritten);
+  SERIAL_OUT.print(F_STR(" bytes in "));
+  SERIAL_OUT.print(elapsed / 1000.0f, 2);
+  SERIAL_OUT.println(F_STR(" ms"));
+  SERIAL_OUT.print(F_STR("  Speed: "));
+  SERIAL_OUT.print(nvramWriteSpeed, 2);
+  SERIAL_OUT.println(F_STR(" bytes/ms"));
+
   // Read test
   volatile uint32_t nvramChecksum = 0;
   startTime = micros();
   uint32_t nvramReads = 0;
-  
+
   while (micros() - startTime < testDuration) {
     for (uint8_t addr = 0; addr < nvramSize; addr++) {
       nvramChecksum += rtc.readnvram(addr);
@@ -3518,23 +3562,23 @@ void benchmarkRTC() {
     nvramReads++;
   }
   elapsed = micros() - startTime;
-  
+
   uint32_t totalBytesRead = nvramReads * nvramSize;
   float nvramReadSpeed = (totalBytesRead * 1000.0f) / elapsed;
-  
-  Serial.print(F("  NVRAM Reads: "));
-  Serial.print(totalBytesRead);
-  Serial.print(F(" bytes in "));
-  Serial.print(elapsed / 1000.0f, 2);
-  Serial.println(F(" ms"));
-  Serial.print(F("  Speed: "));
-  Serial.print(nvramReadSpeed, 2);
-  Serial.println(F(" bytes/ms"));
-  Serial.print(F("  Checksum: 0x"));
-  Serial.println((unsigned long)nvramChecksum, HEX);
-  Serial.println();
-  
-  Serial.println(F("RTC benchmarks complete"));
+
+  SERIAL_OUT.print(F_STR("  NVRAM Reads: "));
+  SERIAL_OUT.print(totalBytesRead);
+  SERIAL_OUT.print(F_STR(" bytes in "));
+  SERIAL_OUT.print(elapsed / 1000.0f, 2);
+  SERIAL_OUT.println(F_STR(" ms"));
+  SERIAL_OUT.print(F_STR("  Speed: "));
+  SERIAL_OUT.print(nvramReadSpeed, 2);
+  SERIAL_OUT.println(F_STR(" bytes/ms"));
+  SERIAL_OUT.print(F_STR("  Checksum: 0x"));
+  SERIAL_OUT.println((unsigned long)nvramChecksum, HEX);
+  SERIAL_OUT.println();
+
+  SERIAL_OUT.println(F_STR("RTC benchmarks complete"));
 }
 #endif  // HAS_RTC
 
@@ -3543,158 +3587,158 @@ void benchmarkRTC() {
 void printSystemInfo() {
   printHeader("SYSTEM INFORMATION");
 
-  Serial.print(F("Board: "));
-  Serial.println(BOARD_NAME);
+  SERIAL_OUT.print(F_STR("Board: "));
+  SERIAL_OUT.println(BOARD_NAME);
 
 #if defined(ESP32)
-  Serial.print(F("Chip Model: "));
-  Serial.println(ESP.getChipModel());
-  Serial.print(F("Chip Revision: "));
-  Serial.println(ESP.getChipRevision());
-  Serial.print(F("CPU Frequency: "));
-  Serial.print(ESP.getCpuFreqMHz());
-  Serial.println(F(" MHz"));
-  Serial.print(F("Cores: "));
-  Serial.println(ESP.getChipCores());
-  Serial.print(F("SDK Version: "));
-  Serial.println(ESP.getSdkVersion());
+  SERIAL_OUT.print(F_STR("Chip Model: "));
+  SERIAL_OUT.println(ESP.getChipModel());
+  SERIAL_OUT.print(F_STR("Chip Revision: "));
+  SERIAL_OUT.println(ESP.getChipRevision());
+  SERIAL_OUT.print(F_STR("CPU Frequency: "));
+  SERIAL_OUT.print(ESP.getCpuFreqMHz());
+  SERIAL_OUT.println(F_STR(" MHz"));
+  SERIAL_OUT.print(F_STR("Cores: "));
+  SERIAL_OUT.println(ESP.getChipCores());
+  SERIAL_OUT.print(F_STR("SDK Version: "));
+  SERIAL_OUT.println(ESP.getSdkVersion());
 #elif defined(ESP8266)
-  Serial.print(F("CPU Frequency: "));
-  Serial.print(ESP.getCpuFreqMHz());
-  Serial.println(F(" MHz"));
-  Serial.print(F("Chip ID: "));
-  Serial.println(ESP.getChipId());
-  Serial.print(F("SDK Version: "));
-  Serial.println(ESP.getSdkVersion());
+  SERIAL_OUT.print(F_STR("CPU Frequency: "));
+  SERIAL_OUT.print(ESP.getCpuFreqMHz());
+  SERIAL_OUT.println(F_STR(" MHz"));
+  SERIAL_OUT.print(F_STR("Chip ID: "));
+  SERIAL_OUT.println(ESP.getChipId());
+  SERIAL_OUT.print(F_STR("SDK Version: "));
+  SERIAL_OUT.println(ESP.getSdkVersion());
 #elif defined(ARDUINO_ARCH_RP2040)
-  Serial.print(F("CPU Frequency: "));
-  Serial.print(F_CPU / 1000000);
-  Serial.println(F(" MHz"));
+  SERIAL_OUT.print(F_STR("CPU Frequency: "));
+  SERIAL_OUT.print(F_CPU / 1000000);
+  SERIAL_OUT.println(F_STR(" MHz"));
 #if defined(ARDUINO_NANO_RP2040_CONNECT)
-  Serial.println(F("Features: WiFi (Nina W102), BLE, IMU (LSM6DSOX), Mic"));
+  SERIAL_OUT.println(F_STR("Features: WiFi (Nina W102), BLE, IMU (LSM6DSOX), Mic"));
 #elif defined(ARDUINO_RASPBERRY_PI_PICO_W)
-  Serial.println(F("Features: WiFi (CYW43439)"));
+  SERIAL_OUT.println(F_STR("Features: WiFi (CYW43439)"));
 #endif
 #elif defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
-  Serial.print(F("MCU: Renesas RA4M1 (ARM Cortex-M4)"));
-  Serial.println();
-  Serial.print(F("CPU Frequency: "));
-  Serial.print(F_CPU / 1000000);
-  Serial.println(F(" MHz"));
+  SERIAL_OUT.print(F_STR("MCU: Renesas RA4M1 (ARM Cortex-M4)"));
+  SERIAL_OUT.println();
+  SERIAL_OUT.print(F_STR("CPU Frequency: "));
+  SERIAL_OUT.print(F_CPU / 1000000);
+  SERIAL_OUT.println(F_STR(" MHz"));
 #ifdef ARDUINO_UNOR4_WIFI
-  Serial.println(F("Features: WiFi (ESP32-S3), 12x8 LED Matrix"));
+  SERIAL_OUT.println(F_STR("Features: WiFi (ESP32-S3), 12x8 LED Matrix"));
 #else
-  Serial.println(F("Features: 12x8 LED Matrix"));
+  SERIAL_OUT.println(F_STR("Features: 12x8 LED Matrix"));
 #endif
 #elif defined(BOARD_SAMD)
-  Serial.print(F("MCU: SAMD (ARM Cortex-M0+)"));
-  Serial.println();
-  Serial.print(F("CPU Frequency: "));
-  Serial.print(F_CPU / 1000000);
-  Serial.println(F(" MHz"));
+  SERIAL_OUT.print(F_STR("MCU: SAMD (ARM Cortex-M0+)"));
+  SERIAL_OUT.println();
+  SERIAL_OUT.print(F_STR("CPU Frequency: "));
+  SERIAL_OUT.print(F_CPU / 1000000);
+  SERIAL_OUT.println(F_STR(" MHz"));
 #if defined(ARDUINO_SAMD_NANO_33_IOT)
-  Serial.println(F("Features: WiFi, BLE, IMU (LSM6DS3)"));
+  SERIAL_OUT.println(F_STR("Features: WiFi, BLE, IMU (LSM6DS3)"));
 #elif defined(ARDUINO_SAMD_MKRWIFI1010)
-  Serial.println(F("Features: WiFi (Nina W102), Crypto (ECC508)"));
+  SERIAL_OUT.println(F_STR("Features: WiFi (Nina W102), Crypto (ECC508)"));
 #endif
 #elif defined(BOARD_NRF52)
-  Serial.print(F("MCU: nRF52840 (ARM Cortex-M4F)"));
-  Serial.println();
-  Serial.print(F("CPU Frequency: 64 MHz"));
-  Serial.println();
-  Serial.println(F("Features: BLE 5.0, IMU (LSM9DS1)"));
+  SERIAL_OUT.print(F_STR("MCU: nRF52840 (ARM Cortex-M4F)"));
+  SERIAL_OUT.println();
+  SERIAL_OUT.print(F_STR("CPU Frequency: 64 MHz"));
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("Features: BLE 5.0, IMU (LSM9DS1)"));
 #elif defined(BOARD_STM32H7)
-  Serial.print(F("MCU: STM32H7 (ARM Cortex-M7)"));
-  Serial.println();
-  Serial.print(F("CPU Frequency: "));
-  Serial.print(F_CPU / 1000000);
-  Serial.println(F(" MHz"));
+  SERIAL_OUT.print(F_STR("MCU: STM32H7 (ARM Cortex-M7)"));
+  SERIAL_OUT.println();
+  SERIAL_OUT.print(F_STR("CPU Frequency: "));
+  SERIAL_OUT.print(F_CPU / 1000000);
+  SERIAL_OUT.println(F_STR(" MHz"));
 #ifdef HAS_DUAL_CORE
-  Serial.println(F("Cores: Dual Core (M7 + M4)"));
+  SERIAL_OUT.println(F_STR("Cores: Dual Core (M7 + M4)"));
 #endif
 #elif defined(BOARD_TEENSY)
-  Serial.print(F("CPU Frequency: "));
-  Serial.print(F_CPU / 1000000);
-  Serial.println(F(" MHz"));
+  SERIAL_OUT.print(F_STR("CPU Frequency: "));
+  SERIAL_OUT.print(F_CPU / 1000000);
+  SERIAL_OUT.println(F_STR(" MHz"));
 #if defined(__IMXRT1062__)
-  Serial.println(F("MCU: i.MX RT1062 (ARM Cortex-M7)"));
+  SERIAL_OUT.println(F_STR("MCU: i.MX RT1062 (ARM Cortex-M7)"));
 #endif
 #elif defined(BOARD_STM32U5)
-  Serial.println(F("MCU: STM32U585 (ARM Cortex-M33)"));
-  Serial.print(F("MCU Frequency: "));
-  
+  SERIAL_OUT.println(F_STR("MCU: STM32U585 (ARM Cortex-M33)"));
+  SERIAL_OUT.print(F_STR("MCU Frequency: "));
+
   // Try to get actual clock frequency
 #if defined(CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC)
-  Serial.print(CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000);
+  SERIAL_OUT.print(CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000);
 #elif defined(F_CPU)
-  Serial.print(F_CPU / 1000000);
+  SERIAL_OUT.print(F_CPU / 1000000);
 #else
-  Serial.print(F("160"));  // STM32U585 default max frequency
+  SERIAL_OUT.print(F_STR("160"));  // STM32U585 default max frequency
 #endif
-  
-  Serial.println(F(" MHz"));
-  Serial.println(F("MCU Features: FPU, DSP, TrustZone"));
-  Serial.println(F("MCU RAM: 786 KB SRAM"));
-  Serial.println(F("MCU Flash: 2 MB"));
+
+  SERIAL_OUT.println(F_STR(" MHz"));
+  SERIAL_OUT.println(F_STR("MCU Features: FPU, DSP, TrustZone"));
+  SERIAL_OUT.println(F_STR("MCU RAM: 786 KB SRAM"));
+  SERIAL_OUT.println(F_STR("MCU Flash: 2 MB"));
 #ifdef USING_ZEPHYR
-  Serial.println(F("MCU RTOS: Zephyr"));
+  SERIAL_OUT.println(F_STR("MCU RTOS: Zephyr"));
 #endif
-  Serial.println();
-  Serial.println(F("Linux MPU: Qualcomm QRB2210"));
-  Serial.println(F("MPU: Quad Cortex-A53 @ up to 2.0 GHz"));
-  Serial.println(F("MPU RAM: 2-4 GB"));
-  Serial.println(F("MPU Storage: 16 GB eMMC"));
-  Serial.println(F("MPU OS: Debian-based Linux"));
-  Serial.println();
-  Serial.println(F("Communication: Arduino Bridge RPC (MCU<->Linux)"));
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("Linux MPU: Qualcomm QRB2210"));
+  SERIAL_OUT.println(F_STR("MPU: Quad Cortex-A53 @ up to 2.0 GHz"));
+  SERIAL_OUT.println(F_STR("MPU RAM: 2-4 GB"));
+  SERIAL_OUT.println(F_STR("MPU Storage: 16 GB eMMC"));
+  SERIAL_OUT.println(F_STR("MPU OS: Debian-based Linux"));
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("Communication: Arduino Bridge RPC (MCU<->Linux)"));
 #ifdef HAS_ROUTER_BRIDGE
-  Serial.println(F("RPC Library: Arduino_RouterBridge (MessagePack)"));
+  SERIAL_OUT.println(F_STR("RPC Library: Arduino_RouterBridge (MessagePack)"));
 #elif defined(HAS_RPCLITE)
-  Serial.println(F("RPC Library: Arduino_RPClite (MessagePack)"));
+  SERIAL_OUT.println(F_STR("RPC Library: Arduino_RPClite (MessagePack)"));
 #else
-  Serial.println(F("RPC Library: Not detected"));
+  SERIAL_OUT.println(F_STR("RPC Library: Not detected"));
 #endif
 #else
-  Serial.print(F("CPU Frequency: "));
+  SERIAL_OUT.print(F_STR("CPU Frequency: "));
 #if defined(F_CPU)
-  Serial.print(F_CPU / 1000000);
-  Serial.println(F(" MHz"));
+  SERIAL_OUT.print(F_CPU / 1000000);
+  SERIAL_OUT.println(F_STR(" MHz"));
 #else
-  Serial.println(F("Unknown"));
+  SERIAL_OUT.println(F_STR("Unknown"));
 #endif
 #endif
 
 #if defined(ARDUINO_AVR_MULTIDUINO)
-  Serial.println(F("Features: RTC (DS1307)"));
+  SERIAL_OUT.println(F_STR("Features: RTC (DS1307)"));
 #endif
 
   // RAM Info
-  Serial.print(F("Free RAM: "));
+  SERIAL_OUT.print(F_STR("Free RAM: "));
 #if defined(ESP32)
-  Serial.print(ESP.getFreeHeap() / 1024);
-  Serial.println(F(" KB"));
-  Serial.print(F("Total Heap: "));
-  Serial.print(ESP.getHeapSize() / 1024);
-  Serial.println(F(" KB"));
-  Serial.print(F("Min Free Heap: "));
-  Serial.print(ESP.getMinFreeHeap() / 1024);
-  Serial.println(F(" KB"));
+  SERIAL_OUT.print(ESP.getFreeHeap() / 1024);
+  SERIAL_OUT.println(F_STR(" KB"));
+  SERIAL_OUT.print(F_STR("Total Heap: "));
+  SERIAL_OUT.print(ESP.getHeapSize() / 1024);
+  SERIAL_OUT.println(F_STR(" KB"));
+  SERIAL_OUT.print(F_STR("Min Free Heap: "));
+  SERIAL_OUT.print(ESP.getMinFreeHeap() / 1024);
+  SERIAL_OUT.println(F_STR(" KB"));
 #elif defined(ESP8266)
-  Serial.print(ESP.getFreeHeap() / 1024);
-  Serial.println(F(" KB"));
+  SERIAL_OUT.print(ESP.getFreeHeap() / 1024);
+  SERIAL_OUT.println(F_STR(" KB"));
 #elif defined(__AVR__)
   extern int __heap_start, *__brkval;
   int v;
   int freeRam = (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
-  Serial.print(freeRam);
-  Serial.println(F(" bytes"));
+  SERIAL_OUT.print(freeRam);
+  SERIAL_OUT.println(F_STR(" bytes"));
 // Show total RAM for common AVR boards
 #if defined(__AVR_ATmega328P__)
-  Serial.println(F("Total RAM: 2 KB"));
+  SERIAL_OUT.println(F_STR("Total RAM: 2 KB"));
 #elif defined(__AVR_ATmega2560__)
-  Serial.println(F("Total RAM: 8 KB"));
+  SERIAL_OUT.println(F_STR("Total RAM: 8 KB"));
 #elif defined(__AVR_ATmega32U4__)
-  Serial.println(F("Total RAM: 2.5 KB"));
+  SERIAL_OUT.println(F_STR("Total RAM: 2.5 KB"));
 #endif
 #elif defined(ARDUINO_SAM_DUE)
   extern char _end;
@@ -3702,44 +3746,49 @@ void printSystemInfo() {
   char *ramstart = (char *)0x20070000;
   char *ramend = (char *)0x20088000;
   int freeRam = ramend - sbrk(0);
-  Serial.print(freeRam / 1024);
-  Serial.println(F(" KB"));
-  Serial.println(F("Total RAM: 96 KB"));
+  SERIAL_OUT.print(freeRam / 1024);
+  SERIAL_OUT.println(F_STR(" KB"));
+  SERIAL_OUT.println(F_STR("Total RAM: 96 KB"));
 #elif defined(ARDUINO_ARCH_RP2040)
   // RP2040 has 264KB RAM
-  Serial.println(F("~264 KB (RP2040)"));
+  SERIAL_OUT.println(F_STR("~264 KB (RP2040)"));
 #elif defined(BOARD_NRF52)
-  Serial.println(F("~256 KB (nRF52840)"));
+  SERIAL_OUT.println(F_STR("~256 KB (nRF52840)"));
 #elif defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
-  Serial.println(F("32 KB (RA4M1)"));
+  SERIAL_OUT.println(F_STR("32 KB (RA4M1)"));
 #elif defined(BOARD_SRAM_KB)
-  Serial.print(F("Total RAM: "));
-  Serial.print(BOARD_SRAM_KB);
-  Serial.println(F(" KB"));
+  SERIAL_OUT.print(F_STR("Total RAM: "));
+  SERIAL_OUT.print(BOARD_SRAM_KB);
+  SERIAL_OUT.println(F_STR(" KB"));
 #else
-  Serial.println(F("Unknown"));
+  SERIAL_OUT.println(F_STR("Unknown"));
 #endif
 
-  Serial.print(F("Compile Date: "));
-  Serial.print(__DATE__);
-  Serial.print(F(" "));
-  Serial.println(__TIME__);
+  SERIAL_OUT.print(F_STR("Compile Date: "));
+  SERIAL_OUT.print(__DATE__);
+  SERIAL_OUT.print(F_STR(" "));
+  SERIAL_OUT.println(__TIME__);
 }
 
 // ==================== MAIN FUNCTIONS ====================
 
 void setup() {
-  Serial.begin(SERIAL_BAUD);
+#if defined(ARDUINO_UNO_Q)
+  SERIAL_OUT.begin();  // Uno Q Monitor doesn't use baud rate
+  delay(3000);  // Wait longer for Monitor connection
+#else
+  SERIAL_OUT.begin(SERIAL_BAUD);
   delay(2000);  // Wait for serial connection
+#endif
 
   calibrateBenchmarkTime();
 
-  Serial.println();
-  Serial.println();
+  SERIAL_OUT.println();
+  SERIAL_OUT.println();
   printDivider();
-  Serial.println(F("  UNIVERSAL ARDUINO BENCHMARK SUITE"));
+  SERIAL_OUT.println(F_STR("  UNIVERSAL ARDUINO BENCHMARK SUITE"));
   printDivider();
-  Serial.println();
+  SERIAL_OUT.println();
 
   // System info
   printSystemInfo();
@@ -3797,7 +3846,7 @@ void setup() {
   benchmarkSoftwareATSE();
 #endif
 #if defined(BOARD_STM32U5) && defined(HAS_DUAL_PROCESSOR)
-  benchmarkArduinoBridge();
+  //benchmarkArduinoBridge();
 #endif
 
   // Multiduino-specific benchmarks
@@ -3807,11 +3856,11 @@ void setup() {
 
   // Final summary
   printHeader("BENCHMARK COMPLETE!");
-  Serial.println(F("Results saved in Serial Monitor."));
-  Serial.println(F("You can copy/paste the output for analysis."));
-  Serial.println();
-  Serial.println(F("To run again, press the RESET button or"));
-  Serial.println(F("re-upload the sketch."));
+  SERIAL_OUT.println(F_STR("Results saved in Serial Monitor."));
+  SERIAL_OUT.println(F_STR("You can copy/paste the output for analysis."));
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("To run again, press the RESET button or"));
+  SERIAL_OUT.println(F_STR("re-upload the sketch."));
   printDivider();
 }
 

@@ -83,8 +83,7 @@ TimedLoopResult runTimedLoop(uint32_t minDurationMs, uint32_t opsPerIteration, F
   do {
     bool shouldContinue = runFuncAndCheck(
       func,
-      typename benchmark_detail::is_same<decltype(func()), void>::type()
-    );
+      typename benchmark_detail::is_same<decltype(func()), void>::type());
     if (!shouldContinue) {
       elapsed = micros() - start;
       break;

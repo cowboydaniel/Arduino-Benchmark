@@ -117,9 +117,7 @@
 #include "Arduino_LED_Matrix.h"
 #elif defined(ARDUINO_UNOR4_MINIMA)
 #define BOARD_NAME "Arduino Uno R4 Minima"
-#define HAS_LED_MATRIX
 #include <EEPROM.h>
-#include "Arduino_LED_Matrix.h"
 #elif defined(ARDUINO_ARCH_RENESAS)
 #define BOARD_NAME "Renesas (Uno R4 family)"
 #include <EEPROM.h>

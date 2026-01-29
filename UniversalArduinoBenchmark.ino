@@ -3665,7 +3665,7 @@ void printSystemInfo() {
 #endif
 
 #if defined(ARDUINO_AVR_MULTIDUINO)
-  Serial.println(F("Features: RTC (DS1307), microSD card"));
+  Serial.println(F("Features: RTC (DS1307)"));
 #endif
 
   // RAM Info

@@ -4452,6 +4452,14 @@ void benchmarkInterruptLatency() {
   SERIAL_OUT.print(F_STR("Using pin "));
   SERIAL_OUT.println(interruptPin);
 
+  int interruptNumber = digitalPinToInterrupt(interruptPin);
+  if (interruptNumber == NOT_AN_INTERRUPT) {
+    SERIAL_OUT.println(F_STR("Interrupt measurement skipped"));
+    SERIAL_OUT.println(F_STR("(digitalPinToInterrupt returned NOT_AN_INTERRUPT)"));
+    SERIAL_OUT.println(F_STR("Check board core/variant selection or pin choice logic."));
+    return;
+  }
+
   pinMode(triggerPin, OUTPUT);
   digitalWrite(triggerPin, LOW);
 
@@ -4459,10 +4467,10 @@ void benchmarkInterruptLatency() {
 #if defined(__AVR__)
   pinMode(interruptPin, INPUT_PULLUP);
   digitalWrite(triggerPin, HIGH);  // Start high for FALLING edge test
-  attachInterrupt(digitalPinToInterrupt(interruptPin), latencyISR, FALLING);
+  attachInterrupt(interruptNumber, latencyISR, FALLING);
 #else
   pinMode(interruptPin, INPUT_PULLDOWN);
-  attachInterrupt(digitalPinToInterrupt(interruptPin), latencyISR, RISING);
+  attachInterrupt(interruptNumber, latencyISR, RISING);
 #endif
 
   // Measure interrupt latency
@@ -4502,7 +4510,7 @@ void benchmarkInterruptLatency() {
     delayMicroseconds(100);  // Small delay between tests
   }
 
-  detachInterrupt(digitalPinToInterrupt(interruptPin));
+  detachInterrupt(interruptNumber);
 
   if (successfulMeasurements > 0) {
     float avgLatency = (float)totalLatency / successfulMeasurements;

@@ -26,6 +26,10 @@
 
 #include <limits.h>
 
+#ifndef NOT_AN_INTERRUPT
+#define NOT_AN_INTERRUPT -1
+#endif
+
 // ==================== BOARD DETECTION ====================
 
 // ESP32 Family (all variants)

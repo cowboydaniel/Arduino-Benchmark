@@ -4433,21 +4433,26 @@ void benchmarkInterruptLatency() {
   int triggerPin, interruptPin;
 
 #if defined(ESP32)
-  triggerPin = 4;
-  interruptPin = 4;  // ESP32 can use same pin
+  triggerPin = 5;
+  interruptPin = 4;
 #elif defined(ARDUINO_ARCH_RP2040)
-  triggerPin = 2;
+  triggerPin = 3;
   interruptPin = 2;
 #elif defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
-  triggerPin = 2;
+  triggerPin = 3;
   interruptPin = 2;
 #elif defined(__AVR__)
-  triggerPin = 2;
+  triggerPin = 3;
   interruptPin = 2;  // INT0
 #else
-  triggerPin = 2;
+  triggerPin = 3;
   interruptPin = 2;
 #endif
+
+  SERIAL_OUT.print(F_STR("Jumper "));
+  SERIAL_OUT.print(triggerPin);
+  SERIAL_OUT.print(F_STR(" -> "));
+  SERIAL_OUT.println(interruptPin);
 
   SERIAL_OUT.print(F_STR("Using pin "));
   SERIAL_OUT.println(interruptPin);

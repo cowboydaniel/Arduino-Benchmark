@@ -1462,14 +1462,19 @@ void benchmarkDigitalIO() {
   for (uint8_t trial = 0; trial < kJitterTrials; trial++) {
     TimedLoopResult regResult = runTimedLoop(minDurationMs, 2000, [&]() {
       for (int i = 0; i < 1000; i++) {
-#if defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32C5) || defined(CONFIG_IDF_TARGET_ESP32H2)
-        // ESP32-C6/C5/H2 use different register structure with .val field
+#if defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32C5) || defined(CONFIG_IDF_TARGET_ESP32H2) || defined(CONFIG_IDF_TARGET_ESP32C3)
+        // ESP32-C6/C5/H2/C3 use different register structure with .val field
         if (testPin < 32) {
           GPIO.out_w1ts.val = 1u << testPin;
           GPIO.out_w1tc.val = 1u << testPin;
         } else {
+#if defined(CONFIG_IDF_TARGET_ESP32C3)
+          digitalWrite(testPin, HIGH);
+          digitalWrite(testPin, LOW);
+#else
           GPIO.out1_w1ts.val = 1u << (testPin - 32);
           GPIO.out1_w1tc.val = 1u << (testPin - 32);
+#endif
         }
 #elif ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 0, 0)
         // Other ESP32 variants
@@ -3769,7 +3774,7 @@ void benchmarkESP32DAC() {
 void benchmarkESP32Touch() {
   printHeader("I/O: CAPACITIVE TOUCH (ESP32)");
 
-#if defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32C5) || defined(CONFIG_IDF_TARGET_ESP32H2)
+#if defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32C5) || defined(CONFIG_IDF_TARGET_ESP32H2) || defined(CONFIG_IDF_TARGET_ESP32C3)
   SERIAL_OUT.println(F_STR("Touch sensors not available on this ESP32 variant"));
   return;
 #else

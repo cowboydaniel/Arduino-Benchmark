@@ -4433,24 +4433,37 @@ void benchmarkInterruptLatency() {
   int triggerPin, interruptPin;
 
 #if defined(ESP32)
-  triggerPin = 4;
-  interruptPin = 4;  // ESP32 can use same pin
+  triggerPin = 5;
+  interruptPin = 4;
 #elif defined(ARDUINO_ARCH_RP2040)
-  triggerPin = 2;
+  triggerPin = 3;
   interruptPin = 2;
 #elif defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
-  triggerPin = 2;
+  triggerPin = 3;
   interruptPin = 2;
 #elif defined(__AVR__)
-  triggerPin = 2;
+  triggerPin = 3;
   interruptPin = 2;  // INT0
 #else
-  triggerPin = 2;
+  triggerPin = 3;
   interruptPin = 2;
 #endif
 
+  SERIAL_OUT.print(F_STR("Jumper "));
+  SERIAL_OUT.print(triggerPin);
+  SERIAL_OUT.print(F_STR(" -> "));
+  SERIAL_OUT.println(interruptPin);
+
   SERIAL_OUT.print(F_STR("Using pin "));
   SERIAL_OUT.println(interruptPin);
+
+  int interruptNumber = digitalPinToInterrupt(interruptPin);
+  if (interruptNumber == NOT_AN_INTERRUPT) {
+    SERIAL_OUT.println(F_STR("Interrupt measurement skipped"));
+    SERIAL_OUT.println(F_STR("(digitalPinToInterrupt returned NOT_AN_INTERRUPT)"));
+    SERIAL_OUT.println(F_STR("Check board core/variant selection or pin choice logic."));
+    return;
+  }
 
   pinMode(triggerPin, OUTPUT);
   digitalWrite(triggerPin, LOW);
@@ -4459,10 +4472,10 @@ void benchmarkInterruptLatency() {
 #if defined(__AVR__)
   pinMode(interruptPin, INPUT_PULLUP);
   digitalWrite(triggerPin, HIGH);  // Start high for FALLING edge test
-  attachInterrupt(digitalPinToInterrupt(interruptPin), latencyISR, FALLING);
+  attachInterrupt(interruptNumber, latencyISR, FALLING);
 #else
   pinMode(interruptPin, INPUT_PULLDOWN);
-  attachInterrupt(digitalPinToInterrupt(interruptPin), latencyISR, RISING);
+  attachInterrupt(interruptNumber, latencyISR, RISING);
 #endif
 
   // Measure interrupt latency
@@ -4502,7 +4515,7 @@ void benchmarkInterruptLatency() {
     delayMicroseconds(100);  // Small delay between tests
   }
 
-  detachInterrupt(digitalPinToInterrupt(interruptPin));
+  detachInterrupt(interruptNumber);
 
   if (successfulMeasurements > 0) {
     float avgLatency = (float)totalLatency / successfulMeasurements;

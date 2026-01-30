@@ -369,8 +369,32 @@
 #endif
 
 #include "BenchmarkHelpers.h"
+#include <SPI.h>
+
 #if defined(ESP32)
 #include <HEXBuilder.h>
+#include "mbedtls/aes.h"
+#include "esp_sleep.h"
+#endif
+
+#if defined(ARDUINO_ARCH_RP2040)
+#include "hardware/dma.h"
+#include "hardware/pio.h"
+#include "hardware/clocks.h"
+#include "hardware/interp.h"
+#include "hardware/pwm.h"
+#include "hardware/watchdog.h"
+#include "pico/stdlib.h"
+#endif
+
+#if defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
+#include "RTC.h"
+#endif
+
+#if defined(__AVR__)
+#include <avr/sleep.h>
+#include <avr/power.h>
+#include <avr/wdt.h>
 #endif
 
 // ==================== SERIAL OUTPUT ABSTRACTION ====================
@@ -3623,6 +3647,1103 @@ void benchmarkRTC() {
 }
 #endif  // HAS_RTC
 
+// ==================== ESP32 ADDITIONAL BENCHMARKS ====================
+
+#if defined(ESP32)
+
+// ESP32 DAC Benchmark (GPIO25/26 on classic ESP32)
+#if defined(CONFIG_IDF_TARGET_ESP32)
+void benchmarkESP32DAC() {
+  printHeader("I/O: DAC OUTPUT (ESP32)");
+
+  SERIAL_OUT.println(F_STR("ESP32 has 2x 8-bit DACs on GPIO25 and GPIO26"));
+
+  const int dacPin = 25;  // DAC1
+
+  // DAC write speed benchmark
+  volatile uint32_t dacValue = 0;
+  startBenchmark();
+  for (int i = 0; i < 10000; i++) {
+    dacWrite(dacPin, dacValue & 0xFF);
+    dacValue++;
+  }
+  unsigned long dacTime = endBenchmark();
+
+  SERIAL_OUT.print(F_STR("dacWrite() (10000 ops): "));
+  SERIAL_OUT.print(dacTime);
+  SERIAL_OUT.print(F_STR(" us ("));
+  SERIAL_OUT.print(10000.0 / dacTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
+  // DAC ramp test - measure update rate
+  startBenchmark();
+  for (int cycle = 0; cycle < 100; cycle++) {
+    for (int val = 0; val < 256; val++) {
+      dacWrite(dacPin, val);
+    }
+  }
+  unsigned long rampTime = endBenchmark();
+
+  SERIAL_OUT.print(F_STR("DAC ramp (100 cycles, 25600 writes): "));
+  SERIAL_OUT.print(rampTime);
+  SERIAL_OUT.print(F_STR(" us ("));
+  SERIAL_OUT.print(25600.0 / rampTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
+  // Calculate effective sample rate
+  float sampleRate = 25600.0 / (rampTime / 1000000.0);
+  SERIAL_OUT.print(F_STR("Effective sample rate: "));
+  SERIAL_OUT.print(sampleRate / 1000, 1);
+  SERIAL_OUT.println(F_STR(" kHz"));
+
+  dacWrite(dacPin, 0);  // Reset to 0
+}
+#endif  // CONFIG_IDF_TARGET_ESP32
+
+// ESP32 Touch Sensor Benchmark
+void benchmarkESP32Touch() {
+  printHeader("I/O: CAPACITIVE TOUCH (ESP32)");
+
+#if defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32C5) || defined(CONFIG_IDF_TARGET_ESP32H2)
+  SERIAL_OUT.println(F_STR("Touch sensors not available on this ESP32 variant"));
+  return;
+#else
+  // Touch pins vary by ESP32 variant
+  int touchPin;
+#if defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
+  touchPin = 1;  // T1 = GPIO1
+#else
+  touchPin = 4;  // T0 = GPIO4 on classic ESP32
+#endif
+
+  SERIAL_OUT.print(F_STR("Testing touch pin: GPIO"));
+  SERIAL_OUT.println(touchPin);
+
+  // Warm up reads
+  for (int i = 0; i < 10; i++) {
+    touchRead(touchPin);
+  }
+
+  // Touch read speed benchmark
+  volatile uint32_t touchSum = 0;
+  startBenchmark();
+  for (int i = 0; i < 1000; i++) {
+    touchSum += touchRead(touchPin);
+  }
+  unsigned long touchTime = endBenchmark();
+
+  SERIAL_OUT.print(F_STR("touchRead() (1000 ops): "));
+  SERIAL_OUT.print(touchTime);
+  SERIAL_OUT.print(F_STR(" us ("));
+  SERIAL_OUT.print(1000.0 / touchTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
+  SERIAL_OUT.print(F_STR("Average touch value: "));
+  SERIAL_OUT.println(touchSum / 1000);
+
+  // Touch threshold detection timing
+  uint16_t baseline = touchRead(touchPin);
+  SERIAL_OUT.print(F_STR("Baseline (no touch): "));
+  SERIAL_OUT.println(baseline);
+
+  SERIAL_OUT.print(F_STR("Time per read: "));
+  SERIAL_OUT.print(touchTime / 1000.0, 2);
+  SERIAL_OUT.println(F_STR(" us"));
+#endif
+}
+
+// ESP32 Light Sleep Benchmark
+void benchmarkESP32Sleep() {
+  printHeader("POWER: LIGHT SLEEP TIMING (ESP32)");
+
+  SERIAL_OUT.println(F_STR("Testing light sleep wake latency..."));
+  SERIAL_OUT.println(F_STR("(Deep sleep would reset the MCU)"));
+  SERIAL_OUT.flush();
+
+  // Configure timer wake up for light sleep
+  const uint64_t sleepTimeUs = 1000;  // 1ms sleep
+
+  // Measure wake latency over multiple iterations
+  unsigned long totalWakeTime = 0;
+  const int iterations = 20;
+
+  for (int i = 0; i < iterations; i++) {
+    esp_sleep_enable_timer_wakeup(sleepTimeUs);
+
+    unsigned long beforeSleep = micros();
+    esp_light_sleep_start();
+    unsigned long afterWake = micros();
+
+    unsigned long actualSleep = afterWake - beforeSleep;
+    totalWakeTime += actualSleep;
+
+    yield();
+  }
+
+  float avgSleepTime = (float)totalWakeTime / iterations;
+  float wakeOverhead = avgSleepTime - sleepTimeUs;
+
+  SERIAL_OUT.print(F_STR("Target sleep time: "));
+  SERIAL_OUT.print(sleepTimeUs);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  SERIAL_OUT.print(F_STR("Average actual time: "));
+  SERIAL_OUT.print(avgSleepTime, 1);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  SERIAL_OUT.print(F_STR("Wake overhead: "));
+  SERIAL_OUT.print(wakeOverhead, 1);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  SERIAL_OUT.print(F_STR("Iterations: "));
+  SERIAL_OUT.println(iterations);
+
+  // Test different sleep durations
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("Sleep duration accuracy:"));
+
+  uint64_t testDurations[] = {100, 500, 1000, 5000, 10000};
+  for (int d = 0; d < 5; d++) {
+    esp_sleep_enable_timer_wakeup(testDurations[d]);
+    unsigned long before = micros();
+    esp_light_sleep_start();
+    unsigned long actual = micros() - before;
+
+    float error = ((float)actual - testDurations[d]) / testDurations[d] * 100;
+
+    SERIAL_OUT.print(F_STR("  Target "));
+    SERIAL_OUT.print((uint32_t)testDurations[d]);
+    SERIAL_OUT.print(F_STR(" us -> Actual "));
+    SERIAL_OUT.print(actual);
+    SERIAL_OUT.print(F_STR(" us ("));
+    SERIAL_OUT.print(error, 1);
+    SERIAL_OUT.println(F_STR("% error)"));
+  }
+}
+
+// ESP32 Hardware AES Benchmark
+void benchmarkESP32AES() {
+  printHeader("CRYPTO: HARDWARE AES (ESP32)");
+
+  SERIAL_OUT.println(F_STR("Using ESP32 hardware AES accelerator"));
+
+  // Test data
+  uint8_t key[16] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+                     0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F};
+  uint8_t plaintext[16] = {0};
+  uint8_t ciphertext[16] = {0};
+  uint8_t decrypted[16] = {0};
+
+  mbedtls_aes_context aes;
+  mbedtls_aes_init(&aes);
+
+  // AES-128 Encryption benchmark
+  mbedtls_aes_setkey_enc(&aes, key, 128);
+
+  volatile uint32_t checksum = 0;
+  startBenchmark();
+  for (int i = 0; i < 1000; i++) {
+    plaintext[0] = i & 0xFF;
+    mbedtls_aes_crypt_ecb(&aes, MBEDTLS_AES_ENCRYPT, plaintext, ciphertext);
+    checksum += ciphertext[0];
+  }
+  unsigned long encTime = endBenchmark();
+
+  SERIAL_OUT.print(F_STR("AES-128 Encrypt (1000 blocks): "));
+  SERIAL_OUT.print(encTime);
+  SERIAL_OUT.print(F_STR(" us ("));
+  SERIAL_OUT.print(1000.0 / encTime * 1000);
+  SERIAL_OUT.println(F_STR(" blocks/ms)"));
+
+  // AES-128 Decryption benchmark
+  mbedtls_aes_setkey_dec(&aes, key, 128);
+
+  startBenchmark();
+  for (int i = 0; i < 1000; i++) {
+    mbedtls_aes_crypt_ecb(&aes, MBEDTLS_AES_DECRYPT, ciphertext, decrypted);
+    checksum += decrypted[0];
+  }
+  unsigned long decTime = endBenchmark();
+
+  SERIAL_OUT.print(F_STR("AES-128 Decrypt (1000 blocks): "));
+  SERIAL_OUT.print(decTime);
+  SERIAL_OUT.print(F_STR(" us ("));
+  SERIAL_OUT.print(1000.0 / decTime * 1000);
+  SERIAL_OUT.println(F_STR(" blocks/ms)"));
+
+  // Throughput calculation (16 bytes per block)
+  float encThroughput = (1000 * 16) / (encTime / 1000000.0) / 1024;
+  float decThroughput = (1000 * 16) / (decTime / 1000000.0) / 1024;
+
+  SERIAL_OUT.print(F_STR("Encrypt throughput: "));
+  SERIAL_OUT.print(encThroughput, 1);
+  SERIAL_OUT.println(F_STR(" KB/s"));
+
+  SERIAL_OUT.print(F_STR("Decrypt throughput: "));
+  SERIAL_OUT.print(decThroughput, 1);
+  SERIAL_OUT.println(F_STR(" KB/s"));
+
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println(checksum);
+
+  mbedtls_aes_free(&aes);
+}
+
+#endif  // ESP32
+
+// ==================== RP2040 ADDITIONAL BENCHMARKS ====================
+
+#if defined(ARDUINO_ARCH_RP2040)
+
+// RP2040 DMA Benchmark
+void benchmarkRP2040DMA() {
+  printHeader("MEMORY: DMA vs CPU COPY (RP2040)");
+
+  const size_t bufSize = 4096;
+  uint8_t *src = (uint8_t *)malloc(bufSize);
+  uint8_t *dst = (uint8_t *)malloc(bufSize);
+
+  if (!src || !dst) {
+    SERIAL_OUT.println(F_STR("Failed to allocate buffers"));
+    if (src) free(src);
+    if (dst) free(dst);
+    return;
+  }
+
+  // Initialize source
+  for (size_t i = 0; i < bufSize; i++) {
+    src[i] = i & 0xFF;
+  }
+
+  // CPU memcpy benchmark
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    memcpy(dst, src, bufSize);
+  }
+  unsigned long cpuTime = endBenchmark();
+
+  SERIAL_OUT.print(F_STR("CPU memcpy ("));
+  SERIAL_OUT.print(bufSize * 100);
+  SERIAL_OUT.print(F_STR(" bytes): "));
+  SERIAL_OUT.print(cpuTime);
+  SERIAL_OUT.print(F_STR(" us ("));
+  SERIAL_OUT.print((bufSize * 100.0) / cpuTime);
+  SERIAL_OUT.println(F_STR(" MB/s)"));
+
+  // DMA benchmark
+  int dma_chan = dma_claim_unused_channel(true);
+
+  dma_channel_config c = dma_channel_get_default_config(dma_chan);
+  channel_config_set_transfer_data_size(&c, DMA_SIZE_8);
+  channel_config_set_read_increment(&c, true);
+  channel_config_set_write_increment(&c, true);
+
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    dma_channel_configure(dma_chan, &c, dst, src, bufSize, true);
+    dma_channel_wait_for_finish_blocking(dma_chan);
+  }
+  unsigned long dmaTime = endBenchmark();
+
+  SERIAL_OUT.print(F_STR("DMA transfer ("));
+  SERIAL_OUT.print(bufSize * 100);
+  SERIAL_OUT.print(F_STR(" bytes): "));
+  SERIAL_OUT.print(dmaTime);
+  SERIAL_OUT.print(F_STR(" us ("));
+  SERIAL_OUT.print((bufSize * 100.0) / dmaTime);
+  SERIAL_OUT.println(F_STR(" MB/s)"));
+
+  // Speedup
+  SERIAL_OUT.print(F_STR("DMA speedup: "));
+  SERIAL_OUT.print((float)cpuTime / dmaTime, 2);
+  SERIAL_OUT.println(F_STR("x"));
+
+  // Verify correctness
+  bool match = true;
+  for (size_t i = 0; i < bufSize; i++) {
+    if (dst[i] != src[i]) {
+      match = false;
+      break;
+    }
+  }
+  SERIAL_OUT.print(F_STR("Data verification: "));
+  SERIAL_OUT.println(match ? F_STR("PASS") : F_STR("FAIL"));
+
+  dma_channel_unclaim(dma_chan);
+  free(src);
+  free(dst);
+}
+
+// RP2040 PIO Benchmark
+void benchmarkRP2040PIO() {
+  printHeader("I/O: PIO STATE MACHINE (RP2040)");
+
+  SERIAL_OUT.println(F_STR("RP2040 Programmable I/O Information:"));
+  SERIAL_OUT.println(F_STR("  2x PIO blocks, 4 state machines each"));
+  SERIAL_OUT.print(F_STR("  System clock: "));
+  SERIAL_OUT.print(clock_get_hz(clk_sys) / 1000000);
+  SERIAL_OUT.println(F_STR(" MHz"));
+
+  // PIO can run at system clock speed
+  float maxPioFreq = clock_get_hz(clk_sys) / 1000000.0;
+  SERIAL_OUT.print(F_STR("  Max PIO frequency: "));
+  SERIAL_OUT.print(maxPioFreq, 0);
+  SERIAL_OUT.println(F_STR(" MHz"));
+
+  // Theoretical GPIO toggle rate (2 cycles per toggle)
+  SERIAL_OUT.print(F_STR("  Theoretical GPIO toggle: "));
+  SERIAL_OUT.print(maxPioFreq / 2, 0);
+  SERIAL_OUT.println(F_STR(" MHz"));
+
+  // Compare with digitalWrite
+  const int testPin = 25;  // LED pin
+  pinMode(testPin, OUTPUT);
+
+  volatile uint32_t toggles = 0;
+  startBenchmark();
+  for (int i = 0; i < 10000; i++) {
+    digitalWrite(testPin, HIGH);
+    digitalWrite(testPin, LOW);
+    toggles += 2;
+  }
+  unsigned long gpioTime = endBenchmark();
+
+  float gpioFreq = (toggles / 2.0) / (gpioTime / 1000000.0) / 1000;
+
+  SERIAL_OUT.print(F_STR("  digitalWrite toggle rate: "));
+  SERIAL_OUT.print(gpioFreq, 1);
+  SERIAL_OUT.println(F_STR(" kHz"));
+
+  // Direct register toggle
+  startBenchmark();
+  for (int i = 0; i < 100000; i++) {
+    sio_hw->gpio_set = 1ul << testPin;
+    sio_hw->gpio_clr = 1ul << testPin;
+  }
+  unsigned long regTime = endBenchmark();
+
+  float regFreq = 100000.0 / (regTime / 1000000.0) / 1000000;
+
+  SERIAL_OUT.print(F_STR("  Direct register toggle: "));
+  SERIAL_OUT.print(regFreq, 2);
+  SERIAL_OUT.println(F_STR(" MHz"));
+
+  SERIAL_OUT.println();
+  SERIAL_OUT.print(F_STR("PIO speedup potential: "));
+  SERIAL_OUT.print(maxPioFreq / 2 / (regFreq), 0);
+  SERIAL_OUT.println(F_STR("x over direct register"));
+}
+
+// RP2040 Interpolator Benchmark
+void benchmarkRP2040Interpolator() {
+  printHeader("COMPUTE: HARDWARE INTERPOLATOR (RP2040)");
+
+  SERIAL_OUT.println(F_STR("RP2040 has 2 hardware interpolators per core"));
+  SERIAL_OUT.println(F_STR("Used for: affine texture mapping, lane operations"));
+  SERIAL_OUT.println();
+
+  // Configure interpolator 0 for simple linear interpolation
+  interp_config cfg = interp_default_config();
+  interp_config_set_blend(&cfg, true);
+  interp_set_config(interp0, 0, &cfg);
+
+  // Benchmark interpolator operations
+  volatile uint32_t result = 0;
+
+  startBenchmark();
+  for (int i = 0; i < 10000; i++) {
+    // Set base and accumulator values
+    interp0->base[0] = 0;
+    interp0->base[1] = 1000;
+    interp0->accum[0] = i % 256;  // Blend factor 0-255
+
+    // Read interpolated result
+    result += interp0->peek[0];
+  }
+  unsigned long interpTime = endBenchmark();
+
+  SERIAL_OUT.print(F_STR("Interpolator ops (10000): "));
+  SERIAL_OUT.print(interpTime);
+  SERIAL_OUT.print(F_STR(" us ("));
+  SERIAL_OUT.print(10000.0 / interpTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
+  // Compare with software interpolation
+  volatile int32_t softResult = 0;
+  startBenchmark();
+  for (int i = 0; i < 10000; i++) {
+    int32_t a = 0;
+    int32_t b = 1000;
+    int32_t t = i % 256;
+    softResult += a + ((b - a) * t) / 256;
+  }
+  unsigned long softTime = endBenchmark();
+
+  SERIAL_OUT.print(F_STR("Software lerp (10000): "));
+  SERIAL_OUT.print(softTime);
+  SERIAL_OUT.print(F_STR(" us ("));
+  SERIAL_OUT.print(10000.0 / softTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
+  SERIAL_OUT.print(F_STR("Interpolator speedup: "));
+  SERIAL_OUT.print((float)softTime / interpTime, 2);
+  SERIAL_OUT.println(F_STR("x"));
+
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println(result + softResult);
+}
+
+// RP2040 PWM Benchmark
+void benchmarkRP2040PWM() {
+  printHeader("I/O: PWM HARDWARE (RP2040)");
+
+  const int pwmPin = 25;  // LED pin
+
+  SERIAL_OUT.println(F_STR("RP2040 PWM Features:"));
+  SERIAL_OUT.println(F_STR("  8 PWM slices, 2 channels each (16 outputs)"));
+  SERIAL_OUT.println(F_STR("  16-bit counter, 16-bit wrap value"));
+
+  uint32_t sysClk = clock_get_hz(clk_sys);
+  SERIAL_OUT.print(F_STR("  System clock: "));
+  SERIAL_OUT.print(sysClk / 1000000);
+  SERIAL_OUT.println(F_STR(" MHz"));
+
+  // Get slice for our pin
+  uint slice_num = pwm_gpio_to_slice_num(pwmPin);
+  uint channel = pwm_gpio_to_channel(pwmPin);
+
+  SERIAL_OUT.print(F_STR("  Pin "));
+  SERIAL_OUT.print(pwmPin);
+  SERIAL_OUT.print(F_STR(" -> Slice "));
+  SERIAL_OUT.print(slice_num);
+  SERIAL_OUT.print(F_STR(", Channel "));
+  SERIAL_OUT.println(channel == PWM_CHAN_A ? 'A' : 'B');
+
+  // Configure for maximum frequency
+  gpio_set_function(pwmPin, GPIO_FUNC_PWM);
+
+  pwm_config config = pwm_get_default_config();
+  pwm_config_set_clkdiv(&config, 1.0f);  // No division
+  pwm_config_set_wrap(&config, 255);      // 8-bit resolution
+  pwm_init(slice_num, &config, true);
+
+  float pwmFreq = (float)sysClk / 256;
+  SERIAL_OUT.print(F_STR("  8-bit PWM frequency: "));
+  SERIAL_OUT.print(pwmFreq / 1000, 1);
+  SERIAL_OUT.println(F_STR(" kHz"));
+
+  // Benchmark duty cycle updates
+  startBenchmark();
+  for (int i = 0; i < 10000; i++) {
+    pwm_set_gpio_level(pwmPin, i & 0xFF);
+  }
+  unsigned long updateTime = endBenchmark();
+
+  SERIAL_OUT.print(F_STR("Duty cycle updates (10000): "));
+  SERIAL_OUT.print(updateTime);
+  SERIAL_OUT.print(F_STR(" us ("));
+  SERIAL_OUT.print(10000.0 / updateTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
+  // Test different resolutions
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("PWM frequency vs resolution:"));
+
+  uint16_t resolutions[] = {256, 1024, 4096, 16384, 65535};
+  const char* resNames[] = {"8-bit", "10-bit", "12-bit", "14-bit", "16-bit"};
+
+  for (int r = 0; r < 5; r++) {
+    pwm_config_set_wrap(&config, resolutions[r] - 1);
+    pwm_init(slice_num, &config, true);
+
+    float freq = (float)sysClk / resolutions[r];
+    SERIAL_OUT.print(F_STR("  "));
+    SERIAL_OUT.print(resNames[r]);
+    SERIAL_OUT.print(F_STR(": "));
+    if (freq >= 1000000) {
+      SERIAL_OUT.print(freq / 1000000, 2);
+      SERIAL_OUT.println(F_STR(" MHz"));
+    } else {
+      SERIAL_OUT.print(freq / 1000, 1);
+      SERIAL_OUT.println(F_STR(" kHz"));
+    }
+  }
+
+  // Cleanup
+  pwm_set_enabled(slice_num, false);
+  gpio_set_function(pwmPin, GPIO_FUNC_SIO);
+  pinMode(pwmPin, OUTPUT);
+  digitalWrite(pwmPin, LOW);
+}
+
+// Pico W BLE Benchmark
+#if defined(ARDUINO_RASPBERRY_PI_PICO_W)
+void benchmarkPicoWBLE() {
+  printHeader("WIRELESS: BLE (Pico W)");
+
+  SERIAL_OUT.println(F_STR("Pico W has BLE via CYW43439 module"));
+  SERIAL_OUT.println(F_STR("BLE requires BTstack library"));
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("To use BLE on Pico W:"));
+  SERIAL_OUT.println(F_STR("  1. Include <BTstackLib.h>"));
+  SERIAL_OUT.println(F_STR("  2. Call BTstack.setup()"));
+  SERIAL_OUT.println(F_STR("  3. Use BTstack API for scanning/advertising"));
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("Note: Full BLE benchmark requires BTstack integration"));
+}
+#endif
+
+#endif  // ARDUINO_ARCH_RP2040
+
+// ==================== UNO R4 WIFI ADDITIONAL BENCHMARKS ====================
+
+#if defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
+
+// Uno R4 DAC Benchmark
+void benchmarkUnoR4DAC() {
+  printHeader("I/O: DAC OUTPUT (Uno R4)");
+
+  SERIAL_OUT.println(F_STR("Renesas RA4M1 has 1x 12-bit DAC on pin A0/DAC"));
+
+  const int dacPin = DAC;
+
+  // Set 12-bit resolution
+  analogWriteResolution(12);
+
+  // DAC write speed benchmark
+  volatile uint32_t dacValue = 0;
+  startBenchmark();
+  for (int i = 0; i < 10000; i++) {
+    analogWrite(dacPin, dacValue & 0xFFF);
+    dacValue++;
+  }
+  unsigned long dacTime = endBenchmark();
+
+  SERIAL_OUT.print(F_STR("analogWrite() 12-bit (10000 ops): "));
+  SERIAL_OUT.print(dacTime);
+  SERIAL_OUT.print(F_STR(" us ("));
+  SERIAL_OUT.print(10000.0 / dacTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
+  // DAC ramp test
+  startBenchmark();
+  for (int cycle = 0; cycle < 10; cycle++) {
+    for (int val = 0; val < 4096; val += 16) {
+      analogWrite(dacPin, val);
+    }
+  }
+  unsigned long rampTime = endBenchmark();
+
+  uint32_t rampOps = 10 * (4096 / 16);
+  SERIAL_OUT.print(F_STR("DAC ramp (10 cycles, "));
+  SERIAL_OUT.print(rampOps);
+  SERIAL_OUT.print(F_STR(" writes): "));
+  SERIAL_OUT.print(rampTime);
+  SERIAL_OUT.print(F_STR(" us ("));
+  SERIAL_OUT.print((float)rampOps / rampTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
+  // Calculate effective sample rate
+  float sampleRate = rampOps / (rampTime / 1000000.0);
+  SERIAL_OUT.print(F_STR("Effective sample rate: "));
+  SERIAL_OUT.print(sampleRate / 1000, 1);
+  SERIAL_OUT.println(F_STR(" kHz"));
+
+  // Reset to 8-bit and clear
+  analogWriteResolution(8);
+  analogWrite(dacPin, 0);
+}
+
+// Uno R4 RTC Benchmark
+void benchmarkUnoR4RTC() {
+  printHeader("TIMING: INTERNAL RTC (Uno R4)");
+
+  SERIAL_OUT.println(F_STR("Renesas RA4M1 has built-in RTC"));
+
+  // Initialize RTC
+  RTC.begin();
+
+  // Set initial time
+  RTCTime startTime(1, Month::JANUARY, 2024, 12, 0, 0, DayOfWeek::MONDAY, SaveLight::SAVING_TIME_INACTIVE);
+  RTC.setTime(startTime);
+
+  // RTC read speed benchmark
+  RTCTime currentTime;
+  volatile uint32_t timeSum = 0;
+
+  startBenchmark();
+  for (int i = 0; i < 1000; i++) {
+    RTC.getTime(currentTime);
+    timeSum += currentTime.getSeconds();
+  }
+  unsigned long readTime = endBenchmark();
+
+  SERIAL_OUT.print(F_STR("RTC.getTime() (1000 ops): "));
+  SERIAL_OUT.print(readTime);
+  SERIAL_OUT.print(F_STR(" us ("));
+  SERIAL_OUT.print(1000.0 / readTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
+  // RTC write speed benchmark
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    RTCTime newTime(1, Month::JANUARY, 2024, 12, 0, i % 60, DayOfWeek::MONDAY, SaveLight::SAVING_TIME_INACTIVE);
+    RTC.setTime(newTime);
+  }
+  unsigned long writeTime = endBenchmark();
+
+  SERIAL_OUT.print(F_STR("RTC.setTime() (100 ops): "));
+  SERIAL_OUT.print(writeTime);
+  SERIAL_OUT.print(F_STR(" us ("));
+  SERIAL_OUT.print(100.0 / writeTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
+  // RTC tick accuracy test
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("RTC tick accuracy (1 second test):"));
+
+  RTC.getTime(currentTime);
+  int startSec = currentTime.getSeconds();
+  unsigned long startMicros = micros();
+
+  // Wait for second to change
+  int currentSec = startSec;
+  while (currentSec == startSec) {
+    RTC.getTime(currentTime);
+    currentSec = currentTime.getSeconds();
+  }
+
+  // Now wait for next second change
+  startSec = currentSec;
+  startMicros = micros();
+  while (currentSec == startSec) {
+    RTC.getTime(currentTime);
+    currentSec = currentTime.getSeconds();
+  }
+  unsigned long elapsed = micros() - startMicros;
+
+  float error = ((float)elapsed - 1000000) / 1000000 * 100;
+  SERIAL_OUT.print(F_STR("  1 RTC second = "));
+  SERIAL_OUT.print(elapsed);
+  SERIAL_OUT.print(F_STR(" us ("));
+  SERIAL_OUT.print(error, 3);
+  SERIAL_OUT.println(F_STR("% error)"));
+
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println(timeSum);
+}
+
+// Uno R4 WiFi BLE Benchmark
+#if defined(ARDUINO_UNOR4_WIFI)
+void benchmarkUnoR4BLE() {
+  printHeader("WIRELESS: BLE (Uno R4 WiFi)");
+
+  SERIAL_OUT.println(F_STR("Uno R4 WiFi has BLE via ESP32-S3 module"));
+  SERIAL_OUT.println(F_STR("BLE requires ArduinoBLE library"));
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("To use BLE on Uno R4 WiFi:"));
+  SERIAL_OUT.println(F_STR("  1. Install ArduinoBLE library"));
+  SERIAL_OUT.println(F_STR("  2. #include <ArduinoBLE.h>"));
+  SERIAL_OUT.println(F_STR("  3. Call BLE.begin()"));
+  SERIAL_OUT.println(F_STR("  4. Use BLE.scan() for device discovery"));
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("Note: Full BLE benchmark requires ArduinoBLE"));
+}
+#endif
+
+#endif  // ARDUINO_UNOR4_WIFI || ARDUINO_UNOR4_MINIMA
+
+// ==================== GENERAL BENCHMARKS (ALL BOARDS) ====================
+
+// PWM Benchmark (all boards with analogWrite)
+void benchmarkPWM() {
+  printHeader("I/O: PWM PERFORMANCE");
+
+  // Find a PWM-capable pin
+  int pwmPin;
+#if defined(ESP32)
+  pwmPin = 2;
+#elif defined(ARDUINO_ARCH_RP2040)
+  pwmPin = 25;
+#elif defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
+  pwmPin = 3;
+#elif defined(__AVR__)
+  pwmPin = 9;
+#else
+  pwmPin = 3;
+#endif
+
+  pinMode(pwmPin, OUTPUT);
+
+  SERIAL_OUT.print(F_STR("Testing PWM on pin "));
+  SERIAL_OUT.println(pwmPin);
+
+  // analogWrite speed benchmark
+  volatile uint8_t duty = 0;
+  startBenchmark();
+  for (int i = 0; i < 10000; i++) {
+    analogWrite(pwmPin, duty);
+    duty++;
+  }
+  unsigned long pwmTime = endBenchmark();
+
+  SERIAL_OUT.print(F_STR("analogWrite() (10000 ops): "));
+  SERIAL_OUT.print(pwmTime);
+  SERIAL_OUT.print(F_STR(" us ("));
+  SERIAL_OUT.print(10000.0 / pwmTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
+  // PWM ramp timing
+  startBenchmark();
+  for (int cycle = 0; cycle < 100; cycle++) {
+    for (int val = 0; val < 256; val++) {
+      analogWrite(pwmPin, val);
+    }
+  }
+  unsigned long rampTime = endBenchmark();
+
+  SERIAL_OUT.print(F_STR("PWM ramp (100 cycles): "));
+  SERIAL_OUT.print(rampTime);
+  SERIAL_OUT.print(F_STR(" us ("));
+  SERIAL_OUT.print(25600.0 / rampTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
+  // Time per update
+  SERIAL_OUT.print(F_STR("Time per update: "));
+  SERIAL_OUT.print(rampTime / 25600.0, 3);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  analogWrite(pwmPin, 0);
+}
+
+// Interrupt Latency Benchmark
+volatile unsigned long isrStartTime = 0;
+volatile unsigned long isrEndTime = 0;
+volatile bool isrFired = false;
+
+void latencyISR() {
+  isrEndTime = micros();
+  isrFired = true;
+}
+
+void benchmarkInterruptLatency() {
+  printHeader("TIMING: INTERRUPT LATENCY");
+
+  // Find suitable pins for interrupt test
+  int triggerPin, interruptPin;
+
+#if defined(ESP32)
+  triggerPin = 4;
+  interruptPin = 4;  // ESP32 can use same pin
+#elif defined(ARDUINO_ARCH_RP2040)
+  triggerPin = 2;
+  interruptPin = 2;
+#elif defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
+  triggerPin = 2;
+  interruptPin = 2;
+#elif defined(__AVR__)
+  triggerPin = 2;
+  interruptPin = 2;  // INT0
+#else
+  triggerPin = 2;
+  interruptPin = 2;
+#endif
+
+  SERIAL_OUT.print(F_STR("Using pin "));
+  SERIAL_OUT.println(interruptPin);
+
+  pinMode(triggerPin, OUTPUT);
+  digitalWrite(triggerPin, LOW);
+
+  // INPUT_PULLDOWN not available on AVR - use INPUT_PULLUP with FALLING edge instead
+#if defined(__AVR__)
+  pinMode(interruptPin, INPUT_PULLUP);
+  digitalWrite(triggerPin, HIGH);  // Start high for FALLING edge test
+  attachInterrupt(digitalPinToInterrupt(interruptPin), latencyISR, FALLING);
+#else
+  pinMode(interruptPin, INPUT_PULLDOWN);
+  attachInterrupt(digitalPinToInterrupt(interruptPin), latencyISR, RISING);
+#endif
+
+  // Measure interrupt latency
+  unsigned long totalLatency = 0;
+  int successfulMeasurements = 0;
+  const int iterations = 100;
+
+  for (int i = 0; i < iterations; i++) {
+    isrFired = false;
+
+    // Trigger the interrupt
+    isrStartTime = micros();
+#if defined(__AVR__)
+    digitalWrite(triggerPin, LOW);   // FALLING edge for AVR
+#else
+    digitalWrite(triggerPin, HIGH);  // RISING edge for others
+#endif
+
+    // Wait for ISR (with timeout)
+    unsigned long timeout = micros() + 1000;  // 1ms timeout
+    while (!isrFired && micros() < timeout) {
+      // Spin
+    }
+
+#if defined(__AVR__)
+    digitalWrite(triggerPin, HIGH);  // Reset for next FALLING edge
+#else
+    digitalWrite(triggerPin, LOW);   // Reset for next RISING edge
+#endif
+
+    if (isrFired) {
+      unsigned long latency = isrEndTime - isrStartTime;
+      totalLatency += latency;
+      successfulMeasurements++;
+    }
+
+    delayMicroseconds(100);  // Small delay between tests
+  }
+
+  detachInterrupt(digitalPinToInterrupt(interruptPin));
+
+  if (successfulMeasurements > 0) {
+    float avgLatency = (float)totalLatency / successfulMeasurements;
+
+    SERIAL_OUT.print(F_STR("Successful measurements: "));
+    SERIAL_OUT.print(successfulMeasurements);
+    SERIAL_OUT.print(F_STR("/"));
+    SERIAL_OUT.println(iterations);
+
+    SERIAL_OUT.print(F_STR("Average interrupt latency: "));
+    SERIAL_OUT.print(avgLatency, 2);
+    SERIAL_OUT.println(F_STR(" us"));
+
+    SERIAL_OUT.println();
+    SERIAL_OUT.println(F_STR("Note: Includes digitalWrite + ISR entry overhead"));
+  } else {
+    SERIAL_OUT.println(F_STR("Interrupt measurement failed"));
+    SERIAL_OUT.println(F_STR("(Pin may not support interrupts)"));
+  }
+}
+
+// SPI Loopback Benchmark
+void benchmarkSPI() {
+  printHeader("I/O: SPI PERFORMANCE");
+
+  SERIAL_OUT.println(F_STR("Testing SPI transaction speed"));
+  SERIAL_OUT.println(F_STR("(No loopback - measuring CPU overhead)"));
+  SERIAL_OUT.println();
+
+  SPI.begin();
+
+  // Test different SPI speeds
+#if defined(ESP32)
+  uint32_t speeds[] = {1000000, 4000000, 10000000, 20000000, 40000000};
+  const char* speedNames[] = {"1 MHz", "4 MHz", "10 MHz", "20 MHz", "40 MHz"};
+  int numSpeeds = 5;
+#elif defined(ARDUINO_ARCH_RP2040)
+  uint32_t speeds[] = {1000000, 4000000, 10000000, 20000000, 62500000};
+  const char* speedNames[] = {"1 MHz", "4 MHz", "10 MHz", "20 MHz", "62.5 MHz"};
+  int numSpeeds = 5;
+#elif defined(__AVR__)
+  uint32_t speeds[] = {1000000, 2000000, 4000000, 8000000};
+  const char* speedNames[] = {"1 MHz", "2 MHz", "4 MHz", "8 MHz"};
+  int numSpeeds = 4;
+#else
+  uint32_t speeds[] = {1000000, 4000000, 8000000, 16000000};
+  const char* speedNames[] = {"1 MHz", "4 MHz", "8 MHz", "16 MHz"};
+  int numSpeeds = 4;
+#endif
+
+  for (int s = 0; s < numSpeeds; s++) {
+    SPISettings settings(speeds[s], MSBFIRST, SPI_MODE0);
+
+    volatile uint8_t result = 0;
+    startBenchmark();
+    for (int i = 0; i < 1000; i++) {
+      SPI.beginTransaction(settings);
+      result += SPI.transfer(i & 0xFF);
+      SPI.endTransaction();
+    }
+    unsigned long xferTime = endBenchmark();
+
+    SERIAL_OUT.print(speedNames[s]);
+    SERIAL_OUT.print(F_STR(": "));
+    SERIAL_OUT.print(xferTime);
+    SERIAL_OUT.print(F_STR(" us for 1000 bytes ("));
+    SERIAL_OUT.print(1000.0 / xferTime * 1000);
+    SERIAL_OUT.println(F_STR(" KB/s effective)"));
+  }
+
+  // Bulk transfer benchmark
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("Bulk transfer (256 bytes):"));
+
+  uint8_t txBuffer[256];
+  uint8_t rxBuffer[256];
+  for (int i = 0; i < 256; i++) txBuffer[i] = i;
+
+#if defined(ESP32) || defined(ARDUINO_ARCH_RP2040)
+  uint32_t bulkSpeed = 10000000;
+#else
+  uint32_t bulkSpeed = 4000000;
+#endif
+
+  SPISettings bulkSettings(bulkSpeed, MSBFIRST, SPI_MODE0);
+
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    SPI.beginTransaction(bulkSettings);
+    SPI.transfer(txBuffer, 256);
+    SPI.endTransaction();
+  }
+  unsigned long bulkTime = endBenchmark();
+
+  float throughput = (256.0 * 100) / (bulkTime / 1000000.0) / 1024;
+  SERIAL_OUT.print(F_STR("Throughput: "));
+  SERIAL_OUT.print(throughput, 1);
+  SERIAL_OUT.println(F_STR(" KB/s"));
+
+  SPI.end();
+}
+
+// Watchdog Timer Benchmark
+void benchmarkWatchdog() {
+  printHeader("SYSTEM: WATCHDOG TIMER");
+
+#if defined(ESP32)
+  SERIAL_OUT.println(F_STR("ESP32 Watchdog Information:"));
+  SERIAL_OUT.println(F_STR("  Task WDT: Monitors FreeRTOS tasks"));
+  SERIAL_OUT.println(F_STR("  Interrupt WDT: Monitors interrupt handling"));
+  SERIAL_OUT.println(F_STR("  RTC WDT: Low-power watchdog"));
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("Watchdog is managed by ESP-IDF/FreeRTOS"));
+  SERIAL_OUT.println(F_STR("Default timeout: ~5 seconds"));
+
+#elif defined(ARDUINO_ARCH_RP2040)
+  SERIAL_OUT.println(F_STR("RP2040 Watchdog Features:"));
+  SERIAL_OUT.println(F_STR("  Max timeout: ~8.3 seconds"));
+  SERIAL_OUT.println(F_STR("  Resolution: 1 microsecond"));
+  SERIAL_OUT.println();
+
+  // Test watchdog setup time (but don't enable it)
+  startBenchmark();
+  for (int i = 0; i < 1000; i++) {
+    // Just measure time to check if WDT caused reset
+    bool wasWdt = watchdog_caused_reboot();
+    (void)wasWdt;
+  }
+  unsigned long wdtCheckTime = endBenchmark();
+
+  SERIAL_OUT.print(F_STR("watchdog_caused_reboot() (1000 calls): "));
+  SERIAL_OUT.print(wdtCheckTime);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  SERIAL_OUT.print(F_STR("Last reset was WDT: "));
+  SERIAL_OUT.println(watchdog_caused_reboot() ? F_STR("YES") : F_STR("NO"));
+
+#elif defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
+  SERIAL_OUT.println(F_STR("Renesas RA4M1 Watchdog:"));
+  SERIAL_OUT.println(F_STR("  Independent WDT (IWDT)"));
+  SERIAL_OUT.println(F_STR("  Configurable timeout periods"));
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("Use WDT library for configuration"));
+
+#elif defined(__AVR__)
+  SERIAL_OUT.println(F_STR("AVR Watchdog Features:"));
+  SERIAL_OUT.println(F_STR("  Timeout options: 16ms to 8s"));
+  SERIAL_OUT.println(F_STR("  Can trigger reset or interrupt"));
+  SERIAL_OUT.println();
+
+  // Check reset cause
+  uint8_t mcusr = MCUSR;
+  SERIAL_OUT.print(F_STR("Reset cause: "));
+  if (mcusr & (1 << WDRF)) SERIAL_OUT.print(F_STR("WDT "));
+  if (mcusr & (1 << BORF)) SERIAL_OUT.print(F_STR("Brown-out "));
+  if (mcusr & (1 << EXTRF)) SERIAL_OUT.print(F_STR("External "));
+  if (mcusr & (1 << PORF)) SERIAL_OUT.print(F_STR("Power-on "));
+  SERIAL_OUT.println();
+
+#else
+  SERIAL_OUT.println(F_STR("Watchdog information not available for this board"));
+#endif
+}
+
+// Sleep Mode Benchmark
+void benchmarkSleepModes() {
+  printHeader("POWER: SLEEP MODE TIMING");
+
+#if defined(ESP32)
+  // Already covered in benchmarkESP32Sleep()
+  SERIAL_OUT.println(F_STR("See ESP32 Light Sleep benchmark above"));
+
+#elif defined(ARDUINO_ARCH_RP2040)
+  SERIAL_OUT.println(F_STR("RP2040 Sleep Modes:"));
+  SERIAL_OUT.println(F_STR("  DORMANT: Deep sleep, wake on GPIO/RTC"));
+  SERIAL_OUT.println(F_STR("  SLEEP: WFI/WFE, wake on interrupt"));
+  SERIAL_OUT.println();
+
+  // Measure __wfi timing
+  SERIAL_OUT.println(F_STR("Testing WFI (Wait For Interrupt):"));
+
+  // Set up a timer to wake us
+  unsigned long wakeTime = 0;
+  unsigned long sleepStart = 0;
+
+  // Use systick interrupt to wake (happens every 1ms)
+  sleepStart = micros();
+  __wfi();
+  wakeTime = micros() - sleepStart;
+
+  SERIAL_OUT.print(F_STR("  WFI wake time: "));
+  SERIAL_OUT.print(wakeTime);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  // Multiple WFI cycles
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    __wfi();
+  }
+  unsigned long wfiTime = endBenchmark();
+
+  SERIAL_OUT.print(F_STR("  100x WFI cycles: "));
+  SERIAL_OUT.print(wfiTime);
+  SERIAL_OUT.println(F_STR(" us"));
+
+#elif defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
+  SERIAL_OUT.println(F_STR("Renesas RA4M1 Low Power Modes:"));
+  SERIAL_OUT.println(F_STR("  Sleep: CPU stopped, peripherals active"));
+  SERIAL_OUT.println(F_STR("  Deep Sleep: Most peripherals stopped"));
+  SERIAL_OUT.println(F_STR("  Software Standby: Lowest power"));
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("Use LowPower library for sleep control"));
+
+#elif defined(__AVR__)
+  SERIAL_OUT.println(F_STR("AVR Sleep Modes:"));
+  SERIAL_OUT.println(F_STR("  IDLE: CPU stopped"));
+  SERIAL_OUT.println(F_STR("  ADC Noise Reduction: ADC runs"));
+  SERIAL_OUT.println(F_STR("  Power-down: Deepest sleep"));
+  SERIAL_OUT.println(F_STR("  Power-save: Timer2 + async"));
+  SERIAL_OUT.println(F_STR("  Standby: Oscillator runs"));
+  SERIAL_OUT.println();
+
+  // Test idle mode timing
+  set_sleep_mode(SLEEP_MODE_IDLE);
+
+  // Use Timer0 interrupt to wake (happens frequently)
+  unsigned long idleStart = micros();
+  sleep_enable();
+  sleep_cpu();
+  sleep_disable();
+  unsigned long idleTime = micros() - idleStart;
+
+  SERIAL_OUT.print(F_STR("Idle mode wake: "));
+  SERIAL_OUT.print(idleTime);
+  SERIAL_OUT.println(F_STR(" us"));
+
+#else
+  SERIAL_OUT.println(F_STR("Sleep mode info not available for this board"));
+#endif
+}
+
 // ==================== SYSTEM INFO ====================
 
 void printSystemInfo() {
@@ -3894,6 +5015,45 @@ void setup() {
 #ifdef HAS_RTC
   benchmarkRTC();
 #endif
+
+  // ========== NEW BENCHMARKS ==========
+
+  // ESP32 Additional Benchmarks
+#if defined(ESP32)
+  #if defined(CONFIG_IDF_TARGET_ESP32)
+  benchmarkESP32DAC();
+  #endif
+  benchmarkESP32Touch();
+  benchmarkESP32Sleep();
+  benchmarkESP32AES();
+#endif
+
+  // RP2040 Additional Benchmarks
+#if defined(ARDUINO_ARCH_RP2040)
+  benchmarkRP2040DMA();
+  benchmarkRP2040PIO();
+  benchmarkRP2040Interpolator();
+  benchmarkRP2040PWM();
+  #if defined(ARDUINO_RASPBERRY_PI_PICO_W)
+  benchmarkPicoWBLE();
+  #endif
+#endif
+
+  // Uno R4 Additional Benchmarks
+#if defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
+  benchmarkUnoR4DAC();
+  benchmarkUnoR4RTC();
+  #if defined(ARDUINO_UNOR4_WIFI)
+  benchmarkUnoR4BLE();
+  #endif
+#endif
+
+  // General Benchmarks (all boards)
+  benchmarkPWM();
+  benchmarkInterruptLatency();
+  benchmarkSPI();
+  benchmarkWatchdog();
+  benchmarkSleepModes();
 
   // Final summary
   printHeader("BENCHMARK COMPLETE!");

@@ -24,6 +24,8 @@
  * Upload to ANY Arduino-compatible board and view results in Serial Monitor (115200 baud)
  */
 
+#include <limits.h>
+
 // ==================== BOARD DETECTION ====================
 
 // ESP32 Family (all variants)
@@ -1026,36 +1028,95 @@ void benchmarkSRAM() {
   SERIAL_OUT.println(F_STR("--- Memory Bandwidth Tests ---"));
 
   // Scale buffer size based on available RAM
-  size_t bufSize;
-#if defined(BOARD_STM32U5)
-  bufSize = 8192;  // 8 KB for 786 KB RAM
-  SERIAL_OUT.println(F_STR("Using 8 KB buffers (786 KB SRAM)"));
-#elif defined(ESP32)
-  bufSize = 8192;  // 8 KB
-  SERIAL_OUT.println(F_STR("Using 8 KB buffers (large heap)"));
-#elif defined(ARDUINO_ARCH_RP2040)
-  bufSize = 4096;  // 4 KB for 264 KB RAM
-  SERIAL_OUT.println(F_STR("Using 4 KB buffers (264 KB RAM)"));
-#elif defined(ARDUINO_SAM_DUE)
-  bufSize = 2048;        // 2 KB for 96 KB RAM
-  SERIAL_OUT.println(F_STR("Using 2 KB buffers (96 KB RAM)"));
-#elif defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
-  bufSize = 1024;  // 1 KB for 32 KB RAM
-  SERIAL_OUT.println(F_STR("Using 1 KB buffers (32 KB RAM)"));
-#elif defined(__AVR_ATmega2560__)
-  bufSize = 512;  // 512 bytes for 8 KB RAM
-  SERIAL_OUT.println(F_STR("Using 512 byte buffers (8 KB RAM)"));
+  size_t freeHeapBytes = 0;
+#if defined(ESP32) || defined(ESP8266)
+  freeHeapBytes = ESP.getFreeHeap();
 #elif defined(__AVR__)
-  bufSize = 256;  // 256 bytes for 2 KB RAM (already tested above)
-  SERIAL_OUT.println(F_STR("Using 256 byte buffers (2 KB RAM)"));
+  extern int __heap_start, *__brkval;
+  int v;
+  freeHeapBytes =
+    (size_t)((int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval));
+#elif defined(ARDUINO_SAM_DUE)
+  extern "C" char *sbrk(int i);
+  char *ramend = (char *)0x20088000;
+  freeHeapBytes = (size_t)(ramend - sbrk(0));
 #else
-  bufSize = 512;  // Conservative default
-  SERIAL_OUT.println(F_STR("Using 512 byte buffers"));
+  // Probe heap by attempting allocations until failure.
+  size_t low = 0;
+  size_t high = 1024;
+  while (true) {
+    void *probe = malloc(high);
+    if (probe) {
+      free(probe);
+      low = high;
+      if (high > (SIZE_MAX / 2)) {
+        break;
+      }
+      high *= 2;
+    } else {
+      break;
+    }
+  }
+  size_t left = low;
+  size_t right = high;
+  while (left + 1 < right) {
+    size_t mid = left + (right - left) / 2;
+    void *probe = malloc(mid);
+    if (probe) {
+      free(probe);
+      left = mid;
+    } else {
+      right = mid;
+    }
+  }
+  freeHeapBytes = left;
 #endif
 
+  if (freeHeapBytes > 0) {
+    SERIAL_OUT.print(F_STR("Detected free heap: "));
+    SERIAL_OUT.print(freeHeapBytes);
+    SERIAL_OUT.println(F_STR(" bytes"));
+  }
+
+  size_t bufSize = 0;
+  if (freeHeapBytes > 0) {
+    // Use ~75% of free heap across two buffers (leave headroom for stack/overhead).
+    bufSize = (freeHeapBytes * 3) / 8;
+    bufSize = (bufSize / 4) * 4;
+    if (bufSize < 128) {
+      bufSize = 128;
+    }
+    SERIAL_OUT.print(F_STR("Using "));
+    SERIAL_OUT.print(bufSize);
+    SERIAL_OUT.println(F_STR(" byte buffers (~75% free heap total)"));
+  }
+
   // Allocate buffers on heap for safety
-  uint8_t *largeSrc = (uint8_t *)malloc(bufSize);
-  uint8_t *largeDst = (uint8_t *)malloc(bufSize);
+  if (bufSize == 0) {
+    bufSize = 512;
+    SERIAL_OUT.println(F_STR("Using 512 byte buffers (fallback)"));
+  }
+
+  uint8_t *largeSrc = NULL;
+  uint8_t *largeDst = NULL;
+  size_t attemptSize = bufSize;
+  while (attemptSize >= 64 && (!largeSrc || !largeDst)) {
+    largeSrc = (uint8_t *)malloc(attemptSize);
+    largeDst = (uint8_t *)malloc(attemptSize);
+    if (largeSrc && largeDst) {
+      bufSize = attemptSize;
+      break;
+    }
+    if (largeSrc) {
+      free(largeSrc);
+      largeSrc = NULL;
+    }
+    if (largeDst) {
+      free(largeDst);
+      largeDst = NULL;
+    }
+    attemptSize /= 2;
+  }
 
   if (largeSrc == NULL || largeDst == NULL) {
     SERIAL_OUT.println(F_STR("ERROR: Could not allocate test buffers"));

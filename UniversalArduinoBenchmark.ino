@@ -4454,10 +4454,16 @@ void benchmarkInterruptLatency() {
 
   pinMode(triggerPin, OUTPUT);
   digitalWrite(triggerPin, LOW);
-  pinMode(interruptPin, INPUT_PULLDOWN);
 
-  // Attach interrupt
+  // INPUT_PULLDOWN not available on AVR - use INPUT_PULLUP with FALLING edge instead
+#if defined(__AVR__)
+  pinMode(interruptPin, INPUT_PULLUP);
+  digitalWrite(triggerPin, HIGH);  // Start high for FALLING edge test
+  attachInterrupt(digitalPinToInterrupt(interruptPin), latencyISR, FALLING);
+#else
+  pinMode(interruptPin, INPUT_PULLDOWN);
   attachInterrupt(digitalPinToInterrupt(interruptPin), latencyISR, RISING);
+#endif
 
   // Measure interrupt latency
   unsigned long totalLatency = 0;
@@ -4469,7 +4475,11 @@ void benchmarkInterruptLatency() {
 
     // Trigger the interrupt
     isrStartTime = micros();
-    digitalWrite(triggerPin, HIGH);
+#if defined(__AVR__)
+    digitalWrite(triggerPin, LOW);   // FALLING edge for AVR
+#else
+    digitalWrite(triggerPin, HIGH);  // RISING edge for others
+#endif
 
     // Wait for ISR (with timeout)
     unsigned long timeout = micros() + 1000;  // 1ms timeout
@@ -4477,7 +4487,11 @@ void benchmarkInterruptLatency() {
       // Spin
     }
 
-    digitalWrite(triggerPin, LOW);
+#if defined(__AVR__)
+    digitalWrite(triggerPin, HIGH);  // Reset for next FALLING edge
+#else
+    digitalWrite(triggerPin, LOW);   // Reset for next RISING edge
+#endif
 
     if (isrFired) {
       unsigned long latency = isrEndTime - isrStartTime;

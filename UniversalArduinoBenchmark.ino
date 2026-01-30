@@ -1653,12 +1653,12 @@ void benchmarkAnalogIO() {
 #if defined(ESP32)
     const int pwmFreq = 5000;
     const int pwmResolution = 8;
+    const int pwmChannel = 0;
 
     startBenchmark();
   #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
-    (void)ledcAttach(analogOutPin, pwmFreq, pwmResolution);
+    (void)ledcAttachChannel(analogOutPin, pwmFreq, pwmResolution, pwmChannel);
   #else
-    const int pwmChannel = 0;
     ledcSetup(pwmChannel, pwmFreq, pwmResolution);
     ledcAttachPin(analogOutPin, pwmChannel);
   #endif
@@ -1667,7 +1667,7 @@ void benchmarkAnalogIO() {
     uint32_t pwmValue = 0;
     TimedLoopResult updateResult = runTimedLoop(minDurationMs, 1, [&]() {
   #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
-      ledcWrite(analogOutPin, pwmValue % 256);
+      ledcWrite(pwmChannel, pwmValue % 256);
   #else
       ledcWrite(pwmChannel, pwmValue % 256);
   #endif
@@ -4447,10 +4447,10 @@ void benchmarkPWM() {
 #if defined(ESP32)
   const int pwmFreq = 5000;
   const int pwmResolution = 8;
-#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
-  ledcAttach(pwmPin, pwmFreq, pwmResolution);
-#else
   const int pwmChannel = 0;
+#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+  ledcAttachChannel(pwmPin, pwmFreq, pwmResolution, pwmChannel);
+#else
   ledcSetup(pwmChannel, pwmFreq, pwmResolution);
   ledcAttachPin(pwmPin, pwmChannel);
 #endif
@@ -4461,7 +4461,7 @@ void benchmarkPWM() {
   for (int i = 0; i < 10000; i++) {
 #if defined(ESP32)
   #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
-    ledcWrite(pwmPin, duty);
+    ledcWrite(pwmChannel, duty);
   #else
     ledcWrite(pwmChannel, duty);
   #endif
@@ -4488,7 +4488,7 @@ void benchmarkPWM() {
     for (int val = 0; val < 256; val++) {
 #if defined(ESP32)
   #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
-      ledcWrite(pwmPin, val);
+      ledcWrite(pwmChannel, val);
   #else
       ledcWrite(pwmChannel, val);
   #endif
@@ -4512,7 +4512,7 @@ void benchmarkPWM() {
 
 #if defined(ESP32)
   #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
-  ledcWrite(pwmPin, 0);
+  ledcWrite(pwmChannel, 0);
   #else
   ledcWrite(pwmChannel, 0);
   #endif

@@ -216,6 +216,16 @@
 #include <EEPROM.h>
 #define BOARD_AVR
 
+// INK4u Board (AVR128DA28 - Next Gen Arduino Uno)
+#elif defined(ARDUINO_AVR_INK4U) || defined(__AVR_AVR128DA28__)
+#define BOARD_NAME "INK4u Board"
+#include <EEPROM.h>
+#define BOARD_AVR
+#define BOARD_MEGAAVR  // Modern AVR with advanced features
+#define HAS_UPDI       // UPDI programming interface
+#define BOARD_SRAM_KB 16
+#define BOARD_FLASH_KB 128
+
 // Multiduino (your custom Uno-derivative)
 #elif defined(ARDUINO_AVR_MULTIDUINO)
 #define BOARD_NAME "Multiduino"
@@ -406,11 +416,11 @@
 // ==================== SERIAL OUTPUT ABSTRACTION ====================
 // Uno Q uses Monitor instead of Serial for output
 #if defined(ARDUINO_UNO_Q)
-  #define SERIAL_OUT Monitor
-  #define F_STR(x) x  // Monitor doesn't support F() macro
+#define SERIAL_OUT Monitor
+#define F_STR(x) x  // Monitor doesn't support F() macro
 #else
-  #define SERIAL_OUT Serial
-  #define F_STR(x) F(x)  // Use F() macro for flash storage on other boards
+#define SERIAL_OUT Serial
+#define F_STR(x) F(x)  // Use F() macro for flash storage on other boards
 #endif
 
 // Serial baud rate
@@ -578,7 +588,7 @@ void benchmarkCPUStress() {
       result = result * 1.0001f + f1;
       result = result * 0.9999f + f2;
 #else
-  #if defined(ARDUINO_UNO_Q) || defined(ARDUINO_UNO_Q_MCU)
+#if defined(ARDUINO_UNO_Q) || defined(ARDUINO_UNO_Q_MCU)
       // Keep it deterministic and heavy without libm (no sin/cos/fmod/sqrt)
       // Mix float + integer-ish noise
       uint32_t x = (uint32_t)iterations * 1664525u + 1013904223u;
@@ -586,17 +596,17 @@ void benchmarkCPUStress() {
       float f2 = (float)((x >> 16) & 0xFFFFu) * 0.00005f;
       result = result * 1.00013f + f1;
       result = result * 0.99991f + f2;
-  #else
+#else
       result = result * 1.0001f + sqrtf((float)i);
-    #if defined(__ZEPHYR__) || defined(BOARD_STM32U5)
+#if defined(__ZEPHYR__) || defined(BOARD_STM32U5)
       // Manual fmod implementation for Zephyr (avoids libm linking issues)
       float divisor = twoPi;
       result = result - ((int)(result / divisor)) * divisor;
-    #else
+#else
       result = fmodf(result, twoPi);
-    #endif
+#endif
       result = sinf(result) + cosf(result);
-  #endif
+#endif
 #endif
       iterations++;
     }
@@ -1404,7 +1414,7 @@ void benchmarkDigitalIO() {
 #elif defined(ARDUINO_ARCH_RP2040)
   testPin = 25;
 #else
-  testPin = 13;  // Classic Arduino default
+  testPin = 13;           // Classic Arduino default
 #endif
 
   pinMode(testPin, OUTPUT);
@@ -1472,19 +1482,19 @@ void benchmarkDigitalIO() {
           digitalWrite(testPin, HIGH);
           digitalWrite(testPin, LOW);
 #else
-          GPIO.out1_w1ts.val = 1u << (testPin - 32);
-          GPIO.out1_w1tc.val = 1u << (testPin - 32);
+            GPIO.out1_w1ts.val = 1u << (testPin - 32);
+            GPIO.out1_w1tc.val = 1u << (testPin - 32);
 #endif
         }
 #elif ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 0, 0)
-        // Other ESP32 variants
-        if (testPin < 32) {
-          GPIO.out_w1ts = 1u << testPin;
-          GPIO.out_w1tc = 1u << testPin;
-        } else {
-          GPIO.out1_w1ts.data = 1u << (testPin - 32);
-          GPIO.out1_w1tc.data = 1u << (testPin - 32);
-        }
+          // Other ESP32 variants
+          if (testPin < 32) {
+            GPIO.out_w1ts = 1u << testPin;
+            GPIO.out_w1tc = 1u << testPin;
+          } else {
+            GPIO.out1_w1ts.data = 1u << (testPin - 32);
+            GPIO.out1_w1tc.data = 1u << (testPin - 32);
+          }
 #else
           digitalWrite(testPin, HIGH);
           digitalWrite(testPin, LOW);
@@ -1569,26 +1579,26 @@ void benchmarkAnalogIO() {
 
   // Find analog pins
 #if defined(ESP32)
-  #if defined(ARDUINO_NANO_ESP32)
-    int analogInPin = A0;
-  #elif defined(CONFIG_IDF_TARGET_ESP32S3)
-    int analogInPin = 1;
-  #elif defined(CONFIG_IDF_TARGET_ESP32S2)
-    int analogInPin = 1;
-  #elif defined(CONFIG_IDF_TARGET_ESP32C3)
-    int analogInPin = 0;
-  #elif defined(CONFIG_IDF_TARGET_ESP32C6)
-    int analogInPin = 0;
-  #elif defined(CONFIG_IDF_TARGET_ESP32H2)
-    int analogInPin = 0;
-  #else
-    int analogInPin = 36;
-  #endif
-  #if defined(CONFIG_IDF_TARGET_ESP32)
-    int analogOutPin = 25;   // DAC1
-  #else
-    int analogOutPin = -1;
-  #endif
+#if defined(ARDUINO_NANO_ESP32)
+  int analogInPin = A0;
+#elif defined(CONFIG_IDF_TARGET_ESP32S3)
+  int analogInPin = 1;
+#elif defined(CONFIG_IDF_TARGET_ESP32S2)
+  int analogInPin = 1;
+#elif defined(CONFIG_IDF_TARGET_ESP32C3)
+  int analogInPin = 0;
+#elif defined(CONFIG_IDF_TARGET_ESP32C6)
+  int analogInPin = 0;
+#elif defined(CONFIG_IDF_TARGET_ESP32H2)
+  int analogInPin = 0;
+#else
+  int analogInPin = 36;
+#endif
+#if defined(CONFIG_IDF_TARGET_ESP32)
+  int analogOutPin = 25;  // DAC1
+#else
+  int analogOutPin = -1;
+#endif
 
 #elif defined(ESP8266)
   int analogInPin = A0;
@@ -1598,20 +1608,20 @@ void benchmarkAnalogIO() {
   // UNO Q does have A0..A5 on the header. Keep output format identical to other boards:
   // single analogRead benchmark on a representative pin.
   int analogInPin = A0;
-  int analogOutPin = -1; // no DAC; treat PWM separately elsewhere
+  int analogOutPin = -1;  // no DAC; treat PWM separately elsewhere
 
-  // Make ADC resolution deterministic if the core supports it.
-  #if defined(analogReadResolution)
-    analogReadResolution(12);
-  #endif
+// Make ADC resolution deterministic if the core supports it.
+#if defined(analogReadResolution)
+  analogReadResolution(12);
+#endif
 
 #elif defined(__AVR__)
   int analogInPin = A0;
-  int analogOutPin = 9;      // PWM
+  int analogOutPin = 9;  // PWM
 
 #elif defined(ARDUINO_ARCH_RP2040)
-  int analogInPin = 26;      // A0
-  int analogOutPin = 15;     // PWM
+  int analogInPin = 26;   // A0
+  int analogOutPin = 15;  // PWM
 
 #else
   int analogInPin = A0;
@@ -1661,21 +1671,21 @@ void benchmarkAnalogIO() {
     const int pwmChannel = 0;
 
     startBenchmark();
-  #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
     (void)ledcAttachChannel(analogOutPin, pwmFreq, pwmResolution, pwmChannel);
-  #else
+#else
     ledcSetup(pwmChannel, pwmFreq, pwmResolution);
     ledcAttachPin(analogOutPin, pwmChannel);
-  #endif
+#endif
     unsigned long setupTime = endBenchmark();
 
     uint32_t pwmValue = 0;
     TimedLoopResult updateResult = runTimedLoop(minDurationMs, 1, [&]() {
-  #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
       ledcWrite(pwmChannel, pwmValue % 256);
-  #else
-      ledcWrite(pwmChannel, pwmValue % 256);
-  #endif
+#else
+        ledcWrite(pwmChannel, pwmValue % 256);
+#endif
       pwmValue++;
     });
 
@@ -2704,9 +2714,10 @@ int testRecursion(int depth) {
   recursionCounter++;
   volatile char buffer[32];  // Consume stack space
   buffer[0] = (char)depth;
+  buffer[1] = (char)(depth >> 1);  // Use buffer to prevent optimization
 
   if (depth > 0) {
-    return testRecursion(depth - 1) + 1;
+    return testRecursion(depth - 1) + (buffer[0] & 1);
   }
   return 1;
 }
@@ -2727,10 +2738,10 @@ void benchmarkStackDepth() {
   testDepth = 300;  // 264 KB RAM
   SERIAL_OUT.println(F_STR("Testing deep recursion (264 KB RAM)"));
 #elif defined(ARDUINO_SAM_DUE)
-  testDepth = 200;        // 96 KB RAM
+  testDepth = 200;       // 96 KB RAM
   SERIAL_OUT.println(F_STR("Testing moderate recursion (96 KB RAM)"));
 #elif defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
-  testDepth = 100;  // 32 KB RAM - be conservative
+  testDepth = 100;        // 32 KB RAM - be conservative
   SERIAL_OUT.println(F_STR("Testing moderate recursion (32 KB RAM)"));
 #elif defined(BOARD_SAMD) || defined(BOARD_NRF52)
   testDepth = 100;  // Typically 32-256 KB
@@ -2838,21 +2849,21 @@ void benchmarkMultiCore() {
 #ifdef ESP32
   // Check number of cores available
   uint8_t numCores = 1;
-  #if CONFIG_FREERTOS_UNICORE
-    numCores = 1;
-  #else
-    // For multi-core ESP32 variants, we can check portNUM_PROCESSORS or assume 2
-    #if defined(portNUM_PROCESSORS)
-      numCores = portNUM_PROCESSORS;
-    #elif !defined(CONFIG_IDF_TARGET_ESP32C6) && !defined(CONFIG_IDF_TARGET_ESP32C5) && !defined(CONFIG_IDF_TARGET_ESP32H2) && !defined(CONFIG_IDF_TARGET_ESP32C2) && !defined(CONFIG_IDF_TARGET_ESP32C3)
-      numCores = 2;  // Classic ESP32, S2, S3
-    #endif
-  #endif
+#if CONFIG_FREERTOS_UNICORE
+  numCores = 1;
+#else
+// For multi-core ESP32 variants, we can check portNUM_PROCESSORS or assume 2
+#if defined(portNUM_PROCESSORS)
+  numCores = portNUM_PROCESSORS;
+#elif !defined(CONFIG_IDF_TARGET_ESP32C6) && !defined(CONFIG_IDF_TARGET_ESP32C5) && !defined(CONFIG_IDF_TARGET_ESP32H2) && !defined(CONFIG_IDF_TARGET_ESP32C2) && !defined(CONFIG_IDF_TARGET_ESP32C3)
+  numCores = 2;  // Classic ESP32, S2, S3
+#endif
+#endif
 
   if (numCores < 2) {
     SERIAL_OUT.println(F_STR("Single-Core ESP32 Variant"));
     SERIAL_OUT.println(F_STR("Running single-core workload for 1 second..."));
-    
+
     volatile unsigned long count = 0;
     volatile uint32_t accumulator = 0;
     unsigned long start = millis();
@@ -2861,7 +2872,7 @@ void benchmarkMultiCore() {
       accumulator += 3;
       accumulator ^= (accumulator << 1);
     }
-    
+
     SERIAL_OUT.print(F_STR("Iterations in 1 second: "));
     SERIAL_OUT.println(count);
     SERIAL_OUT.println(F_STR("Note: This variant has only one core"));
@@ -2887,29 +2898,29 @@ void benchmarkMultiCore() {
       &Task2,
       1);
 
-  delay(100);  // Let tasks start
+    delay(100);  // Let tasks start
 
-  // Run test
-  core0Count = 0;
-  core1Count = 0;
-  testRunning = true;
-  delay(1000);
-  testRunning = false;
+    // Run test
+    core0Count = 0;
+    core1Count = 0;
+    testRunning = true;
+    delay(1000);
+    testRunning = false;
 
-  SERIAL_OUT.print(F_STR("Core 0 iterations: "));
-  SERIAL_OUT.println(core0Count);
-  SERIAL_OUT.print(F_STR("Core 1 iterations: "));
-  SERIAL_OUT.println(core1Count);
-  SERIAL_OUT.print(F_STR("Total iterations: "));
-  SERIAL_OUT.println(core0Count + core1Count);
-  SERIAL_OUT.print(F_STR("Core balance: "));
-  float balance = (float)min(core0Count, core1Count) / (float)max(core0Count, core1Count) * 100.0f;
-  SERIAL_OUT.print(balance);
-  SERIAL_OUT.println(F_STR("%"));
+    SERIAL_OUT.print(F_STR("Core 0 iterations: "));
+    SERIAL_OUT.println(core0Count);
+    SERIAL_OUT.print(F_STR("Core 1 iterations: "));
+    SERIAL_OUT.println(core1Count);
+    SERIAL_OUT.print(F_STR("Total iterations: "));
+    SERIAL_OUT.println(core0Count + core1Count);
+    SERIAL_OUT.print(F_STR("Core balance: "));
+    float balance = (float)min(core0Count, core1Count) / (float)max(core0Count, core1Count) * 100.0f;
+    SERIAL_OUT.print(balance);
+    SERIAL_OUT.println(F_STR("%"));
 
-  // Clean up
-  vTaskDelete(Task1);
-  vTaskDelete(Task2);
+    // Clean up
+    vTaskDelete(Task1);
+    vTaskDelete(Task2);
   }  // End of multi-core else block
 
 #elif defined(ARDUINO_ARCH_RP2040)
@@ -3035,11 +3046,11 @@ void benchmarkHardwareRNG() {
 #if defined(ESP32)
   SERIAL_OUT.println(F_STR("Using ESP32 hardware RNG"));
 #elif defined(BOARD_STM32U5)
-  #if defined(__ZEPHYR__)
+#if defined(__ZEPHYR__)
   SERIAL_OUT.println(F_STR("Using STM32U585 hardware RNG (Zephyr)"));
-  #else
+#else
   SERIAL_OUT.println(F_STR("Using STM32U585 RNG"));
-  #endif
+#endif
 #endif
 
   // Test RNG speed
@@ -3868,26 +3879,45 @@ void benchmarkESP32Sleep() {
   SERIAL_OUT.print(F_STR("Iterations: "));
   SERIAL_OUT.println(iterations);
 
-  // Test different sleep durations
+  // Test different sleep durations (with timeout protection)
   SERIAL_OUT.println();
   SERIAL_OUT.println(F_STR("Sleep duration accuracy:"));
 
-  uint64_t testDurations[] = {100, 500, 1000, 5000, 10000};
+  uint64_t testDurations[] = { 100, 500, 1000, 5000, 10000 };
   for (int d = 0; d < 5; d++) {
+    // Add timeout check to prevent freezing on some variants
+    unsigned long testStart = millis();
+    
     esp_sleep_enable_timer_wakeup(testDurations[d]);
     unsigned long before = micros();
-    esp_light_sleep_start();
-    unsigned long actual = micros() - before;
+    
+    // Use timeout - if sleep doesn't wake in 50ms, something is wrong
+    unsigned long timeout = 50000;  // 50ms timeout
+    while ((micros() - before) < timeout) {
+      esp_light_sleep_start();
+      unsigned long actual = micros() - before;
+      
+      if (actual > 0) {
+        float error = ((float)actual - testDurations[d]) / testDurations[d] * 100;
 
-    float error = ((float)actual - testDurations[d]) / testDurations[d] * 100;
-
-    SERIAL_OUT.print(F_STR("  Target "));
-    SERIAL_OUT.print((uint32_t)testDurations[d]);
-    SERIAL_OUT.print(F_STR(" us -> Actual "));
-    SERIAL_OUT.print(actual);
-    SERIAL_OUT.print(F_STR(" us ("));
-    SERIAL_OUT.print(error, 1);
-    SERIAL_OUT.println(F_STR("% error)"));
+        SERIAL_OUT.print(F_STR("  Target "));
+        SERIAL_OUT.print((uint32_t)testDurations[d]);
+        SERIAL_OUT.print(F_STR(" us -> Actual "));
+        SERIAL_OUT.print(actual);
+        SERIAL_OUT.print(F_STR(" us ("));
+        SERIAL_OUT.print(error, 1);
+        SERIAL_OUT.println(F_STR("% error)"));
+        break;
+      }
+    }
+    
+    // Check if timeout occurred
+    if ((millis() - testStart) > 100) {
+      SERIAL_OUT.println(F_STR("  [Sleep test timeout - skipping remaining tests]"));
+      break;
+    }
+    
+    yield();
   }
 }
 
@@ -3898,11 +3928,11 @@ void benchmarkESP32AES() {
   SERIAL_OUT.println(F_STR("Using ESP32 hardware AES accelerator"));
 
   // Test data
-  uint8_t key[16] = {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-                     0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F};
-  uint8_t plaintext[16] = {0};
-  uint8_t ciphertext[16] = {0};
-  uint8_t decrypted[16] = {0};
+  uint8_t key[16] = { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+                      0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F };
+  uint8_t plaintext[16] = { 0 };
+  uint8_t ciphertext[16] = { 0 };
+  uint8_t decrypted[16] = { 0 };
 
   mbedtls_aes_context aes;
   mbedtls_aes_init(&aes);
@@ -4194,7 +4224,7 @@ void benchmarkRP2040PWM() {
 
   pwm_config config = pwm_get_default_config();
   pwm_config_set_clkdiv(&config, 1.0f);  // No division
-  pwm_config_set_wrap(&config, 255);      // 8-bit resolution
+  pwm_config_set_wrap(&config, 255);     // 8-bit resolution
   pwm_init(slice_num, &config, true);
 
   float pwmFreq = (float)sysClk / 256;
@@ -4219,8 +4249,8 @@ void benchmarkRP2040PWM() {
   SERIAL_OUT.println();
   SERIAL_OUT.println(F_STR("PWM frequency vs resolution:"));
 
-  uint16_t resolutions[] = {256, 1024, 4096, 16384, 65535};
-  const char* resNames[] = {"8-bit", "10-bit", "12-bit", "14-bit", "16-bit"};
+  uint16_t resolutions[] = { 256, 1024, 4096, 16384, 65535 };
+  const char *resNames[] = { "8-bit", "10-bit", "12-bit", "14-bit", "16-bit" };
 
   for (int r = 0; r < 5; r++) {
     pwm_config_set_wrap(&config, resolutions[r] - 1);
@@ -4465,11 +4495,11 @@ void benchmarkPWM() {
   startBenchmark();
   for (int i = 0; i < 10000; i++) {
 #if defined(ESP32)
-  #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
     ledcWrite(pwmChannel, duty);
-  #else
+#else
     ledcWrite(pwmChannel, duty);
-  #endif
+#endif
 #else
     analogWrite(pwmPin, duty);
 #endif
@@ -4492,11 +4522,11 @@ void benchmarkPWM() {
   for (int cycle = 0; cycle < 100; cycle++) {
     for (int val = 0; val < 256; val++) {
 #if defined(ESP32)
-  #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
       ledcWrite(pwmChannel, val);
-  #else
+#else
       ledcWrite(pwmChannel, val);
-  #endif
+#endif
 #else
       analogWrite(pwmPin, val);
 #endif
@@ -4516,11 +4546,11 @@ void benchmarkPWM() {
   SERIAL_OUT.println(F_STR(" us"));
 
 #if defined(ESP32)
-  #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
+#if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
   ledcWrite(pwmChannel, 0);
-  #else
+#else
   ledcWrite(pwmChannel, 0);
-  #endif
+#endif
 #else
   analogWrite(pwmPin, 0);
 #endif
@@ -4599,7 +4629,7 @@ void benchmarkInterruptLatency() {
     // Trigger the interrupt
     isrStartTime = micros();
 #if defined(__AVR__)
-    digitalWrite(triggerPin, LOW);   // FALLING edge for AVR
+    digitalWrite(triggerPin, LOW);  // FALLING edge for AVR
 #else
     digitalWrite(triggerPin, HIGH);  // RISING edge for others
 #endif
@@ -4659,20 +4689,20 @@ void benchmarkSPI() {
 
   // Test different SPI speeds
 #if defined(ESP32)
-  uint32_t speeds[] = {1000000, 4000000, 10000000, 20000000, 40000000};
-  const char* speedNames[] = {"1 MHz", "4 MHz", "10 MHz", "20 MHz", "40 MHz"};
+  uint32_t speeds[] = { 1000000, 4000000, 10000000, 20000000, 40000000 };
+  const char *speedNames[] = { "1 MHz", "4 MHz", "10 MHz", "20 MHz", "40 MHz" };
   int numSpeeds = 5;
 #elif defined(ARDUINO_ARCH_RP2040)
-  uint32_t speeds[] = {1000000, 4000000, 10000000, 20000000, 62500000};
-  const char* speedNames[] = {"1 MHz", "4 MHz", "10 MHz", "20 MHz", "62.5 MHz"};
+  uint32_t speeds[] = { 1000000, 4000000, 10000000, 20000000, 62500000 };
+  const char *speedNames[] = { "1 MHz", "4 MHz", "10 MHz", "20 MHz", "62.5 MHz" };
   int numSpeeds = 5;
 #elif defined(__AVR__)
-  uint32_t speeds[] = {1000000, 2000000, 4000000, 8000000};
-  const char* speedNames[] = {"1 MHz", "2 MHz", "4 MHz", "8 MHz"};
+  uint32_t speeds[] = { 1000000, 2000000, 4000000, 8000000 };
+  const char *speedNames[] = { "1 MHz", "2 MHz", "4 MHz", "8 MHz" };
   int numSpeeds = 4;
 #else
-  uint32_t speeds[] = {1000000, 4000000, 8000000, 16000000};
-  const char* speedNames[] = {"1 MHz", "4 MHz", "8 MHz", "16 MHz"};
+  uint32_t speeds[] = { 1000000, 4000000, 8000000, 16000000 };
+  const char *speedNames[] = { "1 MHz", "4 MHz", "8 MHz", "16 MHz" };
   int numSpeeds = 4;
 #endif
 
@@ -4701,7 +4731,6 @@ void benchmarkSPI() {
   SERIAL_OUT.println(F_STR("Bulk transfer (256 bytes):"));
 
   uint8_t txBuffer[256];
-  uint8_t rxBuffer[256];
   for (int i = 0; i < 256; i++) txBuffer[i] = i;
 
 #if defined(ESP32) || defined(ARDUINO_ARCH_RP2040)
@@ -4776,14 +4805,30 @@ void benchmarkWatchdog() {
   SERIAL_OUT.println(F_STR("  Can trigger reset or interrupt"));
   SERIAL_OUT.println();
 
-  // Check reset cause
-  uint8_t mcusr = MCUSR;
-  SERIAL_OUT.print(F_STR("Reset cause: "));
-  if (mcusr & (1 << WDRF)) SERIAL_OUT.print(F_STR("WDT "));
-  if (mcusr & (1 << BORF)) SERIAL_OUT.print(F_STR("Brown-out "));
-  if (mcusr & (1 << EXTRF)) SERIAL_OUT.print(F_STR("External "));
-  if (mcusr & (1 << PORF)) SERIAL_OUT.print(F_STR("Power-on "));
-  SERIAL_OUT.println();
+  // Check reset cause (register names differ between classic AVR and megaAVR)
+  #if defined(BOARD_MEGAAVR)
+    // megaAVR (AVR128DA28, etc.) uses RSTFR register
+    #if defined(RSTFR)
+      uint8_t rstfr = RSTFR;
+      SERIAL_OUT.print(F_STR("Reset cause: "));
+      if (rstfr & 0x01) SERIAL_OUT.print(F_STR("Power-on "));
+      if (rstfr & 0x02) SERIAL_OUT.print(F_STR("Brown-out "));
+      if (rstfr & 0x04) SERIAL_OUT.print(F_STR("External "));
+      if (rstfr & 0x08) SERIAL_OUT.print(F_STR("Watchdog "));
+      SERIAL_OUT.println();
+    #else
+      SERIAL_OUT.println(F_STR("Reset cause: Not available on this megaAVR variant"));
+    #endif
+  #else
+    // Classic AVR (ATmega328P, etc.) uses MCUSR register
+    uint8_t mcusr = MCUSR;
+    SERIAL_OUT.print(F_STR("Reset cause: "));
+    if (mcusr & (1 << WDRF)) SERIAL_OUT.print(F_STR("WDT "));
+    if (mcusr & (1 << BORF)) SERIAL_OUT.print(F_STR("Brown-out "));
+    if (mcusr & (1 << EXTRF)) SERIAL_OUT.print(F_STR("External "));
+    if (mcusr & (1 << PORF)) SERIAL_OUT.print(F_STR("Power-on "));
+    SERIAL_OUT.println();
+  #endif
 
 #else
   SERIAL_OUT.println(F_STR("Watchdog information not available for this board"));
@@ -5060,7 +5105,10 @@ void printSystemInfo() {
 void setup() {
 #if defined(ARDUINO_UNO_Q)
   SERIAL_OUT.begin();  // Uno Q Monitor doesn't use baud rate
-  delay(3000);  // Wait longer for Monitor connection
+  delay(3000);         // Wait longer for Monitor connection
+#elif defined(ESP32)
+  SERIAL_OUT.begin(SERIAL_BAUD);
+  delay(3000);  // ESP32 needs extra time for serial initialization
 #else
   SERIAL_OUT.begin(SERIAL_BAUD);
   delay(2000);  // Wait for serial connection
@@ -5143,9 +5191,9 @@ void setup() {
 
   // ESP32 Additional Benchmarks
 #if defined(ESP32)
-  #if defined(CONFIG_IDF_TARGET_ESP32)
+#if defined(CONFIG_IDF_TARGET_ESP32)
   benchmarkESP32DAC();
-  #endif
+#endif
   benchmarkESP32Touch();
   benchmarkESP32Sleep();
   benchmarkESP32AES();
@@ -5157,18 +5205,18 @@ void setup() {
   benchmarkRP2040PIO();
   benchmarkRP2040Interpolator();
   benchmarkRP2040PWM();
-  #if defined(ARDUINO_RASPBERRY_PI_PICO_W)
+#if defined(ARDUINO_RASPBERRY_PI_PICO_W)
   benchmarkPicoWBLE();
-  #endif
+#endif
 #endif
 
   // Uno R4 Additional Benchmarks
 #if defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
   benchmarkUnoR4DAC();
   benchmarkUnoR4RTC();
-  #if defined(ARDUINO_UNOR4_WIFI)
+#if defined(ARDUINO_UNOR4_WIFI)
   benchmarkUnoR4BLE();
-  #endif
+#endif
 #endif
 
   // General Benchmarks (all boards)

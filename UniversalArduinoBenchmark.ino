@@ -2714,7 +2714,7 @@ int testRecursion(int depth) {
   recursionCounter++;
   volatile char buffer[32];  // Consume stack space
   buffer[0] = (char)depth;
-  buffer[1] = (char)(depth >> 1);  // Use buffer to prevent optimization
+  buffer[1] = (char)(depth >> 1);
 
   if (depth > 0) {
     return testRecursion(depth - 1) + (buffer[0] & 1);
@@ -2731,9 +2731,15 @@ void benchmarkStackDepth() {
 #if defined(BOARD_STM32U5)
   testDepth = 500;  // 786 KB RAM - can go deep
   SERIAL_OUT.println(F_STR("Testing deep recursion (786 KB SRAM)"));
+#elif defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6)
+  testDepth = 50;  // C3/C6 have very limited task stack
+  SERIAL_OUT.println(F_STR("Testing shallow recursion (ESP32-C3/C6)"));
+#elif defined(CONFIG_IDF_TARGET_ESP32S3)
+  testDepth = 80;  // S3 has more stack
+  SERIAL_OUT.println(F_STR("Testing moderate recursion (ESP32-S3)"));
 #elif defined(ESP32)
-  testDepth = 500;  // ESP32 has plenty of RAM
-  SERIAL_OUT.println(F_STR("Testing deep recursion (large heap)"));
+  testDepth = 60;  // Classic ESP32 - limited task stack
+  SERIAL_OUT.println(F_STR("Testing moderate recursion (ESP32)"));
 #elif defined(ARDUINO_ARCH_RP2040)
   testDepth = 300;  // 264 KB RAM
   SERIAL_OUT.println(F_STR("Testing deep recursion (264 KB RAM)"));
@@ -2777,13 +2783,9 @@ void benchmarkStackDepth() {
 
   // Estimate stack usage per call (very rough)
   // Each recursive call typically uses 20-50 bytes on ARM, more on some platforms
-#if defined(BOARD_STM32U5) || defined(ESP32) || defined(ARDUINO_ARCH_RP2040)
+#if defined(BOARD_STM32U5) || defined(CONFIG_IDF_TARGET_ESP32S3) || defined(ARDUINO_ARCH_RP2040)
   SERIAL_OUT.print(F_STR("Estimated stack usage: ~"));
-  SERIAL_OUT.print(testDepth * 40);  // Rough estimate: 40 bytes/call
-  SERIAL_OUT.println(F_STR(" bytes"));
-#elif defined(__AVR__)
-  SERIAL_OUT.print(F_STR("Estimated stack usage: ~"));
-  SERIAL_OUT.print(testDepth * 30);  // AVR: ~30 bytes/call typical
+  SERIAL_OUT.print(testDepth * 40);  // Rough estimate
   SERIAL_OUT.println(F_STR(" bytes"));
 #endif
 

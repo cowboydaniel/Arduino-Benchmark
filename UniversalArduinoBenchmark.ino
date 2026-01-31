@@ -259,6 +259,15 @@
 #include <EEPROM.h>
 #define BOARD_AVR
 
+// MegaCoreX (ATmega x09 series - modern AVR)
+#elif defined(__AVR_ATmegax09__)
+#define BOARD_NAME "MegaCoreX (ATmega x09)"
+#include <EEPROM.h>
+#define BOARD_AVR
+#define BOARD_MEGAAVR  // Modern AVR architecture like INK4u
+#define BOARD_SRAM_KB 6  // Varies: 4809 has 6KB, 4809 has 6KB, etc.
+#define BOARD_FLASH_KB 48  // Varies by variant
+
 // Arduino Leonardo/Micro
 #elif defined(ARDUINO_AVR_LEONARDO)
 #define BOARD_NAME "Arduino Leonardo"

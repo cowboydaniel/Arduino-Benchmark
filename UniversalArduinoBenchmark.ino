@@ -5346,10 +5346,6 @@ void setup() {
   delay(2000);  // Wait for serial connection
 #endif
 
-#if defined(HAS_YUN_BRIDGE)
-  Bridge.begin();  // Initialize Bridge between ATmega32U4 and Linux
-#endif
-
   calibrateBenchmarkTime();
 
   SERIAL_OUT.println();
@@ -5358,6 +5354,14 @@ void setup() {
   SERIAL_OUT.println(F_STR("  UNIVERSAL ARDUINO BENCHMARK SUITE"));
   printDivider();
   SERIAL_OUT.println();
+
+#if defined(HAS_YUN_BRIDGE)
+  SERIAL_OUT.println(F("Initializing Yun Bridge (may take ~60s after power-on)..."));
+  SERIAL_OUT.flush();  // Force bytes out before Bridge.begin() blocks
+  Bridge.begin();
+  SERIAL_OUT.println(F("Bridge ready."));
+  SERIAL_OUT.println();
+#endif
 
   // System info
   printSystemInfo();

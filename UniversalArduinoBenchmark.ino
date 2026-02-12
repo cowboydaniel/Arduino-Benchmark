@@ -1598,6 +1598,7 @@ void benchmarkDigitalIO() {
 #endif
 }
 
+#ifndef BOARD_SMALL_FLASH
 void benchmarkAnalogIO() {
   printHeader("I/O: ANALOG OPERATIONS");
 
@@ -1747,7 +1748,9 @@ void benchmarkAnalogIO() {
 #endif
   }
 }
+#endif  // BOARD_SMALL_FLASH
 
+#ifndef BOARD_SMALL_FLASH
 void benchmarkSerial() {
   printHeader("I/O: SERIAL COMMUNICATION");
 
@@ -1822,6 +1825,7 @@ void benchmarkSerial() {
     SERIAL_OUT.println(F_STR("CPU-bound)"));
   }
 }
+#endif  // BOARD_SMALL_FLASH
 
 // ==================== BOARD-SPECIFIC BENCHMARKS ====================
 
@@ -5391,8 +5395,10 @@ void setup() {
 
   // I/O benchmarks
   benchmarkDigitalIO();
+#ifndef BOARD_SMALL_FLASH
   benchmarkAnalogIO();
   benchmarkSerial();
+#endif
 
   // Board-specific
   benchmarkFlash();

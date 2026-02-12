@@ -5328,6 +5328,21 @@ void setup() {
   delay(3000);  // ESP32 needs extra time for serial initialization
 #else
   SERIAL_OUT.begin(SERIAL_BAUD);
+  // ATmega32U4 boards (Yun, Leonardo, Micro) and other native USB boards
+  // have a virtual USB CDC serial port that doesn't exist until the host
+  // USB connection is negotiated. Without this wait, all Serial output is
+  // lost because the port isn't ready yet. A fixed delay() is insufficient
+  // because USB enumeration timing varies. The while(!Serial) loop blocks
+  // until the port is actually connected. Timeout after 10s so the sketch
+  // can still run standalone (without Serial Monitor) if needed.
+#if defined(USBCON)
+  {
+    unsigned long waitStart = millis();
+    while (!SERIAL_OUT && (millis() - waitStart < 10000)) {
+      delay(10);
+    }
+  }
+#endif
   delay(2000);  // Wait for serial connection
 #endif
 

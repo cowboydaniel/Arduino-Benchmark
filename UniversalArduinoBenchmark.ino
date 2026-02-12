@@ -5343,11 +5343,6 @@ void setup() {
   // System info
   printSystemInfo();
 
-  // Arduino Yun Bridge benchmarks - run FIRST while RAM is least fragmented
-#ifdef HAS_YUN_BRIDGE
-  benchmarkYunBridge();
-#endif
-
   // CPU benchmarks
   benchmarkIntegerOps();
   benchmarkFloatOps();
@@ -5415,7 +5410,10 @@ void setup() {
   benchmarkRTC();
 #endif
 
-  // (Yun Bridge benchmarks run first - see above)
+  // Arduino Yun Bridge benchmarks
+#ifdef HAS_YUN_BRIDGE
+  benchmarkYunBridge();
+#endif
 
   // ========== NEW BENCHMARKS ==========
 

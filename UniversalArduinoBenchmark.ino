@@ -554,9 +554,7 @@ void benchmarkCPUStress() {
 #endif
 
   if (!hasTempSensor) {
-    SERIAL_OUT.println(F_STR("Temperature sensor not available on this board"));
-    SERIAL_OUT.println(F_STR("Running stress test without temperature monitoring..."));
-    SERIAL_OUT.println();
+    SERIAL_OUT.println(F_STR("No temp sensor, stress only"));
   }
 
   // Initial temperature reading
@@ -578,8 +576,7 @@ void benchmarkCPUStress() {
   SERIAL_OUT.println(F_STR(" °C"));
 #endif
 
-  SERIAL_OUT.print(F_STR("Running intensive computation for 10 seconds..."));
-  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("Running 10s stress test..."));
 
   // CPU stress test - run all cores
   unsigned long stressStart = millis();
@@ -650,15 +647,15 @@ void benchmarkCPUStress() {
   unsigned long stressDuration = millis() - stressStart;
 
   SERIAL_OUT.println();
-  SERIAL_OUT.print(F_STR("Stress test complete: "));
+  SERIAL_OUT.print(F_STR("Done: "));
   SERIAL_OUT.print(iterations);
-  SERIAL_OUT.print(F_STR(" iterations in "));
+  SERIAL_OUT.print(F_STR(" iters in "));
   SERIAL_OUT.print(stressDuration);
   SERIAL_OUT.println(F_STR(" ms"));
 
-  SERIAL_OUT.print(F_STR("Performance: "));
+  SERIAL_OUT.print(F_STR("Rate: "));
   SERIAL_OUT.print((float)iterations / stressDuration);
-  SERIAL_OUT.println(F_STR(" iterations/ms"));
+  SERIAL_OUT.println(F_STR(" iters/ms"));
 
   // Final temperature reading
   if (hasTempSensor) {
@@ -682,11 +679,11 @@ void benchmarkCPUStress() {
     SERIAL_OUT.println(F_STR(" °C"));
 
     if (endTemp - startTemp > 10) {
-      SERIAL_OUT.println(F_STR("⚠️  Significant heating detected - ensure adequate cooling"));
+      SERIAL_OUT.println(F_STR("WARNING: significant heating"));
     } else if (endTemp - startTemp > 5) {
-      SERIAL_OUT.println(F_STR("ℹ️  Normal temperature increase under load"));
+      SERIAL_OUT.println(F_STR("Normal temp increase"));
     } else {
-      SERIAL_OUT.println(F_STR("✓ Minimal temperature increase - good thermal performance"));
+      SERIAL_OUT.println(F_STR("Good thermal performance"));
     }
   }
 }
@@ -942,45 +939,44 @@ void benchmarkStringOps() {
     }
   });
 
-  // snprintf into fixed buffer (no heap allocation)
-  char fixedBuffer[32];
-  volatile int snprintfTotal = 0;
-  TimedLoopResult snprintfResult = runTimedLoop(minDurationMs, 1000, [&]() {
+  // itoa into fixed buffer (no heap allocation)
+  char fixedBuffer[12];
+  TimedLoopResult itoaResult = runTimedLoop(minDurationMs, 1000, [&]() {
     for (int i = 0; i < 1000; i++) {
-      snprintfTotal += snprintf(fixedBuffer, sizeof(fixedBuffer), "%d", i);
+      itoa(i, fixedBuffer, 10);
     }
   });
 
-  SERIAL_OUT.print(F_STR("Arduino String (heap stress) - Concatenation ("));
+  SERIAL_OUT.print(F_STR("Concatenation ("));
   SERIAL_OUT.print(concatResult.totalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
   SERIAL_OUT.print(concatResult.elapsedMicros);
-  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(concatResult.opsPerMs);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  SERIAL_OUT.print(F_STR("Arduino String (heap stress) - Comparison ("));
+  SERIAL_OUT.print(F_STR("Comparison ("));
   SERIAL_OUT.print(cmpResultData.totalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
   SERIAL_OUT.print(cmpResultData.elapsedMicros);
-  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(cmpResultData.opsPerMs);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  SERIAL_OUT.print(F_STR("Arduino String (heap stress) - Int to String ("));
+  SERIAL_OUT.print(F_STR("Int to String ("));
   SERIAL_OUT.print(toStrResult.totalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
   SERIAL_OUT.print(toStrResult.elapsedMicros);
-  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(toStrResult.opsPerMs);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  SERIAL_OUT.print(F_STR("snprintf (fixed buffer, "));
-  SERIAL_OUT.print(snprintfResult.totalOps);
+  SERIAL_OUT.print(F_STR("itoa fixed buf ("));
+  SERIAL_OUT.print(itoaResult.totalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
-  SERIAL_OUT.print(snprintfResult.elapsedMicros);
-  SERIAL_OUT.print(F_STR(" μs ("));
-  SERIAL_OUT.print(snprintfResult.opsPerMs);
+  SERIAL_OUT.print(itoaResult.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" us ("));
+  SERIAL_OUT.print(itoaResult.opsPerMs);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
 }
 #endif  // BOARD_SMALL_FLASH
@@ -1678,7 +1674,7 @@ void benchmarkAnalogIO() {
     SERIAL_OUT.println((uint32_t)(sum / readResult.totalOps));
 
     if (allZero) {
-      SERIAL_OUT.println(F_STR("Warning: ADC reads were all zero; ADC pin may be invalid or tied low."));
+      SERIAL_OUT.println(F_STR("Warning: ADC all zero"));
     }
   }
 
@@ -1782,39 +1778,33 @@ void benchmarkSerial() {
   unsigned long theoreticalWireTime = (unsigned long)(expectedBytes * 10 * 1000000.0 / SERIAL_BAUD);
 
   SERIAL_OUT.println();
-  SERIAL_OUT.print(F_STR("Serial Enqueue ("));
+  SERIAL_OUT.print(F_STR("Enqueue ("));
   SERIAL_OUT.print(expectedBytes);
-  SERIAL_OUT.print(F_STR(" bytes): "));
+  SERIAL_OUT.print(F_STR(" B): "));
   SERIAL_OUT.print(enqueueTime);
-  SERIAL_OUT.print(F_STR(" μs (median "));
+  SERIAL_OUT.print(F_STR(" us (median "));
   SERIAL_OUT.print(enqueueRate);
-  SERIAL_OUT.print(F_STR(" bytes/ms CPU, "));
-  SERIAL_OUT.print(kJitterTrials);
-  SERIAL_OUT.println(F_STR(" trials)"));
+  SERIAL_OUT.println(F_STR(" B/ms)"));
 
-  SERIAL_OUT.print(F_STR("flush() time (implementation-dependent): "));
+  SERIAL_OUT.print(F_STR("flush(): "));
   SERIAL_OUT.print(flushTime);
-  SERIAL_OUT.print(F_STR(" μs"));
-  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR(" us"));
 
-  SERIAL_OUT.print(F_STR("Theoretical Wire Time: "));
+  SERIAL_OUT.print(F_STR("Wire time: "));
   SERIAL_OUT.print(theoreticalWireTime);
-  SERIAL_OUT.print(F_STR(" μs ("));
-  SERIAL_OUT.print(theoreticalWireTime / 1000.0);
-  SERIAL_OUT.println(F_STR(" ms)"));
+  SERIAL_OUT.println(F_STR(" us"));
 
-  SERIAL_OUT.print(F_STR("Wire Throughput: "));
+  SERIAL_OUT.print(F_STR("Throughput: "));
   SERIAL_OUT.print(expectedBytes * 1000.0 / theoreticalWireTime);
-  SERIAL_OUT.print(F_STR(" bytes/ms ("));
-  SERIAL_OUT.print(SERIAL_BAUD / 10);  // 8N1 = 10 bits per byte
-  SERIAL_OUT.println(F_STR(" bytes/sec theoretical)"));
+  SERIAL_OUT.print(F_STR(" B/ms ("));
+  SERIAL_OUT.print(SERIAL_BAUD / 10);
+  SERIAL_OUT.println(F_STR(" B/s max)"));
 
-  // Compare enqueue vs wire
-  SERIAL_OUT.print(F_STR("Enqueue/Wire Ratio: "));
+  SERIAL_OUT.print(F_STR("Ratio: "));
   SERIAL_OUT.print((float)enqueueTime / theoreticalWireTime * 100);
   SERIAL_OUT.print(F_STR("% ("));
   if (enqueueTime < theoreticalWireTime) {
-    SERIAL_OUT.println(F_STR("buffered, won't block)"));
+    SERIAL_OUT.println(F_STR("buffered)"));
   } else {
     SERIAL_OUT.println(F_STR("CPU-bound)"));
   }
@@ -2096,11 +2086,12 @@ void benchmarkFlash() {
 void benchmarkAdvancedMath() {
   printHeader("ADVANCED MATH: Transcendental Functions");
 
-#if defined(ARDUINO_UNO_Q) || defined(ARDUINO_UNO_Q_MCU)
-  SERIAL_OUT.println(F_STR("Uno Q: libm not available (sin/cos/log/exp/pow/atan2)"));
-  SERIAL_OUT.println(F_STR("Skipping advanced math benchmark"));
+#if defined(__AVR__) || defined(ARDUINO_UNO_Q) || defined(ARDUINO_UNO_Q_MCU)
+  // Skip on AVR to save flash (atan2/log/exp/pow add ~1.5KB of libm)
+  // See Float benchmark for sin/cos/sqrt performance
+  SERIAL_OUT.println(F_STR("Skipped (see Float ops benchmark)"));
   return;
-#endif
+#else
 
   volatile float checksum = 0;
 
@@ -2136,7 +2127,6 @@ void benchmarkAdvancedMath() {
   startBenchmark();
   for (int i = 0; i < 1000; i++) {
 #if defined(__ZEPHYR__) || defined(BOARD_STM32U5)
-    // Manual fmod for Zephyr (avoids libm linking issues)
     float val = (float)i;
     float divisor = 7.3f;
     checksum += val - ((int)(val / divisor)) * divisor;
@@ -2151,33 +2141,34 @@ void benchmarkAdvancedMath() {
 
   SERIAL_OUT.print(F_STR("atan2() (100 ops): "));
   SERIAL_OUT.print(atan2Time);
-  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(100.0 / atan2Time * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
 
   SERIAL_OUT.print(F_STR("log() (100 ops): "));
   SERIAL_OUT.print(logTime);
-  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(100.0 / logTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
 
   SERIAL_OUT.print(F_STR("exp() (100 ops): "));
   SERIAL_OUT.print(expTime);
-  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(100.0 / expTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
 
   SERIAL_OUT.print(F_STR("pow() (100 ops): "));
   SERIAL_OUT.print(powTime);
-  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(100.0 / powTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
 
   SERIAL_OUT.print(F_STR("fmod() (1000 ops): "));
   SERIAL_OUT.print(fmodTime);
-  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(1000.0 / fmodTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
 }
 #endif  // BOARD_SMALL_FLASH
 
@@ -2619,11 +2610,11 @@ void benchmarkTimingPrecision() {
   unsigned long endMillis = millis();
   long millisError = abs((long)(endMillis - startMillis) - 1000);
 
-  SERIAL_OUT.print(F_STR("millis() 1-second test: "));
+  SERIAL_OUT.print(F_STR("millis() 1s: "));
   SERIAL_OUT.print(endMillis - startMillis);
-  SERIAL_OUT.print(F_STR(" ms (±"));
+  SERIAL_OUT.print(F_STR(" ms (+/-"));
   SERIAL_OUT.print(millisError);
-  SERIAL_OUT.println(F_STR(" ms error)"));
+  SERIAL_OUT.println(F_STR(" ms)"));
 
   // Test micros() resolution - wait for value to change to measure granularity
   unsigned long micro1 = micros();
@@ -2639,12 +2630,12 @@ void benchmarkTimingPrecision() {
 
   unsigned long microResolution = micro2 - micro1;
 
-  SERIAL_OUT.print(F_STR("micros() resolution: "));
+  SERIAL_OUT.print(F_STR("micros() res: "));
   if (iterations >= maxIterations) {
-    SERIAL_OUT.println(F_STR("TIMEOUT (timer may not be running)"));
+    SERIAL_OUT.println(F_STR("TIMEOUT"));
   } else {
     SERIAL_OUT.print(microResolution);
-    SERIAL_OUT.print(F_STR(" μs (detected after "));
+    SERIAL_OUT.print(F_STR(" us ("));
     SERIAL_OUT.print(iterations);
     SERIAL_OUT.println(F_STR(" reads)"));
   }
@@ -2663,13 +2654,9 @@ void benchmarkTimingPrecision() {
     }
   }
 
-  SERIAL_OUT.print(F_STR("Minimum step size (100 samples): "));
+  SERIAL_OUT.print(F_STR("Min step: "));
   SERIAL_OUT.print(minDiff);
-  SERIAL_OUT.println(F_STR(" μs"));
-
-#if defined(__AVR__)
-  SERIAL_OUT.println(F_STR("Note: AVR micros() typically advances in 4 μs steps"));
-#endif
+  SERIAL_OUT.println(F_STR(" us"));
 
   // Test micros() consistency over short period
   unsigned long startMicros = micros();
@@ -2677,11 +2664,11 @@ void benchmarkTimingPrecision() {
   unsigned long endMicros = micros();
   long microsError = abs((long)(endMicros - startMicros) - 1000);
 
-  SERIAL_OUT.print(F_STR("micros() 1ms test: "));
+  SERIAL_OUT.print(F_STR("micros() 1ms: "));
   SERIAL_OUT.print(endMicros - startMicros);
-  SERIAL_OUT.print(F_STR(" μs (±"));
+  SERIAL_OUT.print(F_STR(" us (+/-"));
   SERIAL_OUT.print(microsError);
-  SERIAL_OUT.println(F_STR(" μs error)"));
+  SERIAL_OUT.println(F_STR(" us)"));
 
 // ESP32: CPU cycle counter cross-check
 #ifdef ESP32
@@ -2780,14 +2767,11 @@ void benchmarkStackDepth() {
   testDepth = 100;  // Typically 32-256 KB
   SERIAL_OUT.println(F_STR("Testing moderate recursion (ARM)"));
 #elif defined(__AVR_ATmega2560__)
-  testDepth = 40;  // 8 KB RAM - deeper than Uno
-  SERIAL_OUT.println(F_STR("Testing shallow recursion (8 KB RAM)"));
+  testDepth = 40;
 #elif defined(__AVR__)
-  testDepth = 20;  // 2-2.5 KB RAM - very conservative
-  SERIAL_OUT.println(F_STR("Testing shallow recursion (2 KB RAM)"));
+  testDepth = 20;
 #else
-  testDepth = 50;  // Conservative default
-  SERIAL_OUT.println(F_STR("Testing moderate recursion (unknown RAM)"));
+  testDepth = 50;
 #endif
 
   // Test safe recursion depth
@@ -2795,28 +2779,21 @@ void benchmarkStackDepth() {
   int result = testRecursion(testDepth);
   (void)result;
 
-  SERIAL_OUT.print(F_STR("Recursion test ("));
+  SERIAL_OUT.print(F_STR("Depth "));
   SERIAL_OUT.print(testDepth);
-  SERIAL_OUT.print(F_STR(" deep): "));
+  SERIAL_OUT.print(F_STR(": "));
   if (recursionCounter == testDepth + 1) {
     SERIAL_OUT.println(F_STR("PASS"));
-    SERIAL_OUT.print(F_STR("Successfully executed "));
-    SERIAL_OUT.print(testDepth);
-    SERIAL_OUT.println(F_STR(" nested function calls"));
   } else {
-    SERIAL_OUT.print(F_STR("FAIL - reached depth "));
+    SERIAL_OUT.print(F_STR("FAIL @ "));
     SERIAL_OUT.println(recursionCounter);
   }
 
-  // Estimate stack usage per call (very rough)
-  // Each recursive call typically uses 20-50 bytes on ARM, more on some platforms
 #if defined(BOARD_STM32U5) || defined(CONFIG_IDF_TARGET_ESP32S3) || defined(ARDUINO_ARCH_RP2040)
-  SERIAL_OUT.print(F_STR("Estimated stack usage: ~"));
-  SERIAL_OUT.print(testDepth * 40);  // Rough estimate
+  SERIAL_OUT.print(F_STR("Est. stack: ~"));
+  SERIAL_OUT.print(testDepth * 40);
   SERIAL_OUT.println(F_STR(" bytes"));
 #endif
-
-  SERIAL_OUT.println(F_STR("Note: Actual stack usage varies by compiler and optimization."));
 }
 #endif  // BOARD_SMALL_FLASH
 
@@ -4832,10 +4809,7 @@ void benchmarkWatchdog() {
   SERIAL_OUT.println(F_STR("Use WDT library for configuration"));
 
 #elif defined(__AVR__)
-  SERIAL_OUT.println(F_STR("AVR Watchdog Features:"));
-  SERIAL_OUT.println(F_STR("  Timeout options: 16ms to 8s"));
-  SERIAL_OUT.println(F_STR("  Can trigger reset or interrupt"));
-  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("AVR WDT: 16ms-8s, reset or IRQ"));
 
   // Check reset cause (register names differ between classic AVR and megaAVR)
   #if defined(BOARD_MEGAAVR)
@@ -4917,13 +4891,7 @@ void benchmarkSleepModes() {
   SERIAL_OUT.println(F_STR("Use LowPower library for sleep control"));
 
 #elif defined(__AVR__)
-  SERIAL_OUT.println(F_STR("AVR Sleep Modes:"));
-  SERIAL_OUT.println(F_STR("  IDLE: CPU stopped"));
-  SERIAL_OUT.println(F_STR("  ADC Noise Reduction: ADC runs"));
-  SERIAL_OUT.println(F_STR("  Power-down: Deepest sleep"));
-  SERIAL_OUT.println(F_STR("  Power-save: Timer2 + async"));
-  SERIAL_OUT.println(F_STR("  Standby: Oscillator runs"));
-  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("Modes: IDLE/ADC_NR/Power-down/Power-save/Standby"));
 
   // Test idle mode timing
   set_sleep_mode(SLEEP_MODE_IDLE);
@@ -4935,7 +4903,7 @@ void benchmarkSleepModes() {
   sleep_disable();
   unsigned long idleTime = micros() - idleStart;
 
-  SERIAL_OUT.print(F_STR("Idle mode wake: "));
+  SERIAL_OUT.print(F_STR("Idle wake: "));
   SERIAL_OUT.print(idleTime);
   SERIAL_OUT.println(F_STR(" us"));
 

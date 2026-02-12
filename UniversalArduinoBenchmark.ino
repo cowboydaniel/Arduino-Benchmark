@@ -273,8 +273,6 @@
 #define BOARD_NAME "Arduino Yun"
 #include <EEPROM.h>
 #define BOARD_AVR
-#define BOARD_SMALL_FLASH  // ATmega32U4 has only 28KB usable flash
-#define HAS_YUN_BRIDGE  // Bridge between ATmega32U4 and Linux (Atheros AR9331)
 
 // Arduino Leonardo/Micro
 #elif defined(ARDUINO_AVR_LEONARDO)
@@ -430,10 +428,6 @@
 #include <avr/wdt.h>
 #endif
 
-#if defined(HAS_YUN_BRIDGE)
-#include <Bridge.h>
-#include <Process.h>
-#endif
 
 // ==================== SERIAL OUTPUT ABSTRACTION ====================
 // Uno Q uses Monitor instead of Serial for output
@@ -3593,179 +3587,6 @@ void benchmarkArduinoBridge() {
 
 #endif  // BOARD_STM32U5 && HAS_DUAL_PROCESSOR
 
-// ==================== ARDUINO YUN BRIDGE BENCHMARKS ====================
-
-#if defined(HAS_YUN_BRIDGE)
-
-void benchmarkYunBridge() {
-  printHeader("YUN BRIDGE (MCU <-> Linux)");
-  SERIAL_OUT.println();
-
-  // Test 1: Simple command execution latency (also validates Bridge)
-  SERIAL_OUT.println(F("1. Command Latency"));
-  bool bridgeOk = false;
-  {
-    const int CMD_RUNS = 5;
-    unsigned long totalCmdTime = 0;
-    int successfulCmds = 0;
-
-    for (int i = 0; i < CMD_RUNS; i++) {
-      Process p;
-      unsigned long start = micros();
-      p.runShellCommand("echo ok");
-      while (p.running());
-      unsigned long elapsed = micros() - start;
-
-      // Verify output without String allocation
-      char buf[4] = {0};
-      byte idx = 0;
-      while (p.available() && idx < 3) {
-        buf[idx++] = p.read();
-      }
-      while (p.available()) p.read();  // drain
-
-      if (buf[0] == 'o' && buf[1] == 'k') {
-        totalCmdTime += elapsed;
-        successfulCmds++;
-      }
-    }
-
-    if (successfulCmds > 0) {
-      bridgeOk = true;
-      SERIAL_OUT.print(F("  OK: "));
-      SERIAL_OUT.print(successfulCmds);
-      SERIAL_OUT.print(F("/"));
-      SERIAL_OUT.println(CMD_RUNS);
-      SERIAL_OUT.print(F("  Avg: "));
-      SERIAL_OUT.print(totalCmdTime / successfulCmds);
-      SERIAL_OUT.println(F(" us"));
-    } else {
-      SERIAL_OUT.println(F("  Linux not responding"));
-      SERIAL_OUT.println(F("  (wait ~60s after power-on)"));
-      return;
-    }
-  }
-  SERIAL_OUT.println();
-
-  // Test 2: Data transfer throughput
-  SERIAL_OUT.println(F("2. Data Transfer"));
-  {
-    Process p;
-    unsigned long start = micros();
-    p.runShellCommand("cat /proc/version");
-    while (p.running());
-    unsigned long elapsed = micros() - start;
-
-    int bytesRead = 0;
-    while (p.available()) {
-      p.read();
-      bytesRead++;
-    }
-
-    SERIAL_OUT.print(F("  Bytes: "));
-    SERIAL_OUT.print(bytesRead);
-    SERIAL_OUT.print(F("  Time: "));
-    SERIAL_OUT.print(elapsed);
-    SERIAL_OUT.println(F(" us"));
-    if (elapsed > 0 && bytesRead > 0) {
-      SERIAL_OUT.print(F("  Throughput: "));
-      SERIAL_OUT.print((float)bytesRead * 1000000.0 / (float)elapsed, 0);
-      SERIAL_OUT.println(F(" B/s"));
-    }
-  }
-  SERIAL_OUT.println();
-
-  // Test 3: Linux system info via Bridge
-  SERIAL_OUT.println(F("3. Linux Info"));
-  {
-    Process p;
-    p.runShellCommand(
-      "echo \"  Kernel: $(uname -r)\";"
-      "echo \"  Up: $(uptime -s 2>/dev/null || uptime)\";"
-      "free -k 2>/dev/null | awk '/Mem:/{print \"  Mem: \"$3\"/\"$2\" KB used\"}'"
-    );
-    while (p.running());
-    while (p.available()) {
-      SERIAL_OUT.write(p.read());
-    }
-    SERIAL_OUT.println();
-  }
-  SERIAL_OUT.println();
-
-  // Test 4: WLAN (WiFi) benchmark via Linux
-  // Single compound command to minimize flash usage on ATmega32U4
-  SERIAL_OUT.println(F("4. WLAN Benchmark (WiFi via Linux)"));
-  {
-    Process p;
-    unsigned long start = micros();
-    p.runShellCommand(
-      "echo \"  MAC: $(cat /sys/class/net/wlan0/address 2>/dev/null)\";"
-      "iwconfig wlan0 2>/dev/null | awk '/ESSID/{print \"  \"$0}; /Bit Rate/{print \"  \"$0}; /Link Quality/{print \"  \"$0}';"
-      "N=$(iwlist wlan0 scan 2>/dev/null | grep -c ESSID:); echo \"  Networks found: $N\";"
-      "iwlist wlan0 scan 2>/dev/null | awk '/ESSID:/{e=$0} /Signal level/{print $0\" \"e}' | sort -rn | head -3 | nl -w2 -s': '"
-    );
-    while (p.running());
-    unsigned long elapsed = micros() - start;
-    while (p.available()) {
-      SERIAL_OUT.write(p.read());
-    }
-    SERIAL_OUT.println();
-    SERIAL_OUT.print(F("  Scan time: "));
-    SERIAL_OUT.print(elapsed);
-    SERIAL_OUT.println(F(" us"));
-  }
-  SERIAL_OUT.println();
-
-  // Test 5: WAN (Ethernet) benchmark via Linux
-  SERIAL_OUT.println(F("5. WAN Benchmark (Ethernet via Linux)"));
-  {
-    Process p;
-    p.runShellCommand(
-      "echo \"  Link: $(cat /sys/class/net/eth0/operstate 2>/dev/null || echo 'not detected')\";"
-      "echo \"  MAC: $(cat /sys/class/net/eth0/address 2>/dev/null)\";"
-      "S=$(cat /sys/class/net/eth0/speed 2>/dev/null) && [ \"$S\" -gt 0 ] 2>/dev/null && echo \"  Speed: ${S} Mb/s\";"
-      "ifconfig eth0 2>/dev/null | awk '/inet addr/{print \"  IP:\"$2}' | sed 's/addr://';"
-      "echo \"  RX: $(cat /sys/class/net/eth0/statistics/rx_bytes 2>/dev/null) bytes\";"
-      "echo \"  TX: $(cat /sys/class/net/eth0/statistics/tx_bytes 2>/dev/null) bytes\""
-    );
-    while (p.running());
-    while (p.available()) {
-      SERIAL_OUT.write(p.read());
-    }
-    SERIAL_OUT.println();
-  }
-  SERIAL_OUT.println();
-
-  // Test 6: Process launch overhead
-  SERIAL_OUT.println(F("6. Process Launch Overhead"));
-  {
-    const int LAUNCH_RUNS = 3;
-    unsigned long totalLaunch = 0;
-
-    for (int i = 0; i < LAUNCH_RUNS; i++) {
-      Process p;
-      unsigned long start = micros();
-      p.runShellCommand("true");
-      while (p.running());
-      unsigned long elapsed = micros() - start;
-      totalLaunch += elapsed;
-
-      // Drain any output
-      while (p.available()) p.read();
-    }
-
-    SERIAL_OUT.print(F("  Avg 'true' cmd time: "));
-    SERIAL_OUT.print(totalLaunch / LAUNCH_RUNS);
-    SERIAL_OUT.println(F(" us"));
-    SERIAL_OUT.print(F("  Commands/sec: "));
-    SERIAL_OUT.println((float)LAUNCH_RUNS * 1000000.0 / (float)totalLaunch, 1);
-  }
-  SERIAL_OUT.println();
-
-  SERIAL_OUT.println(F("Bridge benchmarks complete"));
-}
-
-#endif  // HAS_YUN_BRIDGE
 
 // ==================== MULTIDUINO-SPECIFIC BENCHMARKS ====================
 
@@ -5256,7 +5077,7 @@ void printSystemInfo() {
 
 #if defined(ARDUINO_AVR_YUN)
   SERIAL_OUT.println(F_STR("Linux: AR9331 400MHz, 64MB RAM, 16MB Flash"));
-  SERIAL_OUT.println(F_STR("WiFi + Bridge + USB Host (OpenWrt)"));
+  SERIAL_OUT.println(F_STR("WiFi + USB Host (OpenWrt)"));
 #endif
 
   // RAM Info
@@ -5355,14 +5176,6 @@ void setup() {
   printDivider();
   SERIAL_OUT.println();
 
-#if defined(HAS_YUN_BRIDGE)
-  SERIAL_OUT.println(F("Initializing Yun Bridge (may take ~60s after power-on)..."));
-  SERIAL_OUT.flush();  // Force bytes out before Bridge.begin() blocks
-  Bridge.begin();
-  SERIAL_OUT.println(F("Bridge ready."));
-  SERIAL_OUT.println();
-#endif
-
   // System info
   printSystemInfo();
 
@@ -5433,10 +5246,6 @@ void setup() {
   benchmarkRTC();
 #endif
 
-  // Arduino Yun Bridge benchmarks
-#ifdef HAS_YUN_BRIDGE
-  benchmarkYunBridge();
-#endif
 
   // ========== NEW BENCHMARKS ==========
 

@@ -3601,8 +3601,9 @@ void benchmarkYunBridge() {
   printHeader("YUN BRIDGE (MCU <-> Linux)");
   SERIAL_OUT.println();
 
-  // Test 1: Simple command execution latency
+  // Test 1: Simple command execution latency (also validates Bridge)
   SERIAL_OUT.println(F("1. Command Latency"));
+  bool bridgeOk = false;
   {
     const int CMD_RUNS = 5;
     unsigned long totalCmdTime = 0;
@@ -3630,6 +3631,7 @@ void benchmarkYunBridge() {
     }
 
     if (successfulCmds > 0) {
+      bridgeOk = true;
       SERIAL_OUT.print(F("  OK: "));
       SERIAL_OUT.print(successfulCmds);
       SERIAL_OUT.print(F("/"));
@@ -3638,7 +3640,9 @@ void benchmarkYunBridge() {
       SERIAL_OUT.print(totalCmdTime / successfulCmds);
       SERIAL_OUT.println(F(" us"));
     } else {
-      SERIAL_OUT.println(F("  ERROR: Bridge not ready"));
+      SERIAL_OUT.println(F("  Linux not responding"));
+      SERIAL_OUT.println(F("  (wait ~60s after power-on)"));
+      return;
     }
   }
   SERIAL_OUT.println();
@@ -5343,11 +5347,6 @@ void setup() {
   // System info
   printSystemInfo();
 
-  // Arduino Yun Bridge benchmarks - run FIRST while RAM is least fragmented
-#ifdef HAS_YUN_BRIDGE
-  benchmarkYunBridge();
-#endif
-
   // CPU benchmarks
   benchmarkIntegerOps();
   benchmarkFloatOps();
@@ -5415,7 +5414,10 @@ void setup() {
   benchmarkRTC();
 #endif
 
-  // (Yun Bridge benchmarks run first - see above)
+  // Arduino Yun Bridge benchmarks
+#ifdef HAS_YUN_BRIDGE
+  benchmarkYunBridge();
+#endif
 
   // ========== NEW BENCHMARKS ==========
 

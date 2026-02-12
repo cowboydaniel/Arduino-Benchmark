@@ -273,6 +273,7 @@
 #define BOARD_NAME "Arduino Yun"
 #include <EEPROM.h>
 #define BOARD_AVR
+#define BOARD_SMALL_FLASH  // ATmega32U4 has only 28KB usable flash
 #define HAS_YUN_BRIDGE  // Bridge between ATmega32U4 and Linux (Atheros AR9331)
 
 // Arduino Leonardo/Micro
@@ -542,6 +543,7 @@ void calibrateBenchmarkTime() {
 
 // ==================== CPU BENCHMARKS ====================
 
+#ifndef BOARD_SMALL_FLASH
 void benchmarkCPUStress() {
   printHeader("CPU: STRESS TEST with Temperature");
 
@@ -694,6 +696,7 @@ void benchmarkCPUStress() {
     }
   }
 }
+#endif  // BOARD_SMALL_FLASH
 
 void benchmarkIntegerOps() {
   printHeader("CPU: INTEGER OPERATIONS");
@@ -912,6 +915,7 @@ void benchmarkFloatOps() {
 #endif
 }
 
+#ifndef BOARD_SMALL_FLASH
 void benchmarkStringOps() {
   printHeader("CPU: STRING OPERATIONS");
 
@@ -985,6 +989,7 @@ void benchmarkStringOps() {
   SERIAL_OUT.print(snprintfResult.opsPerMs);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
 }
+#endif  // BOARD_SMALL_FLASH
 
 // ==================== MEMORY BENCHMARKS ====================
 
@@ -2089,6 +2094,7 @@ void benchmarkFlash() {
 
 // ==================== ADVANCED MATH BENCHMARKS ====================
 
+#ifndef BOARD_SMALL_FLASH
 void benchmarkAdvancedMath() {
   printHeader("ADVANCED MATH: Transcendental Functions");
 
@@ -2175,6 +2181,7 @@ void benchmarkAdvancedMath() {
   SERIAL_OUT.print(1000.0 / fmodTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
 }
+#endif  // BOARD_SMALL_FLASH
 
 #if defined(ARDUINO_ARCH_RP2040)
 void benchmarkSHA1() {
@@ -2604,6 +2611,7 @@ void benchmarkESP32Crypto() {
 
 // ==================== TIMING PRECISION BENCHMARKS ====================
 
+#ifndef BOARD_SMALL_FLASH
 void benchmarkTimingPrecision() {
   printHeader("TIMING: millis() and micros() Precision");
 
@@ -2812,6 +2820,7 @@ void benchmarkStackDepth() {
 
   SERIAL_OUT.println(F_STR("Note: Actual stack usage varies by compiler and optimization."));
 }
+#endif  // BOARD_SMALL_FLASH
 
 // ==================== MULTI-CORE BENCHMARKS ====================
 
@@ -3706,220 +3715,46 @@ void benchmarkYunBridge() {
   SERIAL_OUT.println();
 
   // Test 4: WLAN (WiFi) benchmark via Linux
+  // Single compound command to minimize flash usage on ATmega32U4
   SERIAL_OUT.println(F("4. WLAN Benchmark (WiFi via Linux)"));
   {
-    // WiFi interface status
     Process p;
-    p.runShellCommand("iwconfig wlan0 2>/dev/null");
+    unsigned long start = micros();
+    p.runShellCommand(
+      "echo \"  MAC: $(cat /sys/class/net/wlan0/address 2>/dev/null)\";"
+      "iwconfig wlan0 2>/dev/null | awk '/ESSID/{print \"  \"$0}; /Bit Rate/{print \"  \"$0}; /Link Quality/{print \"  \"$0}';"
+      "N=$(iwlist wlan0 scan 2>/dev/null | grep -c ESSID:); echo \"  Networks found: $N\";"
+      "iwlist wlan0 scan 2>/dev/null | awk '/ESSID:/{e=$0} /Signal level/{print $0\" \"e}' | sort -rn | head -3 | nl -w2 -s': '"
+    );
     while (p.running());
-    SERIAL_OUT.println(F("  Interface: wlan0"));
-    while (p.available()) {
-      char c = p.read();
-      if (c == '\n') {
-        SERIAL_OUT.println();
-        SERIAL_OUT.print(F("  "));
-      } else {
-        SERIAL_OUT.write(c);
-      }
-    }
-    SERIAL_OUT.println();
-  }
-  {
-    // MAC address
-    Process p;
-    p.runShellCommand("cat /sys/class/net/wlan0/address 2>/dev/null");
-    while (p.running());
-    SERIAL_OUT.print(F("  MAC Address: "));
+    unsigned long elapsed = micros() - start;
     while (p.available()) {
       SERIAL_OUT.write(p.read());
     }
     SERIAL_OUT.println();
-  }
-  {
-    // WiFi network scan
-    SERIAL_OUT.print(F("  Scanning networks... "));
-    Process p;
-    unsigned long start = micros();
-    p.runShellCommand("iwlist wlan0 scan 2>/dev/null | grep -c 'ESSID:'");
-    while (p.running());
-    unsigned long elapsed = micros() - start;
-
-    String countStr = "";
-    while (p.available()) {
-      char c = p.read();
-      if (c >= '0' && c <= '9') countStr += c;
-    }
-    int netCount = countStr.toInt();
-    SERIAL_OUT.print(netCount);
-    SERIAL_OUT.println(F(" networks found"));
     SERIAL_OUT.print(F("  Scan time: "));
     SERIAL_OUT.print(elapsed);
     SERIAL_OUT.println(F(" us"));
-
-    // Show strongest networks
-    if (netCount > 0) {
-      Process p2;
-      p2.runShellCommand("iwlist wlan0 scan 2>/dev/null | awk '/ESSID:/{essid=$0} /Signal level/{print $0 \" \" essid}' | sort -rn | head -3");
-      while (p2.running());
-      SERIAL_OUT.println(F("  Strongest networks:"));
-      int idx = 1;
-      while (p2.available()) {
-        SERIAL_OUT.print(F("    "));
-        SERIAL_OUT.print(idx++);
-        SERIAL_OUT.print(F(": "));
-        while (p2.available()) {
-          char c = p2.read();
-          if (c == '\n') break;
-          SERIAL_OUT.write(c);
-        }
-        SERIAL_OUT.println();
-      }
-    }
-  }
-  {
-    // WiFi signal quality
-    Process p;
-    p.runShellCommand("cat /proc/net/wireless 2>/dev/null | tail -1");
-    while (p.running());
-    String line = "";
-    while (p.available()) {
-      char c = p.read();
-      if (c != '\n') line += c;
-    }
-    if (line.length() > 0) {
-      SERIAL_OUT.print(F("  Signal stats: "));
-      SERIAL_OUT.println(line);
-    }
-  }
-  {
-    // WiFi link speed
-    Process p;
-    p.runShellCommand("iwconfig wlan0 2>/dev/null | grep 'Bit Rate' | awk '{print $2}' | cut -d= -f2");
-    while (p.running());
-    String rate = "";
-    while (p.available()) {
-      char c = p.read();
-      if (c != '\n') rate += c;
-    }
-    if (rate.length() > 0) {
-      SERIAL_OUT.print(F("  Link speed: "));
-      SERIAL_OUT.print(rate);
-      SERIAL_OUT.println(F(" Mb/s"));
-    }
   }
   SERIAL_OUT.println();
 
   // Test 5: WAN (Ethernet) benchmark via Linux
   SERIAL_OUT.println(F("5. WAN Benchmark (Ethernet via Linux)"));
   {
-    // Check if Ethernet interface exists and is up
     Process p;
-    p.runShellCommand("cat /sys/class/net/eth0/operstate 2>/dev/null");
+    p.runShellCommand(
+      "echo \"  Link: $(cat /sys/class/net/eth0/operstate 2>/dev/null || echo 'not detected')\";"
+      "echo \"  MAC: $(cat /sys/class/net/eth0/address 2>/dev/null)\";"
+      "S=$(cat /sys/class/net/eth0/speed 2>/dev/null) && [ \"$S\" -gt 0 ] 2>/dev/null && echo \"  Speed: ${S} Mb/s\";"
+      "ifconfig eth0 2>/dev/null | awk '/inet addr/{print \"  IP:\"$2}' | sed 's/addr://';"
+      "echo \"  RX: $(cat /sys/class/net/eth0/statistics/rx_bytes 2>/dev/null) bytes\";"
+      "echo \"  TX: $(cat /sys/class/net/eth0/statistics/tx_bytes 2>/dev/null) bytes\""
+    );
     while (p.running());
-    String state = "";
-    while (p.available()) {
-      char c = p.read();
-      if (c != '\n' && c != '\r') state += c;
-    }
-
-    SERIAL_OUT.println(F("  Interface: eth0"));
-    SERIAL_OUT.print(F("  Link state: "));
-    if (state.length() > 0) {
-      SERIAL_OUT.println(state);
-    } else {
-      SERIAL_OUT.println(F("not detected"));
-    }
-  }
-  {
-    // Ethernet MAC address
-    Process p;
-    p.runShellCommand("cat /sys/class/net/eth0/address 2>/dev/null");
-    while (p.running());
-    String mac = "";
-    while (p.available()) {
-      char c = p.read();
-      if (c != '\n') mac += c;
-    }
-    if (mac.length() > 0) {
-      SERIAL_OUT.print(F("  MAC Address: "));
-      SERIAL_OUT.println(mac);
-    }
-  }
-  {
-    // Ethernet speed
-    Process p;
-    p.runShellCommand("cat /sys/class/net/eth0/speed 2>/dev/null");
-    while (p.running());
-    String speed = "";
-    while (p.available()) {
-      char c = p.read();
-      if (c != '\n') speed += c;
-    }
-    if (speed.length() > 0 && speed.toInt() > 0) {
-      SERIAL_OUT.print(F("  Link speed: "));
-      SERIAL_OUT.print(speed);
-      SERIAL_OUT.println(F(" Mb/s"));
-    }
-  }
-  {
-    // IP address on eth0
-    Process p;
-    p.runShellCommand("ifconfig eth0 2>/dev/null | grep 'inet addr' | awk '{print $2}' | cut -d: -f2");
-    while (p.running());
-    String ip = "";
-    while (p.available()) {
-      char c = p.read();
-      if (c != '\n') ip += c;
-    }
-    if (ip.length() > 0) {
-      SERIAL_OUT.print(F("  IP Address: "));
-      SERIAL_OUT.println(ip);
-    }
-  }
-  {
-    // Ethernet RX/TX stats
-    Process p;
-    p.runShellCommand("cat /sys/class/net/eth0/statistics/rx_bytes 2>/dev/null");
-    while (p.running());
-    String rxBytes = "";
-    while (p.available()) {
-      char c = p.read();
-      if (c >= '0' && c <= '9') rxBytes += c;
-    }
-
-    Process p2;
-    p2.runShellCommand("cat /sys/class/net/eth0/statistics/tx_bytes 2>/dev/null");
-    while (p2.running());
-    String txBytes = "";
-    while (p2.available()) {
-      char c = p2.read();
-      if (c >= '0' && c <= '9') txBytes += c;
-    }
-
-    if (rxBytes.length() > 0) {
-      SERIAL_OUT.print(F("  RX bytes: "));
-      SERIAL_OUT.println(rxBytes);
-      SERIAL_OUT.print(F("  TX bytes: "));
-      SERIAL_OUT.println(txBytes);
-    }
-  }
-  {
-    // Ping latency test via Ethernet (localhost only - safe)
-    SERIAL_OUT.println(F("  Loopback ping latency:"));
-    Process p;
-    unsigned long start = micros();
-    p.runShellCommand("ping -c 3 -W 1 127.0.0.1 2>/dev/null | tail -1");
-    while (p.running());
-    unsigned long elapsed = micros() - start;
-
-    SERIAL_OUT.print(F("    "));
     while (p.available()) {
       SERIAL_OUT.write(p.read());
     }
     SERIAL_OUT.println();
-    SERIAL_OUT.print(F("    Bridge overhead: "));
-    SERIAL_OUT.print(elapsed);
-    SERIAL_OUT.println(F(" us"));
   }
   SERIAL_OUT.println();
 
@@ -5155,6 +4990,7 @@ void benchmarkSPI() {
 }
 
 // Watchdog Timer Benchmark
+#ifndef BOARD_SMALL_FLASH
 void benchmarkWatchdog() {
   printHeader("SYSTEM: WATCHDOG TIMER");
 
@@ -5308,6 +5144,7 @@ void benchmarkSleepModes() {
   SERIAL_OUT.println(F_STR("Sleep mode info not available for this board"));
 #endif
 }
+#endif  // BOARD_SMALL_FLASH
 
 // ==================== SYSTEM INFO ====================
 
@@ -5538,8 +5375,10 @@ void setup() {
   // CPU benchmarks
   benchmarkIntegerOps();
   benchmarkFloatOps();
+#ifndef BOARD_SMALL_FLASH
   benchmarkStringOps();
   benchmarkCPUStress();
+#endif
 
   // Memory benchmarks
   benchmarkSRAM();
@@ -5568,9 +5407,11 @@ void setup() {
 #endif
 
   // Advanced benchmarks
+#ifndef BOARD_SMALL_FLASH
   benchmarkAdvancedMath();
   benchmarkTimingPrecision();
   benchmarkStackDepth();
+#endif
 #if defined(ARDUINO_ARCH_RP2040)
   benchmarkSHA1();
 #endif
@@ -5637,8 +5478,10 @@ void setup() {
   benchmarkPWM();
   benchmarkInterruptLatency();
   benchmarkSPI();
+#ifndef BOARD_SMALL_FLASH
   benchmarkWatchdog();
   benchmarkSleepModes();
+#endif
 
   // Final summary
   printHeader("BENCHMARK COMPLETE!");

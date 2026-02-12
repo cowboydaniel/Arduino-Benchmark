@@ -3598,14 +3598,11 @@ void benchmarkArduinoBridge() {
 #if defined(HAS_YUN_BRIDGE)
 
 void benchmarkYunBridge() {
-  printHeader("ARDUINO YUN BRIDGE (ATmega32U4 <-> Linux)");
-
-  SERIAL_OUT.println(F("Testing Bridge communication between"));
-  SERIAL_OUT.println(F("ATmega32U4 MCU and Atheros AR9331 Linux..."));
+  printHeader("YUN BRIDGE (MCU <-> Linux)");
   SERIAL_OUT.println();
 
   // Test 1: Simple command execution latency
-  SERIAL_OUT.println(F("1. Linux Command Execution Latency"));
+  SERIAL_OUT.println(F("1. Command Latency"));
   const int CMD_RUNS = 10;
   unsigned long totalCmdTime = 0;
   int successfulCmds = 0;
@@ -3640,13 +3637,12 @@ void benchmarkYunBridge() {
     SERIAL_OUT.print(totalCmdTime / successfulCmds);
     SERIAL_OUT.println(F(" us"));
   } else {
-    SERIAL_OUT.println(F("  ERROR: No successful commands"));
-    SERIAL_OUT.println(F("  Ensure Linux side has booted"));
+    SERIAL_OUT.println(F("  ERROR: Bridge not ready"));
   }
   SERIAL_OUT.println();
 
   // Test 2: Data transfer throughput (read Linux command output)
-  SERIAL_OUT.println(F("2. Bridge Data Transfer Test"));
+  SERIAL_OUT.println(F("2. Data Transfer"));
   {
     Process p;
     unsigned long start = micros();
@@ -3676,41 +3672,15 @@ void benchmarkYunBridge() {
   SERIAL_OUT.println();
 
   // Test 3: Linux system info via Bridge
-  SERIAL_OUT.println(F("3. Linux System Information"));
+  SERIAL_OUT.println(F("3. Linux Info"));
   {
-    // Uptime
     Process p;
-    p.runShellCommand("uptime -s 2>/dev/null || uptime");
+    p.runShellCommand(
+      "echo \"  Kernel: $(uname -r)\";"
+      "echo \"  Up: $(uptime -s 2>/dev/null || uptime)\";"
+      "free -k 2>/dev/null | awk '/Mem:/{print \"  Mem: \"$3\"/\"$2\" KB used\"}'"
+    );
     while (p.running());
-    SERIAL_OUT.print(F("  Uptime: "));
-    while (p.available()) {
-      SERIAL_OUT.write(p.read());
-    }
-    SERIAL_OUT.println();
-  }
-  {
-    // Free memory on Linux side
-    Process p;
-    p.runShellCommand("free -k 2>/dev/null | head -2");
-    while (p.running());
-    SERIAL_OUT.print(F("  Memory: "));
-    while (p.available()) {
-      char c = p.read();
-      if (c == '\n') {
-        SERIAL_OUT.println();
-        SERIAL_OUT.print(F("          "));
-      } else {
-        SERIAL_OUT.write(c);
-      }
-    }
-    SERIAL_OUT.println();
-  }
-  {
-    // Kernel version
-    Process p;
-    p.runShellCommand("uname -r");
-    while (p.running());
-    SERIAL_OUT.print(F("  Kernel: "));
     while (p.available()) {
       SERIAL_OUT.write(p.read());
     }
@@ -5281,11 +5251,8 @@ void printSystemInfo() {
 #endif
 
 #if defined(ARDUINO_AVR_YUN)
-  SERIAL_OUT.println(F_STR("Linux SoC: Atheros AR9331 (MIPS 24K, 400 MHz)"));
-  SERIAL_OUT.println(F_STR("Linux OS: OpenWrt (Linino)"));
-  SERIAL_OUT.println(F_STR("Linux RAM: 64 MB DDR2"));
-  SERIAL_OUT.println(F_STR("Linux Flash: 16 MB"));
-  SERIAL_OUT.println(F_STR("Features: WiFi (via Linux), Bridge, USB Host"));
+  SERIAL_OUT.println(F_STR("Linux: AR9331 400MHz, 64MB RAM, 16MB Flash"));
+  SERIAL_OUT.println(F_STR("WiFi + Bridge + USB Host (OpenWrt)"));
 #endif
 
   // RAM Info

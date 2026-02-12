@@ -3603,51 +3603,52 @@ void benchmarkYunBridge() {
 
   // Test 1: Simple command execution latency
   SERIAL_OUT.println(F("1. Command Latency"));
-  const int CMD_RUNS = 10;
-  unsigned long totalCmdTime = 0;
-  int successfulCmds = 0;
+  {
+    const int CMD_RUNS = 5;
+    unsigned long totalCmdTime = 0;
+    int successfulCmds = 0;
 
-  for (int i = 0; i < CMD_RUNS; i++) {
-    Process p;
-    unsigned long start = micros();
-    p.runShellCommand("echo ok");
-    while (p.running());  // Wait for completion
-    unsigned long elapsed = micros() - start;
+    for (int i = 0; i < CMD_RUNS; i++) {
+      Process p;
+      unsigned long start = micros();
+      p.runShellCommand("echo ok");
+      while (p.running());
+      unsigned long elapsed = micros() - start;
 
-    // Read output to confirm success
-    String output = "";
-    while (p.available()) {
-      char c = p.read();
-      output += c;
+      // Verify output without String allocation
+      char buf[4] = {0};
+      byte idx = 0;
+      while (p.available() && idx < 3) {
+        buf[idx++] = p.read();
+      }
+      while (p.available()) p.read();  // drain
+
+      if (buf[0] == 'o' && buf[1] == 'k') {
+        totalCmdTime += elapsed;
+        successfulCmds++;
+      }
     }
-    output.trim();
 
-    if (output == "ok") {
-      totalCmdTime += elapsed;
-      successfulCmds++;
+    if (successfulCmds > 0) {
+      SERIAL_OUT.print(F("  OK: "));
+      SERIAL_OUT.print(successfulCmds);
+      SERIAL_OUT.print(F("/"));
+      SERIAL_OUT.println(CMD_RUNS);
+      SERIAL_OUT.print(F("  Avg: "));
+      SERIAL_OUT.print(totalCmdTime / successfulCmds);
+      SERIAL_OUT.println(F(" us"));
+    } else {
+      SERIAL_OUT.println(F("  ERROR: Bridge not ready"));
     }
-  }
-
-  if (successfulCmds > 0) {
-    SERIAL_OUT.print(F("  Successful: "));
-    SERIAL_OUT.print(successfulCmds);
-    SERIAL_OUT.print(F("/"));
-    SERIAL_OUT.println(CMD_RUNS);
-    SERIAL_OUT.print(F("  Avg latency: "));
-    SERIAL_OUT.print(totalCmdTime / successfulCmds);
-    SERIAL_OUT.println(F(" us"));
-  } else {
-    SERIAL_OUT.println(F("  ERROR: Bridge not ready"));
   }
   SERIAL_OUT.println();
 
-  // Test 2: Data transfer throughput (read Linux command output)
+  // Test 2: Data transfer throughput
   SERIAL_OUT.println(F("2. Data Transfer"));
   {
     Process p;
     unsigned long start = micros();
-    // Generate known amount of data from Linux side
-    p.runShellCommand("dd if=/dev/zero bs=1 count=256 2>/dev/null | od -A x -t x1 -v");
+    p.runShellCommand("cat /proc/version");
     while (p.running());
     unsigned long elapsed = micros() - start;
 
@@ -3657,16 +3658,15 @@ void benchmarkYunBridge() {
       bytesRead++;
     }
 
-    SERIAL_OUT.print(F("  Bytes received: "));
-    SERIAL_OUT.println(bytesRead);
-    SERIAL_OUT.print(F("  Transfer time: "));
+    SERIAL_OUT.print(F("  Bytes: "));
+    SERIAL_OUT.print(bytesRead);
+    SERIAL_OUT.print(F("  Time: "));
     SERIAL_OUT.print(elapsed);
     SERIAL_OUT.println(F(" us"));
     if (elapsed > 0 && bytesRead > 0) {
-      float bytesPerSec = (float)bytesRead * 1000000.0 / (float)elapsed;
       SERIAL_OUT.print(F("  Throughput: "));
-      SERIAL_OUT.print(bytesPerSec, 0);
-      SERIAL_OUT.println(F(" bytes/sec"));
+      SERIAL_OUT.print((float)bytesRead * 1000000.0 / (float)elapsed, 0);
+      SERIAL_OUT.println(F(" B/s"));
     }
   }
   SERIAL_OUT.println();
@@ -3735,7 +3735,7 @@ void benchmarkYunBridge() {
   // Test 6: Process launch overhead
   SERIAL_OUT.println(F("6. Process Launch Overhead"));
   {
-    const int LAUNCH_RUNS = 5;
+    const int LAUNCH_RUNS = 3;
     unsigned long totalLaunch = 0;
 
     for (int i = 0; i < LAUNCH_RUNS; i++) {
@@ -3758,7 +3758,7 @@ void benchmarkYunBridge() {
   }
   SERIAL_OUT.println();
 
-  SERIAL_OUT.println(F("Arduino Yun Bridge benchmarks complete"));
+  SERIAL_OUT.println(F("Bridge benchmarks complete"));
 }
 
 #endif  // HAS_YUN_BRIDGE
@@ -5343,6 +5343,11 @@ void setup() {
   // System info
   printSystemInfo();
 
+  // Arduino Yun Bridge benchmarks - run FIRST while RAM is least fragmented
+#ifdef HAS_YUN_BRIDGE
+  benchmarkYunBridge();
+#endif
+
   // CPU benchmarks
   benchmarkIntegerOps();
   benchmarkFloatOps();
@@ -5410,10 +5415,7 @@ void setup() {
   benchmarkRTC();
 #endif
 
-  // Arduino Yun Bridge benchmarks
-#ifdef HAS_YUN_BRIDGE
-  benchmarkYunBridge();
-#endif
+  // (Yun Bridge benchmarks run first - see above)
 
   // ========== NEW BENCHMARKS ==========
 

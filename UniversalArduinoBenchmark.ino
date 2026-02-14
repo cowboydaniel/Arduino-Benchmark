@@ -323,7 +323,6 @@
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/drivers/watchdog.h>
 #include <zephyr/drivers/flash.h>
-#include <zephyr/kernel.h>
 
 // STM32 Family (Blue Pill, Black Pill, Nucleo)
 #elif defined(ARDUINO_ARCH_STM32)
@@ -2976,16 +2975,12 @@ static size_t getStackBudget(uintptr_t callerFrame) {
                                       : (uintptr_t)__brkval;
   return (callerFrame > heapTop) ? (size_t)(callerFrame - heapTop) : 256;
 #elif defined(__ZEPHYR__)
-  // Zephyr RTOS: the thread stack is a fixed-size region, NOT the heap.
-  // k_thread_stack_space_get() returns the remaining unused stack bytes
-  // for the current thread.
+  // Zephyr RTOS: the thread stack is a fixed-size region separate from
+  // the heap.  The kernel thread APIs (k_current_get, etc.) are not
+  // available inside Arduino LLEXT sketches, so we use a conservative
+  // fixed estimate.  The default Arduino-on-Zephyr main thread stack is
+  // typically 8-16 KB; use 4 KB to stay well within bounds.
   (void)callerFrame;
-  size_t free_stack = 0;
-  int rc = k_thread_stack_space_get(k_current_get(), &free_stack);
-  if (rc == 0 && free_stack > 512) {
-    return free_stack;
-  }
-  // Fallback: conservative fixed estimate for typical Arduino-on-Zephyr
   return 4096;
 #elif defined(ARDUINO_SAM_DUE) || defined(ARDUINO_ARCH_RP2040)     \
    || defined(BOARD_STM32U5) || defined(BOARD_SAMD)                 \

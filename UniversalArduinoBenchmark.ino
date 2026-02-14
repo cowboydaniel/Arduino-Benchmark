@@ -551,7 +551,7 @@ void benchmarkCPUStress() {
   hasTempSensor = true;
 #elif defined(ARDUINO_ARCH_RP2040)
   hasTempSensor = true;
-#elif defined(ARDUINO_UNO_Q) && DT_HAS_COMPAT_STATUS_OKAY(st_stm32_temp_cal)
+#elif defined(ARDUINO_UNO_Q) && defined(CONFIG_SENSOR)
   // STM32U585 die temperature via Zephyr sensor API
   const struct device *tempDev = DEVICE_DT_GET(DT_INST(0, st_stm32_temp_cal));
   if (device_is_ready(tempDev)) {
@@ -579,7 +579,7 @@ void benchmarkCPUStress() {
   SERIAL_OUT.print(F_STR("Start Temperature: "));
   SERIAL_OUT.print(startTemp);
   SERIAL_OUT.println(F_STR(" °C"));
-#elif defined(ARDUINO_UNO_Q) && DT_HAS_COMPAT_STATUS_OKAY(st_stm32_temp_cal)
+#elif defined(ARDUINO_UNO_Q) && defined(CONFIG_SENSOR)
   if (hasTempSensor) {
     struct sensor_value val;
     sensor_sample_fetch(tempDev);
@@ -685,7 +685,7 @@ void benchmarkCPUStress() {
     endTemp = temperatureRead();
 #elif defined(ARDUINO_ARCH_RP2040)
     endTemp = analogReadTemp(3.3f);
-#elif defined(ARDUINO_UNO_Q) && DT_HAS_COMPAT_STATUS_OKAY(st_stm32_temp_cal)
+#elif defined(ARDUINO_UNO_Q) && defined(CONFIG_SENSOR)
     {
       struct sensor_value val;
       sensor_sample_fetch(tempDev);
@@ -2109,7 +2109,7 @@ void benchmarkFlash() {
   SERIAL_OUT.print(flashSizeKB);
   SERIAL_OUT.println(F_STR(" KB"));
 
-#if DT_HAS_CHOSEN(zephyr_flash_controller)
+#if defined(CONFIG_FLASH)
   // Also try Zephyr flash API for page geometry
   const struct device *flashDev = DEVICE_DT_GET(DT_CHOSEN(zephyr_flash_controller));
   if (device_is_ready(flashDev)) {
@@ -5010,7 +5010,7 @@ void benchmarkWatchdog() {
   SERIAL_OUT.println(F_STR("  WWDG: Window watchdog (APB-clocked)"));
   SERIAL_OUT.println();
 
-#if DT_HAS_COMPAT_STATUS_OKAY(st_stm32_watchdog)
+#if defined(CONFIG_WATCHDOG)
   const struct device *wdtDev = DEVICE_DT_GET(DT_INST(0, st_stm32_watchdog));
   if (device_is_ready(wdtDev)) {
     SERIAL_OUT.println(F_STR("IWDG device ready"));

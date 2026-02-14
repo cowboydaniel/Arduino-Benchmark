@@ -2725,6 +2725,29 @@ void benchmarkTimingPrecision() {
 void benchmarkDelayTiming() {
   printHeader("TIMING: delay() and delayMicroseconds() Accuracy");
 
+  // Measure micros() call overhead so we can subtract it.
+  // Take median of 15 back-to-back reads to get a stable baseline.
+  long overheadSamples[15];
+  for (uint8_t i = 0; i < 15; i++) {
+    unsigned long a = micros();
+    unsigned long b = micros();
+    overheadSamples[i] = (long)(b - a);
+  }
+  for (uint8_t i = 1; i < 15; i++) {
+    long key = overheadSamples[i];
+    int8_t j = i - 1;
+    while (j >= 0 && overheadSamples[j] > key) {
+      overheadSamples[j + 1] = overheadSamples[j];
+      j--;
+    }
+    overheadSamples[j + 1] = key;
+  }
+  long overhead = overheadSamples[7];  // median
+
+  SERIAL_OUT.print(F_STR("micros() call overhead: "));
+  SERIAL_OUT.print(overhead);
+  SERIAL_OUT.println(F_STR(" us"));
+
   // --- delay() accuracy: test delay(0) .. delay(50) ---
   long delayErrorSum = 0;
   long delayMaxError = 0;
@@ -2734,10 +2757,11 @@ void benchmarkDelayTiming() {
     unsigned long t1 = micros();
     delay(ms);
     unsigned long t2 = micros();
-    long actual = (long)(t2 - t1);
+    long actual = (long)(t2 - t1) - overhead;
+    if (actual < 0) actual = 0;
     long expected = (long)ms * 1000L;
-    long absErr = actual - expected;
-    if (absErr < 0) absErr = -absErr;
+    long err = actual - expected;
+    long absErr = err < 0 ? -err : err;
     delayErrorSum += absErr;
     if (absErr > delayMaxError) delayMaxError = absErr;
 
@@ -2768,7 +2792,8 @@ void benchmarkDelayTiming() {
       unsigned long t1 = micros();
       delayMicroseconds(us);
       unsigned long t2 = micros();
-      measurements[trial] = (long)(t2 - t1);
+      long m = (long)(t2 - t1) - overhead;
+      measurements[trial] = m > 0 ? m : 0;
     }
     // Simple insertion sort for 5 elements
     for (uint8_t i = 1; i < 5; i++) {
@@ -2781,8 +2806,8 @@ void benchmarkDelayTiming() {
       measurements[j + 1] = key;
     }
     long actual = measurements[2];  // median
-    long absErr = actual - (long)us;
-    if (absErr < 0) absErr = -absErr;
+    long err = actual - (long)us;
+    long absErr = err < 0 ? -err : err;
     dusErrorSum += absErr;
     if (absErr > dusMaxError) dusMaxError = absErr;
 

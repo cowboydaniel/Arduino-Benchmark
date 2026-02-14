@@ -405,6 +405,9 @@
 
 #include "BenchmarkHelpers.h"
 #include <SPI.h>
+#if !defined(ARDUINO_UNO_Q)
+#include <Wire.h>
+#endif
 
 #if defined(ESP32)
 #include <HEXBuilder.h>
@@ -700,6 +703,16 @@ void benchmarkFloatOps() {
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println(fresult);
 
+  // Float division
+  fresult = 1000000.0f;
+  startBenchmark();
+  for (uint32_t i = 0; i < BENCHMARK_ITERATIONS / 10; i++) {
+    fresult /= 1.0001f;
+  }
+  unsigned long fdivTime = endBenchmark();
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println(fresult);
+
 #if !defined(ARDUINO_UNO_Q) && !defined(ARDUINO_UNO_Q_MCU)
   // Sqrt - accumulate to prevent optimization (skipped on Uno Q - no libm)
   fresult = 0.0f;
@@ -738,6 +751,14 @@ void benchmarkFloatOps() {
   SERIAL_OUT.print((float)(BENCHMARK_ITERATIONS / 10) / fmulTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
 
+  SERIAL_OUT.print(F_STR("Float Division ("));
+  SERIAL_OUT.print(BENCHMARK_ITERATIONS / 10);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(fdivTime);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print((float)(BENCHMARK_ITERATIONS / 10) / fdivTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
 #if !defined(ARDUINO_UNO_Q) && !defined(ARDUINO_UNO_Q_MCU)
   SERIAL_OUT.print(F_STR("Square Root ("));
   SERIAL_OUT.print(sqrtResult.totalOps);
@@ -756,6 +777,91 @@ void benchmarkFloatOps() {
   SERIAL_OUT.println(F_STR(" ops/ms)"));
 #else
   SERIAL_OUT.println(F_STR("Sqrt/Sin/Cos: Skipped (Uno Q - no libm)"));
+#endif
+
+  SERIAL_OUT.println();
+  SERIAL_OUT.print(F_STR("sizeof(float):  "));
+  SERIAL_OUT.println(sizeof(float));
+  SERIAL_OUT.print(F_STR("sizeof(double): "));
+  SERIAL_OUT.println(sizeof(double));
+
+#if !defined(ARDUINO_UNO_Q) && !defined(ARDUINO_UNO_Q_MCU) && defined(__SIZEOF_DOUBLE__) && __SIZEOF_DOUBLE__ >= 8
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("8-byte double detected - double precision tests:"));
+
+  // Double multiplication
+  volatile double dresult = 1.0;
+  startBenchmark();
+  for (uint32_t i = 0; i < BENCHMARK_ITERATIONS / 10; i++) {
+    dresult *= 1.0001;
+  }
+  unsigned long dmulTime = endBenchmark();
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println((float)dresult);
+
+  // Double division
+  dresult = 1000000.0;
+  startBenchmark();
+  for (uint32_t i = 0; i < BENCHMARK_ITERATIONS / 10; i++) {
+    dresult /= 1.0001;
+  }
+  unsigned long ddivTime = endBenchmark();
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println((float)dresult);
+
+  // Double sqrt
+  dresult = 0.0;
+  TimedLoopResult dsqrtResult = runTimedLoop(minDurationMs, 100, [&]() {
+    for (uint32_t i = 0; i < 100; i++) {
+      dresult += sqrt((double)i);
+    }
+  });
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println((float)dresult);
+
+  // Double sin/cos
+  dresult = 0.0;
+  TimedLoopResult dtrigResult = runTimedLoop(minDurationMs, 100, [&]() {
+    for (uint32_t i = 0; i < 100; i++) {
+      dresult += sin((double)i / 100.0) + cos((double)i / 100.0);
+    }
+  });
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println((float)dresult);
+
+  SERIAL_OUT.print(F_STR("Double Multiply ("));
+  SERIAL_OUT.print(BENCHMARK_ITERATIONS / 10);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(dmulTime);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print((float)(BENCHMARK_ITERATIONS / 10) / dmulTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
+  SERIAL_OUT.print(F_STR("Double Division ("));
+  SERIAL_OUT.print(BENCHMARK_ITERATIONS / 10);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(ddivTime);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print((float)(BENCHMARK_ITERATIONS / 10) / ddivTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
+  SERIAL_OUT.print(F_STR("Double Sqrt ("));
+  SERIAL_OUT.print(dsqrtResult.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(dsqrtResult.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(dsqrtResult.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
+  SERIAL_OUT.print(F_STR("Double Sin/Cos ("));
+  SERIAL_OUT.print(dtrigResult.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(dtrigResult.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(dtrigResult.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+#elif !defined(ARDUINO_UNO_Q) && !defined(ARDUINO_UNO_Q_MCU)
+  SERIAL_OUT.println(F_STR("4-byte double (same as float) - double tests skipped"));
 #endif
 }
 
@@ -1962,8 +2068,6 @@ void benchmarkSPI() {
 
   SPI.end();
 }
-
-// Watchdog Timer Benchmark
 // ==================== SYSTEM INFO ====================
 
 void printSystemInfo() {
@@ -2168,13 +2272,6 @@ void setup() {
   delay(3000);  // ESP32 needs extra time for serial initialization
 #else
   SERIAL_OUT.begin(SERIAL_BAUD);
-  // ATmega32U4 boards (Yun, Leonardo, Micro) and other native USB boards
-  // have a virtual USB CDC serial port that doesn't exist until the host
-  // USB connection is negotiated. Without this wait, all Serial output is
-  // lost because the port isn't ready yet. A fixed delay() is insufficient
-  // because USB enumeration timing varies. The while(!Serial) loop blocks
-  // until the port is actually connected. Timeout after 10s so the sketch
-  // can still run standalone (without Serial Monitor) if needed.
 #if defined(USBCON)
   {
     unsigned long waitStart = millis();

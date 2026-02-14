@@ -394,6 +394,15 @@
 #define BOARD_NAME "Unknown Arduino-Compatible"
 #endif
 
+// Auto-detect small-flash AVR boards (<=32KB flash).
+// Mega/ADK (256KB), INK4u (128KB), and MegaCoreX (48KB+) are excluded.
+#if defined(BOARD_AVR) && !defined(BOARD_SMALL_FLASH) \
+    && !defined(ARDUINO_AVR_MEGA2560) && !defined(ARDUINO_AVR_ADK) \
+    && !defined(ARDUINO_AVR_INK4U) && !defined(__AVR_AVR128DA28__) \
+    && !defined(__AVR_ATmegax09__)
+#define BOARD_SMALL_FLASH
+#endif
+
 // ==================== CONFIGURATION ====================
 #define BENCHMARK_ITERATIONS 10000
 #define MEMORY_TEST_SIZE 1024

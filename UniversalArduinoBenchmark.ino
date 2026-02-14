@@ -269,10 +269,12 @@
 #define BOARD_FLASH_KB 48  // Varies by variant
 
 // Arduino Yun (ATmega32U4 + Atheros AR9331 Linux)
+// Bootloader uses 4KB, leaving only 28672 bytes for the sketch.
 #elif defined(ARDUINO_AVR_YUN)
 #define BOARD_NAME "Arduino Yun"
 #include <EEPROM.h>
 #define BOARD_AVR
+#define BOARD_SMALL_FLASH
 
 // Arduino Leonardo/Micro
 #elif defined(ARDUINO_AVR_LEONARDO)
@@ -392,15 +394,6 @@
 // Unknown/Generic
 #else
 #define BOARD_NAME "Unknown Arduino-Compatible"
-#endif
-
-// Auto-detect small-flash AVR boards (<=32KB flash).
-// Mega/ADK (256KB), INK4u (128KB), and MegaCoreX (48KB+) are excluded.
-#if defined(BOARD_AVR) && !defined(BOARD_SMALL_FLASH) \
-    && !defined(ARDUINO_AVR_MEGA2560) && !defined(ARDUINO_AVR_ADK) \
-    && !defined(ARDUINO_AVR_INK4U) && !defined(__AVR_AVR128DA28__) \
-    && !defined(__AVR_ATmegax09__)
-#define BOARD_SMALL_FLASH
 #endif
 
 // ==================== CONFIGURATION ====================

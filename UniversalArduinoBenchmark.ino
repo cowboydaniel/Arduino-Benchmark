@@ -2891,6 +2891,7 @@ void benchmarkDelayTiming() {
 
 volatile int recursionCounter = 0;
 
+// Timed recursion function - frame layout intentionally matches the probe
 int testRecursion(int depth) {
   recursionCounter++;
   volatile char buffer[32];  // Consume stack space
@@ -2903,64 +2904,185 @@ int testRecursion(int depth) {
   return 1;
 }
 
+// --- Phase 1 helpers: discover the actual stack limit ---
+
+volatile int probeReachedDepth = 0;
+volatile size_t probeFrameBytes = 0;
+volatile size_t probeTotalUsed = 0;
+
+// Recurse until we'd exceed the stack budget.  Same frame layout as
+// testRecursion() so the per-frame cost is representative.
+int probeStackLimit(int depth, uintptr_t stackBase, size_t stackBudget) {
+  volatile char marker;
+  volatile char buffer[32];
+  buffer[0] = (char)depth;
+  buffer[1] = (char)(depth >> 1);
+
+  uintptr_t here = (uintptr_t)&marker;
+  size_t consumed = (stackBase > here) ? (stackBase - here)
+                                       : (here - stackBase);
+
+  probeReachedDepth = depth;
+  probeTotalUsed    = consumed;
+
+  // Compute running average of per-frame cost once we have enough data
+  size_t frameEst;
+  if (depth >= 2) {
+    frameEst = consumed / (size_t)depth;
+    probeFrameBytes = frameEst;
+  } else {
+    frameEst = 80;  // conservative first-pass guess
+  }
+  if (frameEst < 16) frameEst = 16;
+
+  // Stop if the next frame + 512-byte safety margin would blow the budget.
+  // The margin covers interrupt handlers, unwinding, and Serial I/O after
+  // we return.
+  if (consumed + frameEst + 512 > stackBudget) {
+    return 1;
+  }
+
+  return probeStackLimit(depth + 1, stackBase, stackBudget) + (buffer[0] & 1);
+}
+
+// Platform-specific: how many bytes of stack can we still use?
+// Called from benchmarkStackDepth() with &stackBase on the caller's frame.
+static size_t getStackBudget(uintptr_t callerFrame) {
+#if defined(ESP32)
+  // Arduino loop() runs inside a FreeRTOS task whose stack is a fixed
+  // heap allocation (default 8 KB on most ESP32 variants).
+  // uxTaskGetStackHighWaterMark() returns the *minimum* free stack (bytes)
+  // that has ever existed since the task was created -- a safe lower bound
+  // for what we can still use right now.
+  size_t budget = (size_t)uxTaskGetStackHighWaterMark(NULL);
+  if (budget < 1024) budget = 1024;      // floor: always try at least 1 KB
+  return budget;
+#elif defined(ESP8266)
+  // ESP8266 continuation stack is about 4 KB; cont_get_free_stack() is not
+  // always exposed, so use a conservative fixed estimate.
+  (void)callerFrame;
+  return 2048;
+#elif defined(__AVR__)
+  extern int __heap_start, *__brkval;
+  uintptr_t heapTop = (__brkval == 0) ? (uintptr_t)&__heap_start
+                                      : (uintptr_t)__brkval;
+  return (callerFrame > heapTop) ? (size_t)(callerFrame - heapTop) : 256;
+#elif defined(ARDUINO_SAM_DUE)
+  extern "C" char *sbrk(int i);
+  uintptr_t heapTop = (uintptr_t)sbrk(0);
+  return (callerFrame > heapTop) ? (size_t)(callerFrame - heapTop) : 256;
+#elif defined(ARDUINO_ARCH_RP2040) || defined(BOARD_STM32U5)        \
+   || defined(BOARD_SAMD) || defined(BOARD_NRF52)                   \
+   || defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
+  // ARM Cortex boards with newlib — sbrk(0) gives the heap break
+  extern "C" char *sbrk(int i);
+  uintptr_t heapTop = (uintptr_t)sbrk(0);
+  return (callerFrame > heapTop) ? (size_t)(callerFrame - heapTop) : 256;
+#else
+  // Unknown platform: probe with malloc to estimate free memory,
+  // then assume roughly half is usable as stack.
+  (void)callerFrame;
+  size_t low = 0, high = 1024;
+  while (true) {
+    void *p = malloc(high);
+    if (p) { free(p); low = high; if (high > (SIZE_MAX / 2)) break; high *= 2; }
+    else break;
+  }
+  size_t left = low, right = high;
+  while (left + 1 < right) {
+    size_t mid = left + (right - left) / 2;
+    void *p = malloc(mid);
+    if (p) { free(p); left = mid; } else { right = mid; }
+  }
+  return left / 2;
+#endif
+}
+
 void benchmarkStackDepth() {
   printHeader("MEMORY: Stack Depth Test");
 
-  // Scale test depth based on available RAM to avoid overflow
-  int testDepth;
+  // ---- Phase 1: discover the maximum safe recursion depth ----
+  SERIAL_OUT.println(F_STR("Probing stack limit..."));
 
-#if defined(BOARD_STM32U5)
-  testDepth = 500;  // 786 KB RAM - can go deep
-  SERIAL_OUT.println(F_STR("Testing deep recursion (786 KB SRAM)"));
-#elif defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6)
-  testDepth = 50;  // C3/C6 have very limited task stack
-  SERIAL_OUT.println(F_STR("Testing shallow recursion (ESP32-C3/C6)"));
-#elif defined(CONFIG_IDF_TARGET_ESP32S3)
-  testDepth = 80;  // S3 has more stack
-  SERIAL_OUT.println(F_STR("Testing moderate recursion (ESP32-S3)"));
-#elif defined(ESP32)
-  testDepth = 60;  // Classic ESP32 - limited task stack
-  SERIAL_OUT.println(F_STR("Testing moderate recursion (ESP32)"));
-#elif defined(ARDUINO_ARCH_RP2040)
-  testDepth = 300;  // 264 KB RAM
-  SERIAL_OUT.println(F_STR("Testing deep recursion (264 KB RAM)"));
-#elif defined(ARDUINO_SAM_DUE)
-  testDepth = 200;       // 96 KB RAM
-  SERIAL_OUT.println(F_STR("Testing moderate recursion (96 KB RAM)"));
-#elif defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
-  testDepth = 100;        // 32 KB RAM - be conservative
-  SERIAL_OUT.println(F_STR("Testing moderate recursion (32 KB RAM)"));
-#elif defined(BOARD_SAMD) || defined(BOARD_NRF52)
-  testDepth = 100;  // Typically 32-256 KB
-  SERIAL_OUT.println(F_STR("Testing moderate recursion (ARM)"));
-#elif defined(__AVR_ATmega2560__)
-  testDepth = 40;
-#elif defined(__AVR__)
-  testDepth = 20;
-#else
-  testDepth = 50;
-#endif
+  volatile char stackAnchor;
+  uintptr_t baseAddr    = (uintptr_t)&stackAnchor;
+  size_t    stackBudget = getStackBudget(baseAddr);
 
-  // Test safe recursion depth
-  recursionCounter = 0;
-  int result = testRecursion(testDepth);
-  (void)result;
+  SERIAL_OUT.print(F_STR("Stack budget: "));
+  SERIAL_OUT.print((unsigned long)stackBudget);
+  SERIAL_OUT.println(F_STR(" bytes"));
 
-  SERIAL_OUT.print(F_STR("Depth "));
-  SERIAL_OUT.print(testDepth);
-  SERIAL_OUT.print(F_STR(": "));
-  if (recursionCounter == testDepth + 1) {
-    SERIAL_OUT.println(F_STR("PASS"));
-  } else {
-    SERIAL_OUT.print(F_STR("FAIL @ "));
-    SERIAL_OUT.println(recursionCounter);
+  probeReachedDepth = 0;
+  probeFrameBytes   = 0;
+  probeTotalUsed    = 0;
+  int probeResult = probeStackLimit(0, baseAddr, stackBudget);
+  (void)probeResult;
+
+  int maxDepth       = probeReachedDepth;
+  size_t frameBytes  = (size_t)probeFrameBytes;
+  size_t totalUsed   = (size_t)probeTotalUsed;
+
+  SERIAL_OUT.print(F_STR("Max safe depth: "));
+  SERIAL_OUT.println(maxDepth);
+  SERIAL_OUT.print(F_STR("Per-frame cost: "));
+  SERIAL_OUT.print((unsigned long)frameBytes);
+  SERIAL_OUT.println(F_STR(" bytes"));
+  SERIAL_OUT.print(F_STR("Stack used:     "));
+  SERIAL_OUT.print((unsigned long)totalUsed);
+  SERIAL_OUT.print(F_STR(" / "));
+  SERIAL_OUT.print((unsigned long)stackBudget);
+  SERIAL_OUT.println(F_STR(" bytes"));
+
+  if (maxDepth < 2) {
+    SERIAL_OUT.println(F_STR("Stack too small to time - skipping"));
+    return;
   }
 
-#if defined(BOARD_STM32U5) || defined(CONFIG_IDF_TARGET_ESP32S3) || defined(ARDUINO_ARCH_RP2040)
-  SERIAL_OUT.print(F_STR("Est. stack: ~"));
-  SERIAL_OUT.print(testDepth * 40);
-  SERIAL_OUT.println(F_STR(" bytes"));
-#endif
+  // ---- Phase 2: time recursion at 90 % of the discovered limit ----
+  int timedDepth = (maxDepth * 9) / 10;
+  if (timedDepth < 1) timedDepth = 1;
+
+  SERIAL_OUT.print(F_STR("Timing at depth "));
+  SERIAL_OUT.print(timedDepth);
+  SERIAL_OUT.println(F_STR("..."));
+
+  // Warm-up pass (also validates the depth is safe)
+  recursionCounter = 0;
+  int warmup = testRecursion(timedDepth);
+  (void)warmup;
+
+  if (recursionCounter != timedDepth + 1) {
+    SERIAL_OUT.print(F_STR("FAIL during warm-up @ depth "));
+    SERIAL_OUT.println(recursionCounter);
+    return;
+  }
+
+  // Median of kJitterTrials timed runs
+  MedianCollector<float, kJitterTrials> usMedian = {};
+  for (uint8_t trial = 0; trial < kJitterTrials; trial++) {
+    recursionCounter = 0;
+    unsigned long t0 = micros();
+    int r = testRecursion(timedDepth);
+    unsigned long t1 = micros();
+    (void)r;
+    if (recursionCounter == timedDepth + 1) {
+      usMedian.add((float)(t1 - t0));
+    }
+  }
+
+  float medianUs = usMedian.median();
+  SERIAL_OUT.print(F_STR("Recursion ("));
+  SERIAL_OUT.print(timedDepth);
+  SERIAL_OUT.print(F_STR(" deep): "));
+  SERIAL_OUT.print(medianUs, 1);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  if (medianUs > 0.0f) {
+    float usPerLevel = medianUs / (float)timedDepth;
+    SERIAL_OUT.print(F_STR("Per level: "));
+    SERIAL_OUT.print(usPerLevel, 2);
+    SERIAL_OUT.println(F_STR(" us"));
+  }
 }
 #endif  // BOARD_SMALL_FLASH
 

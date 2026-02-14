@@ -2948,7 +2948,7 @@ int probeStackLimit(int depth, uintptr_t stackBase, size_t stackBudget) {
 // Forward-declare sbrk at file scope (extern "C" is not allowed inside
 // a function body in C++).  Guarded so it only appears on platforms that
 // actually provide it via newlib / picolibc.
-#if !defined(ESP32) && !defined(ESP8266) && !defined(__AVR__)
+#if !defined(ESP32) && !defined(ESP8266) && !defined(__AVR__) && !defined(__ZEPHYR__)
 extern "C" char *sbrk(int i);
 #endif
 
@@ -2974,10 +2974,11 @@ static size_t getStackBudget(uintptr_t callerFrame) {
   uintptr_t heapTop = (__brkval == 0) ? (uintptr_t)&__heap_start
                                       : (uintptr_t)__brkval;
   return (callerFrame > heapTop) ? (size_t)(callerFrame - heapTop) : 256;
-#elif defined(ARDUINO_SAM_DUE) || defined(ARDUINO_ARCH_RP2040)      \
+#elif !defined(__ZEPHYR__)                                          \
+   && (defined(ARDUINO_SAM_DUE) || defined(ARDUINO_ARCH_RP2040)     \
    || defined(BOARD_STM32U5) || defined(BOARD_SAMD)                 \
    || defined(BOARD_NRF52)                                          \
-   || defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
+   || defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA))
   // ARM Cortex boards with newlib -- sbrk(0) gives the heap break
   uintptr_t heapTop = (uintptr_t)sbrk(0);
   return (callerFrame > heapTop) ? (size_t)(callerFrame - heapTop) : 256;

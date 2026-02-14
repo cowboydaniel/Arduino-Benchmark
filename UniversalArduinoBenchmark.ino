@@ -407,7 +407,6 @@
 #include <SPI.h>
 
 #if defined(ESP32)
-#include <HEXBuilder.h>
 #include "mbedtls/aes.h"
 #include "esp_sleep.h"
 #endif
@@ -2357,10 +2356,6 @@ void benchmarkESP32Crypto() {
     if (outCapacity < requiredSize) {
       return false;
     }
-#if defined(ESP32)
-    size_t written = HEXBuilder::bytes2hex(out, outCapacity, data, len);
-    return written >= requiredSize;
-#else
     static const char kHexChars[] = "0123456789abcdef";
     for (size_t i = 0; i < len; ++i) {
       const uint8_t byteValue = data[i];
@@ -2369,7 +2364,6 @@ void benchmarkESP32Crypto() {
     }
     out[len * 2] = '\0';
     return true;
-#endif
   };
 
   const uint32_t minDurationMs = max(5UL, (gMinBenchUs + 999UL) / 1000UL);

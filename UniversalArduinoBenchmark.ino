@@ -323,6 +323,7 @@
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/drivers/watchdog.h>
 #include <zephyr/drivers/flash.h>
+#include <zephyr/kernel.h>
 
 // STM32 Family (Blue Pill, Black Pill, Nucleo)
 #elif defined(ARDUINO_ARCH_STM32)
@@ -2974,11 +2975,22 @@ static size_t getStackBudget(uintptr_t callerFrame) {
   uintptr_t heapTop = (__brkval == 0) ? (uintptr_t)&__heap_start
                                       : (uintptr_t)__brkval;
   return (callerFrame > heapTop) ? (size_t)(callerFrame - heapTop) : 256;
-#elif !defined(__ZEPHYR__)                                          \
-   && (defined(ARDUINO_SAM_DUE) || defined(ARDUINO_ARCH_RP2040)     \
+#elif defined(__ZEPHYR__)
+  // Zephyr RTOS: the thread stack is a fixed-size region, NOT the heap.
+  // k_thread_stack_space_get() returns the remaining unused stack bytes
+  // for the current thread.
+  (void)callerFrame;
+  size_t free_stack = 0;
+  int rc = k_thread_stack_space_get(k_current_get(), &free_stack);
+  if (rc == 0 && free_stack > 512) {
+    return free_stack;
+  }
+  // Fallback: conservative fixed estimate for typical Arduino-on-Zephyr
+  return 4096;
+#elif defined(ARDUINO_SAM_DUE) || defined(ARDUINO_ARCH_RP2040)     \
    || defined(BOARD_STM32U5) || defined(BOARD_SAMD)                 \
    || defined(BOARD_NRF52)                                          \
-   || defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA))
+   || defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
   // ARM Cortex boards with newlib -- sbrk(0) gives the heap break
   uintptr_t heapTop = (uintptr_t)sbrk(0);
   return (callerFrame > heapTop) ? (size_t)(callerFrame - heapTop) : 256;

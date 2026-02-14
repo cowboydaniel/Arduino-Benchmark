@@ -2774,45 +2774,66 @@ void benchmarkTimingPrecision() {
 
 // ==================== DELAY TIMING BENCHMARKS ====================
 
-void benchmarkDelayTiming() {
-  printHeader("TIMING: delay() and delayMicroseconds() Accuracy");
-
-  // Measure micros() call overhead so we can subtract it.
-  // Take median of 15 back-to-back reads to get a stable baseline.
-  long overheadSamples[15];
-  for (uint8_t i = 0; i < 15; i++) {
-    unsigned long a = micros();
-    unsigned long b = micros();
-    overheadSamples[i] = (long)(b - a);
-  }
-  for (uint8_t i = 1; i < 15; i++) {
-    long key = overheadSamples[i];
+// Helper: take median of N long values (sorts in-place)
+static long medianOfSorted(long *arr, uint8_t n) {
+  // Insertion sort
+  for (uint8_t i = 1; i < n; i++) {
+    long key = arr[i];
     int8_t j = i - 1;
-    while (j >= 0 && overheadSamples[j] > key) {
-      overheadSamples[j + 1] = overheadSamples[j];
+    while (j >= 0 && arr[j] > key) {
+      arr[j + 1] = arr[j];
       j--;
     }
-    overheadSamples[j + 1] = key;
+    arr[j + 1] = key;
   }
-  long overhead = overheadSamples[7];  // median
+  return arr[n / 2];
+}
 
-  SERIAL_OUT.print(F_STR("micros() call overhead: "));
-  SERIAL_OUT.print(overhead);
-  SERIAL_OUT.println(F_STR(" us"));
-
-  // --- delay() accuracy: test delay(0) .. delay(50) ---
-  long delayErrorSum = 0;
-  long delayMaxError = 0;
-  const int delaySteps = 51;  // 0..50
-
-  for (int ms = 0; ms < delaySteps; ms++) {
+// Measure the raw time of a single delay(ms) call (median of 5)
+static long measureDelayMs(int ms) {
+  long samples[5];
+  for (uint8_t i = 0; i < 5; i++) {
     unsigned long t1 = micros();
     delay(ms);
     unsigned long t2 = micros();
-    long actual = (long)(t2 - t1) - overhead;
-    if (actual < 0) actual = 0;
+    samples[i] = (long)(t2 - t1);
+  }
+  return medianOfSorted(samples, 5);
+}
+
+// Measure the raw time of a single delayMicroseconds(us) call (median of 5)
+static long measureDelayUs(int us) {
+  long samples[5];
+  for (uint8_t i = 0; i < 5; i++) {
+    unsigned long t1 = micros();
+    delayMicroseconds(us);
+    unsigned long t2 = micros();
+    samples[i] = (long)(t2 - t1);
+  }
+  return medianOfSorted(samples, 5);
+}
+
+void benchmarkDelayTiming() {
+  printHeader("TIMING: delay() and delayMicroseconds() Accuracy");
+
+  // --- delay() ---
+  // Measure call overhead via delay(0)
+  long delayOverhead = measureDelayMs(0);
+
+  SERIAL_OUT.print(F_STR("delay(0) call overhead: "));
+  SERIAL_OUT.print(delayOverhead / 1000.0f, 3);
+  SERIAL_OUT.println(F_STR(" ms"));
+
+  // Measure delay(1..50), subtract the call overhead
+  long delayErrorSum = 0;
+  long delayMaxError = 0;
+  const int delaySteps = 50;  // 1..50
+
+  for (int ms = 1; ms <= delaySteps; ms++) {
+    long raw = measureDelayMs(ms);
+    long corrected = raw - delayOverhead;       // remove call overhead
     long expected = (long)ms * 1000L;
-    long err = actual - expected;
+    long err = corrected - expected;
     long absErr = err < 0 ? -err : err;
     delayErrorSum += absErr;
     if (absErr > delayMaxError) delayMaxError = absErr;
@@ -2822,43 +2843,30 @@ void benchmarkDelayTiming() {
 #endif
   }
 
-  float delayAvgError = delayErrorSum / (float)delaySteps / 1000.0f;
-  float delayMaxErrorMs = delayMaxError / 1000.0f;
-
-  SERIAL_OUT.print(F_STR("delay(0..50) avg absolute error: "));
-  SERIAL_OUT.print(delayAvgError, 3);
+  SERIAL_OUT.print(F_STR("delay(1..50) avg deviation: "));
+  SERIAL_OUT.print(delayErrorSum / (float)delaySteps / 1000.0f, 3);
   SERIAL_OUT.println(F_STR(" ms"));
-  SERIAL_OUT.print(F_STR("delay(0..50) max absolute error: "));
-  SERIAL_OUT.print(delayMaxErrorMs, 3);
+  SERIAL_OUT.print(F_STR("delay(1..50) max deviation: "));
+  SERIAL_OUT.print(delayMaxError / 1000.0f, 3);
   SERIAL_OUT.println(F_STR(" ms"));
 
-  // --- delayMicroseconds() accuracy: test 0..50 us ---
+  // --- delayMicroseconds() ---
+  // Measure call overhead via delayMicroseconds(0)
+  long dusOverhead = measureDelayUs(0);
+
+  SERIAL_OUT.print(F_STR("delayMicroseconds(0) call overhead: "));
+  SERIAL_OUT.print(dusOverhead);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  // Measure delayMicroseconds(1..50), subtract the call overhead
   long dusErrorSum = 0;
   long dusMaxError = 0;
-  const int dusSteps = 51;  // 0..50
+  const int dusSteps = 50;  // 1..50
 
-  for (int us = 0; us < dusSteps; us++) {
-    // Take median of 5 measurements to reduce jitter
-    long measurements[5];
-    for (uint8_t trial = 0; trial < 5; trial++) {
-      unsigned long t1 = micros();
-      delayMicroseconds(us);
-      unsigned long t2 = micros();
-      long m = (long)(t2 - t1) - overhead;
-      measurements[trial] = m > 0 ? m : 0;
-    }
-    // Simple insertion sort for 5 elements
-    for (uint8_t i = 1; i < 5; i++) {
-      long key = measurements[i];
-      int8_t j = i - 1;
-      while (j >= 0 && measurements[j] > key) {
-        measurements[j + 1] = measurements[j];
-        j--;
-      }
-      measurements[j + 1] = key;
-    }
-    long actual = measurements[2];  // median
-    long err = actual - (long)us;
+  for (int us = 1; us <= dusSteps; us++) {
+    long raw = measureDelayUs(us);
+    long corrected = raw - dusOverhead;         // remove call overhead
+    long err = corrected - (long)us;
     long absErr = err < 0 ? -err : err;
     dusErrorSum += absErr;
     if (absErr > dusMaxError) dusMaxError = absErr;
@@ -2868,12 +2876,10 @@ void benchmarkDelayTiming() {
 #endif
   }
 
-  float dusAvgError = dusErrorSum / (float)dusSteps;
-
-  SERIAL_OUT.print(F_STR("delayMicroseconds(0..50) avg absolute error: "));
-  SERIAL_OUT.print(dusAvgError, 1);
+  SERIAL_OUT.print(F_STR("delayMicroseconds(1..50) avg deviation: "));
+  SERIAL_OUT.print(dusErrorSum / (float)dusSteps, 1);
   SERIAL_OUT.println(F_STR(" us"));
-  SERIAL_OUT.print(F_STR("delayMicroseconds(0..50) max absolute error: "));
+  SERIAL_OUT.print(F_STR("delayMicroseconds(1..50) max deviation: "));
   SERIAL_OUT.print(dusMaxError);
   SERIAL_OUT.println(F_STR(" us"));
 }

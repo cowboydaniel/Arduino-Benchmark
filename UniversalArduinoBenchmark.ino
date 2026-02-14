@@ -269,12 +269,10 @@
 #define BOARD_FLASH_KB 48  // Varies by variant
 
 // Arduino Yun (ATmega32U4 + Atheros AR9331 Linux)
-// Bootloader uses 4KB, leaving only 28672 bytes for the sketch.
 #elif defined(ARDUINO_AVR_YUN)
 #define BOARD_NAME "Arduino Yun"
 #include <EEPROM.h>
 #define BOARD_AVR
-#define BOARD_SMALL_FLASH
 
 // Arduino Leonardo/Micro
 #elif defined(ARDUINO_AVR_LEONARDO)
@@ -481,6 +479,24 @@ unsigned long endBenchmark() {
   return micros() - benchmarkStart;
 }
 
+// Compact result printer — saves ~2KB flash by deduplicating the 7-line
+// print sequence that appears 30+ times across benchmarks.
+void printOpsResult(const __FlashStringHelper* name, uint32_t ops,
+                    unsigned long timeUs, float opsPerMs) {
+  SERIAL_OUT.print(name);
+  SERIAL_OUT.print(F_STR(" ("));
+  SERIAL_OUT.print(ops);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(timeUs);
+  SERIAL_OUT.print(F_STR(" us ("));
+  SERIAL_OUT.print(opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+}
+
+void printOpsResult(const __FlashStringHelper* name, const TimedLoopResult& r) {
+  printOpsResult(name, r.totalOps, r.elapsedMicros, r.opsPerMs);
+}
+
 template<typename T, size_t N>
 struct MedianCollector {
   T values[N];
@@ -543,7 +559,6 @@ void calibrateBenchmarkTime() {
 
 // ==================== CPU BENCHMARKS ====================
 
-#ifndef BOARD_SMALL_FLASH
 void benchmarkCPUStress() {
   printHeader("CPU: STRESS TEST with Temperature");
 
@@ -716,7 +731,6 @@ void benchmarkCPUStress() {
     }
   }
 }
-#endif  // BOARD_SMALL_FLASH
 
 void benchmarkIntegerOps() {
   printHeader("CPU: INTEGER OPERATIONS");
@@ -754,29 +768,9 @@ void benchmarkIntegerOps() {
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println((uint32_t)acc);
 
-  SERIAL_OUT.print(F_STR("Addition ("));
-  SERIAL_OUT.print(BENCHMARK_ITERATIONS);
-  SERIAL_OUT.print(F_STR(" ops): "));
-  SERIAL_OUT.print(addTime);
-  SERIAL_OUT.print(F_STR(" μs ("));
-  SERIAL_OUT.print((float)BENCHMARK_ITERATIONS / addTime * 1000);
-  SERIAL_OUT.println(F_STR(" ops/ms)"));
-
-  SERIAL_OUT.print(F_STR("Multiplication ("));
-  SERIAL_OUT.print(mulResult.totalOps);
-  SERIAL_OUT.print(F_STR(" ops): "));
-  SERIAL_OUT.print(mulResult.elapsedMicros);
-  SERIAL_OUT.print(F_STR(" μs ("));
-  SERIAL_OUT.print(mulResult.opsPerMs);
-  SERIAL_OUT.println(F_STR(" ops/ms)"));
-
-  SERIAL_OUT.print(F_STR("Division ("));
-  SERIAL_OUT.print(divResult.totalOps);
-  SERIAL_OUT.print(F_STR(" ops): "));
-  SERIAL_OUT.print(divResult.elapsedMicros);
-  SERIAL_OUT.print(F_STR(" μs ("));
-  SERIAL_OUT.print(divResult.opsPerMs);
-  SERIAL_OUT.println(F_STR(" ops/ms)"));
+  printOpsResult(F_STR("Addition"), BENCHMARK_ITERATIONS, addTime, (float)BENCHMARK_ITERATIONS / addTime * 1000);
+  printOpsResult(F_STR("Multiplication"), mulResult);
+  printOpsResult(F_STR("Division"), divResult);
 
 #if defined(BOARD_STM32U5) || defined(HAS_DSP)
   // Enhanced tests for Cortex-M33 with DSP extensions
@@ -898,44 +892,17 @@ void benchmarkFloatOps() {
   SERIAL_OUT.println(fresult);
 #endif
 
-  SERIAL_OUT.print(F_STR("Float Addition ("));
-  SERIAL_OUT.print(BENCHMARK_ITERATIONS / 10);
-  SERIAL_OUT.print(F_STR(" ops): "));
-  SERIAL_OUT.print(faddTime);
-  SERIAL_OUT.print(F_STR(" μs ("));
-  SERIAL_OUT.print((float)(BENCHMARK_ITERATIONS / 10) / faddTime * 1000);
-  SERIAL_OUT.println(F_STR(" ops/ms)"));
-
-  SERIAL_OUT.print(F_STR("Float Multiply ("));
-  SERIAL_OUT.print(BENCHMARK_ITERATIONS / 10);
-  SERIAL_OUT.print(F_STR(" ops): "));
-  SERIAL_OUT.print(fmulTime);
-  SERIAL_OUT.print(F_STR(" μs ("));
-  SERIAL_OUT.print((float)(BENCHMARK_ITERATIONS / 10) / fmulTime * 1000);
-  SERIAL_OUT.println(F_STR(" ops/ms)"));
+  printOpsResult(F_STR("Float Addition"), BENCHMARK_ITERATIONS / 10, faddTime, (float)(BENCHMARK_ITERATIONS / 10) / faddTime * 1000);
+  printOpsResult(F_STR("Float Multiply"), BENCHMARK_ITERATIONS / 10, fmulTime, (float)(BENCHMARK_ITERATIONS / 10) / fmulTime * 1000);
 
 #if !defined(ARDUINO_UNO_Q) && !defined(ARDUINO_UNO_Q_MCU)
-  SERIAL_OUT.print(F_STR("Square Root ("));
-  SERIAL_OUT.print(sqrtResult.totalOps);
-  SERIAL_OUT.print(F_STR(" ops): "));
-  SERIAL_OUT.print(sqrtResult.elapsedMicros);
-  SERIAL_OUT.print(F_STR(" μs ("));
-  SERIAL_OUT.print(sqrtResult.opsPerMs);
-  SERIAL_OUT.println(F_STR(" ops/ms)"));
-
-  SERIAL_OUT.print(F_STR("Sin/Cos ("));
-  SERIAL_OUT.print(trigResult.totalOps);
-  SERIAL_OUT.print(F_STR(" ops): "));
-  SERIAL_OUT.print(trigResult.elapsedMicros);
-  SERIAL_OUT.print(F_STR(" μs ("));
-  SERIAL_OUT.print(trigResult.opsPerMs);
-  SERIAL_OUT.println(F_STR(" ops/ms)"));
+  printOpsResult(F_STR("Square Root"), sqrtResult);
+  printOpsResult(F_STR("Sin/Cos"), trigResult);
 #else
   SERIAL_OUT.println(F_STR("Sqrt/Sin/Cos: Skipped (Uno Q - no libm)"));
 #endif
 }
 
-#ifndef BOARD_SMALL_FLASH
 void benchmarkStringOps() {
   printHeader("CPU: STRING OPERATIONS");
 
@@ -976,39 +943,11 @@ void benchmarkStringOps() {
     }
   });
 
-  SERIAL_OUT.print(F_STR("Concatenation ("));
-  SERIAL_OUT.print(concatResult.totalOps);
-  SERIAL_OUT.print(F_STR(" ops): "));
-  SERIAL_OUT.print(concatResult.elapsedMicros);
-  SERIAL_OUT.print(F_STR(" us ("));
-  SERIAL_OUT.print(concatResult.opsPerMs);
-  SERIAL_OUT.println(F_STR(" ops/ms)"));
-
-  SERIAL_OUT.print(F_STR("Comparison ("));
-  SERIAL_OUT.print(cmpResultData.totalOps);
-  SERIAL_OUT.print(F_STR(" ops): "));
-  SERIAL_OUT.print(cmpResultData.elapsedMicros);
-  SERIAL_OUT.print(F_STR(" us ("));
-  SERIAL_OUT.print(cmpResultData.opsPerMs);
-  SERIAL_OUT.println(F_STR(" ops/ms)"));
-
-  SERIAL_OUT.print(F_STR("Int to String ("));
-  SERIAL_OUT.print(toStrResult.totalOps);
-  SERIAL_OUT.print(F_STR(" ops): "));
-  SERIAL_OUT.print(toStrResult.elapsedMicros);
-  SERIAL_OUT.print(F_STR(" us ("));
-  SERIAL_OUT.print(toStrResult.opsPerMs);
-  SERIAL_OUT.println(F_STR(" ops/ms)"));
-
-  SERIAL_OUT.print(F_STR("itoa fixed buf ("));
-  SERIAL_OUT.print(itoaResult.totalOps);
-  SERIAL_OUT.print(F_STR(" ops): "));
-  SERIAL_OUT.print(itoaResult.elapsedMicros);
-  SERIAL_OUT.print(F_STR(" us ("));
-  SERIAL_OUT.print(itoaResult.opsPerMs);
-  SERIAL_OUT.println(F_STR(" ops/ms)"));
+  printOpsResult(F_STR("Concatenation"), concatResult);
+  printOpsResult(F_STR("Comparison"), cmpResultData);
+  printOpsResult(F_STR("Int to String"), toStrResult);
+  printOpsResult(F_STR("itoa fixed buf"), itoaResult);
 }
-#endif  // BOARD_SMALL_FLASH
 
 // ==================== MEMORY BENCHMARKS ====================
 
@@ -1056,21 +995,8 @@ void benchmarkSRAM() {
   SERIAL_OUT.print(F_STR("Random checksum: "));
   SERIAL_OUT.println((uint32_t)checksum);
 
-  SERIAL_OUT.print(F_STR("Sequential Write ("));
-  SERIAL_OUT.print(writeResult.totalOps);
-  SERIAL_OUT.print(F_STR(" ops): "));
-  SERIAL_OUT.print(writeResult.elapsedMicros);
-  SERIAL_OUT.print(F_STR(" μs ("));
-  SERIAL_OUT.print(writeResult.opsPerMs);
-  SERIAL_OUT.println(F_STR(" ops/ms)"));
-
-  SERIAL_OUT.print(F_STR("Sequential Read ("));
-  SERIAL_OUT.print(readResult.totalOps);
-  SERIAL_OUT.print(F_STR(" ops): "));
-  SERIAL_OUT.print(readResult.elapsedMicros);
-  SERIAL_OUT.print(F_STR(" μs ("));
-  SERIAL_OUT.print(readResult.opsPerMs);
-  SERIAL_OUT.println(F_STR(" ops/ms)"));
+  printOpsResult(F_STR("Sequential Write"), writeResult);
+  printOpsResult(F_STR("Sequential Read"), readResult);
 
   SERIAL_OUT.print(F_STR("Random Access ("));
   SERIAL_OUT.print(randomTotalOps);
@@ -1617,7 +1543,6 @@ void benchmarkDigitalIO() {
 #endif
 }
 
-#ifndef BOARD_SMALL_FLASH
 void benchmarkAnalogIO() {
   printHeader("I/O: ANALOG OPERATIONS");
 
@@ -1691,13 +1616,7 @@ void benchmarkAnalogIO() {
       if (value != 0) allZero = false;
     });
 
-    SERIAL_OUT.print(F_STR("analogRead() ("));
-    SERIAL_OUT.print(readResult.totalOps);
-    SERIAL_OUT.print(F_STR(" ops): "));
-    SERIAL_OUT.print(readResult.elapsedMicros);
-    SERIAL_OUT.print(F_STR(" μs ("));
-    SERIAL_OUT.print(readResult.opsPerMs);
-    SERIAL_OUT.println(F_STR(" ops/ms)"));
+    printOpsResult(F_STR("analogRead()"), readResult);
 
     SERIAL_OUT.print(F_STR("ADC average: "));
     SERIAL_OUT.println((uint32_t)(sum / readResult.totalOps));
@@ -1741,13 +1660,7 @@ void benchmarkAnalogIO() {
     SERIAL_OUT.print(1000.0 / (double)setupTime);
     SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-    SERIAL_OUT.print(F_STR("PWM duty update ("));
-    SERIAL_OUT.print(updateResult.totalOps);
-    SERIAL_OUT.print(F_STR(" ops): "));
-    SERIAL_OUT.print(updateResult.elapsedMicros);
-    SERIAL_OUT.print(F_STR(" μs ("));
-    SERIAL_OUT.print(updateResult.opsPerMs);
-    SERIAL_OUT.println(F_STR(" ops/ms)"));
+    printOpsResult(F_STR("PWM duty update"), updateResult);
 #else
     pinMode(analogOutPin, OUTPUT);
 
@@ -1757,19 +1670,11 @@ void benchmarkAnalogIO() {
       pwmValue++;
     });
 
-    SERIAL_OUT.print(F_STR("analogWrite() ("));
-    SERIAL_OUT.print(writeResult.totalOps);
-    SERIAL_OUT.print(F_STR(" ops): "));
-    SERIAL_OUT.print(writeResult.elapsedMicros);
-    SERIAL_OUT.print(F_STR(" μs ("));
-    SERIAL_OUT.print(writeResult.opsPerMs);
-    SERIAL_OUT.println(F_STR(" ops/ms)"));
+    printOpsResult(F_STR("analogWrite()"), writeResult);
 #endif
   }
 }
-#endif  // BOARD_SMALL_FLASH
 
-#ifndef BOARD_SMALL_FLASH
 void benchmarkSerial() {
   printHeader("I/O: SERIAL COMMUNICATION");
 
@@ -1838,7 +1743,6 @@ void benchmarkSerial() {
     SERIAL_OUT.println(F_STR("CPU-bound)"));
   }
 }
-#endif  // BOARD_SMALL_FLASH
 
 // ==================== BOARD-SPECIFIC BENCHMARKS ====================
 
@@ -2139,7 +2043,6 @@ void benchmarkFlash() {
 
 // ==================== ADVANCED MATH BENCHMARKS ====================
 
-#ifndef BOARD_SMALL_FLASH
 void benchmarkAdvancedMath() {
   printHeader("ADVANCED MATH: Transcendental Functions");
 
@@ -2227,7 +2130,6 @@ void benchmarkAdvancedMath() {
   SERIAL_OUT.println(F_STR(" ops/ms)"));
 #endif
 }
-#endif  // BOARD_SMALL_FLASH
 
 #if defined(ARDUINO_ARCH_RP2040)
 void benchmarkSHA1() {
@@ -2657,7 +2559,6 @@ void benchmarkESP32Crypto() {
 
 // ==================== TIMING PRECISION BENCHMARKS ====================
 
-#ifndef BOARD_SMALL_FLASH
 void benchmarkTimingPrecision() {
   printHeader("TIMING: millis() and micros() Precision");
 
@@ -3097,7 +2998,6 @@ void benchmarkStackDepth() {
     SERIAL_OUT.println(F_STR(" us"));
   }
 }
-#endif  // BOARD_SMALL_FLASH
 
 // ==================== MULTI-CORE BENCHMARKS ====================
 
@@ -5068,7 +4968,6 @@ void benchmarkSPI() {
 }
 
 // Watchdog Timer Benchmark
-#ifndef BOARD_SMALL_FLASH
 void benchmarkWatchdog() {
   printHeader("SYSTEM: WATCHDOG TIMER");
 
@@ -5277,7 +5176,6 @@ void benchmarkSleepModes() {
   SERIAL_OUT.println(F_STR("Sleep mode info not available for this board"));
 #endif
 }
-#endif  // BOARD_SMALL_FLASH
 
 // ==================== SYSTEM INFO ====================
 
@@ -5516,10 +5414,8 @@ void setup() {
   // CPU benchmarks
   benchmarkIntegerOps();
   benchmarkFloatOps();
-#ifndef BOARD_SMALL_FLASH
   benchmarkStringOps();
   benchmarkCPUStress();
-#endif
 
   // Memory benchmarks
   benchmarkSRAM();
@@ -5532,10 +5428,8 @@ void setup() {
 
   // I/O benchmarks
   benchmarkDigitalIO();
-#ifndef BOARD_SMALL_FLASH
   benchmarkAnalogIO();
   benchmarkSerial();
-#endif
 
   // Board-specific
   benchmarkFlash();
@@ -5550,12 +5444,10 @@ void setup() {
 #endif
 
   // Advanced benchmarks
-#ifndef BOARD_SMALL_FLASH
   benchmarkAdvancedMath();
   benchmarkTimingPrecision();
   benchmarkDelayTiming();
   benchmarkStackDepth();
-#endif
 #if defined(ARDUINO_ARCH_RP2040)
   benchmarkSHA1();
 #endif
@@ -5618,10 +5510,8 @@ void setup() {
   benchmarkPWM();
   benchmarkInterruptLatency();
   benchmarkSPI();
-#ifndef BOARD_SMALL_FLASH
   benchmarkWatchdog();
   benchmarkSleepModes();
-#endif
 
   // Final summary
   printHeader("BENCHMARK COMPLETE!");

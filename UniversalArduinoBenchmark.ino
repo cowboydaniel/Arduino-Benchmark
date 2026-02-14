@@ -319,6 +319,7 @@
 #define HAS_ROUTER_BRIDGE
 #define HAS_RPC_BRIDGE
 #include "Arduino_RouterBridge.h"
+#include <zephyr/devicetree.h>
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/drivers/watchdog.h>
 #include <zephyr/drivers/flash.h>
@@ -550,7 +551,7 @@ void benchmarkCPUStress() {
   hasTempSensor = true;
 #elif defined(ARDUINO_ARCH_RP2040)
   hasTempSensor = true;
-#elif defined(ARDUINO_UNO_Q)
+#elif defined(ARDUINO_UNO_Q) && DT_HAS_COMPAT_STATUS_OKAY(st_stm32_temp_cal)
   // STM32U585 die temperature via Zephyr sensor API
   const struct device *tempDev = DEVICE_DT_GET(DT_INST(0, st_stm32_temp_cal));
   if (device_is_ready(tempDev)) {
@@ -578,7 +579,7 @@ void benchmarkCPUStress() {
   SERIAL_OUT.print(F_STR("Start Temperature: "));
   SERIAL_OUT.print(startTemp);
   SERIAL_OUT.println(F_STR(" °C"));
-#elif defined(ARDUINO_UNO_Q)
+#elif defined(ARDUINO_UNO_Q) && DT_HAS_COMPAT_STATUS_OKAY(st_stm32_temp_cal)
   if (hasTempSensor) {
     struct sensor_value val;
     sensor_sample_fetch(tempDev);
@@ -684,7 +685,7 @@ void benchmarkCPUStress() {
     endTemp = temperatureRead();
 #elif defined(ARDUINO_ARCH_RP2040)
     endTemp = analogReadTemp(3.3f);
-#elif defined(ARDUINO_UNO_Q)
+#elif defined(ARDUINO_UNO_Q) && DT_HAS_COMPAT_STATUS_OKAY(st_stm32_temp_cal)
     {
       struct sensor_value val;
       sensor_sample_fetch(tempDev);
@@ -2108,6 +2109,7 @@ void benchmarkFlash() {
   SERIAL_OUT.print(flashSizeKB);
   SERIAL_OUT.println(F_STR(" KB"));
 
+#if DT_HAS_CHOSEN(zephyr_flash_controller)
   // Also try Zephyr flash API for page geometry
   const struct device *flashDev = DEVICE_DT_GET(DT_CHOSEN(zephyr_flash_controller));
   if (device_is_ready(flashDev)) {
@@ -2126,6 +2128,7 @@ void benchmarkFlash() {
   } else {
     SERIAL_OUT.println(F_STR("Zephyr flash device not ready"));
   }
+#endif
 
 #else
   SERIAL_OUT.println(F_STR("Flash info not available on this platform"));
@@ -5007,6 +5010,7 @@ void benchmarkWatchdog() {
   SERIAL_OUT.println(F_STR("  WWDG: Window watchdog (APB-clocked)"));
   SERIAL_OUT.println();
 
+#if DT_HAS_COMPAT_STATUS_OKAY(st_stm32_watchdog)
   const struct device *wdtDev = DEVICE_DT_GET(DT_INST(0, st_stm32_watchdog));
   if (device_is_ready(wdtDev)) {
     SERIAL_OUT.println(F_STR("IWDG device ready"));
@@ -5059,6 +5063,9 @@ void benchmarkWatchdog() {
   } else {
     SERIAL_OUT.println(F_STR("IWDG device not ready"));
   }
+#else
+  SERIAL_OUT.println(F_STR("IWDG driver not enabled in Kconfig"));
+#endif
 
 #else
   SERIAL_OUT.println(F_STR("Watchdog information not available for this board"));

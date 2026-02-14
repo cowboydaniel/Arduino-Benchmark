@@ -218,7 +218,7 @@
 
 // INK4u Board (AVR128DA28 - Next Gen Arduino Uno)
 #elif defined(ARDUINO_AVR_INK4U) || defined(__AVR_AVR128DA28__)
-#define BOARD_NAME "INK4u Board"
+#define BOARD_NAME "INK4u Board (AVR128DA28)"
 #include <EEPROM.h>
 #define BOARD_AVR
 #define BOARD_MEGAAVR  // Modern AVR with advanced features

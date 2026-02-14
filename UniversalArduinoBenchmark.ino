@@ -319,6 +319,9 @@
 #define HAS_ROUTER_BRIDGE
 #define HAS_RPC_BRIDGE
 #include "Arduino_RouterBridge.h"
+#include <zephyr/drivers/sensor.h>
+#include <zephyr/drivers/watchdog.h>
+#include <zephyr/drivers/flash.h>
 
 // STM32 Family (Blue Pill, Black Pill, Nucleo)
 #elif defined(ARDUINO_ARCH_STM32)
@@ -547,6 +550,12 @@ void benchmarkCPUStress() {
   hasTempSensor = true;
 #elif defined(ARDUINO_ARCH_RP2040)
   hasTempSensor = true;
+#elif defined(ARDUINO_UNO_Q)
+  // STM32U585 die temperature via Zephyr sensor API
+  const struct device *tempDev = DEVICE_DT_GET(DT_INST(0, st_stm32_temp_cal));
+  if (device_is_ready(tempDev)) {
+    hasTempSensor = true;
+  }
 #elif defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
   hasTempSensor = false;  // RA4M1 has sensor but not easily accessible
 #elif defined(BOARD_TEENSY) && defined(__IMXRT1062__)
@@ -569,6 +578,16 @@ void benchmarkCPUStress() {
   SERIAL_OUT.print(F_STR("Start Temperature: "));
   SERIAL_OUT.print(startTemp);
   SERIAL_OUT.println(F_STR(" °C"));
+#elif defined(ARDUINO_UNO_Q)
+  if (hasTempSensor) {
+    struct sensor_value val;
+    sensor_sample_fetch(tempDev);
+    sensor_channel_get(tempDev, SENSOR_CHAN_DIE_TEMP, &val);
+    startTemp = val.val1 + val.val2 / 1000000.0f;
+    SERIAL_OUT.print(F_STR("Start Temperature: "));
+    SERIAL_OUT.print(startTemp);
+    SERIAL_OUT.println(F_STR(" °C (die)"));
+  }
 #elif defined(BOARD_TEENSY) && defined(__IMXRT1062__)
   startTemp = tempmonGetTemp();
   SERIAL_OUT.print(F_STR("Start Temperature: "));
@@ -665,6 +684,13 @@ void benchmarkCPUStress() {
     endTemp = temperatureRead();
 #elif defined(ARDUINO_ARCH_RP2040)
     endTemp = analogReadTemp(3.3f);
+#elif defined(ARDUINO_UNO_Q)
+    {
+      struct sensor_value val;
+      sensor_sample_fetch(tempDev);
+      sensor_channel_get(tempDev, SENSOR_CHAN_DIE_TEMP, &val);
+      endTemp = val.val1 + val.val2 / 1000000.0f;
+    }
 #elif defined(BOARD_TEENSY) && defined(__IMXRT1062__)
     endTemp = tempmonGetTemp();
 #endif
@@ -2075,6 +2101,32 @@ void benchmarkFlash() {
   SERIAL_OUT.print(F_STR("Free Sketch Space: "));
   SERIAL_OUT.print(ESP.getFreeSketchSpace() / 1024);
   SERIAL_OUT.println(F_STR(" KB"));
+#elif defined(ARDUINO_UNO_Q)
+  // STM32U585 flash size register at 0x0BFA07A0 (value in KB)
+  uint16_t flashSizeKB = *((volatile uint16_t *)0x0BFA07A0);
+  SERIAL_OUT.print(F_STR("Flash Size (register): "));
+  SERIAL_OUT.print(flashSizeKB);
+  SERIAL_OUT.println(F_STR(" KB"));
+
+  // Also try Zephyr flash API for page geometry
+  const struct device *flashDev = DEVICE_DT_GET(DT_CHOSEN(zephyr_flash_controller));
+  if (device_is_ready(flashDev)) {
+    const struct flash_parameters *fp = flash_get_parameters(flashDev);
+    if (fp) {
+      SERIAL_OUT.print(F_STR("Write block size: "));
+      SERIAL_OUT.print((unsigned long)fp->write_block_size);
+      SERIAL_OUT.println(F_STR(" bytes"));
+      SERIAL_OUT.print(F_STR("Erase value: 0x"));
+      SERIAL_OUT.println(fp->erase_value, HEX);
+    }
+    size_t totalSize = flash_get_write_block_size(flashDev);
+    SERIAL_OUT.print(F_STR("Flash write-block: "));
+    SERIAL_OUT.print((unsigned long)totalSize);
+    SERIAL_OUT.println(F_STR(" bytes"));
+  } else {
+    SERIAL_OUT.println(F_STR("Zephyr flash device not ready"));
+  }
+
 #else
   SERIAL_OUT.println(F_STR("Flash info not available on this platform"));
 #endif
@@ -4941,6 +4993,66 @@ void benchmarkWatchdog() {
     if (mcusr & (1 << PORF)) SERIAL_OUT.print(F_STR("Power-on "));
     SERIAL_OUT.println();
   #endif
+
+#elif defined(ARDUINO_UNO_Q)
+  // STM32U585 has IWDG (independent) and WWDG (window) watchdogs
+  SERIAL_OUT.println(F_STR("STM32U585 Watchdog (Zephyr):"));
+  SERIAL_OUT.println(F_STR("  IWDG: Independent watchdog (LSI-clocked)"));
+  SERIAL_OUT.println(F_STR("  WWDG: Window watchdog (APB-clocked)"));
+  SERIAL_OUT.println();
+
+  const struct device *wdtDev = DEVICE_DT_GET(DT_INST(0, st_stm32_watchdog));
+  if (device_is_ready(wdtDev)) {
+    SERIAL_OUT.println(F_STR("IWDG device ready"));
+
+    // Configure a 2-second window, install + feed + disable
+    struct wdt_timeout_cfg cfg = {};
+    cfg.window.min = 0;
+    cfg.window.max = 2000;          // 2 s timeout
+    cfg.callback = NULL;            // reset on timeout (no ISR for IWDG)
+
+    int chanId = wdt_install_timeout(wdtDev, &cfg);
+    if (chanId >= 0) {
+      SERIAL_OUT.print(F_STR("  Timeout installed (channel "));
+      SERIAL_OUT.print(chanId);
+      SERIAL_OUT.println(')');
+
+      // Benchmark wdt_feed() jitter: 100 feeds, report avg + max
+      int err = wdt_setup(wdtDev, 0);
+      if (err == 0) {
+        long feedMin = LONG_MAX;
+        long feedMax = 0;
+        long feedSum = 0;
+        const int feeds = 100;
+        for (int i = 0; i < feeds; i++) {
+          unsigned long t1 = micros();
+          wdt_feed(wdtDev, chanId);
+          unsigned long t2 = micros();
+          long dt = (long)(t2 - t1);
+          feedSum += dt;
+          if (dt < feedMin) feedMin = dt;
+          if (dt > feedMax) feedMax = dt;
+        }
+        SERIAL_OUT.print(F_STR("  wdt_feed() avg: "));
+        SERIAL_OUT.print(feedSum / feeds);
+        SERIAL_OUT.println(F_STR(" us"));
+        SERIAL_OUT.print(F_STR("  wdt_feed() max: "));
+        SERIAL_OUT.print(feedMax);
+        SERIAL_OUT.println(F_STR(" us"));
+
+        // Disable WDT so we don't reset during remaining benchmarks
+        wdt_disable(wdtDev);
+      } else {
+        SERIAL_OUT.print(F_STR("  wdt_setup failed: "));
+        SERIAL_OUT.println(err);
+      }
+    } else {
+      SERIAL_OUT.print(F_STR("  wdt_install_timeout failed: "));
+      SERIAL_OUT.println(chanId);
+    }
+  } else {
+    SERIAL_OUT.println(F_STR("IWDG device not ready"));
+  }
 
 #else
   SERIAL_OUT.println(F_STR("Watchdog information not available for this board"));

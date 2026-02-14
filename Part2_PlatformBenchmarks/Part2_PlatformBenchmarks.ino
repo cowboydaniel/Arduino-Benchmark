@@ -405,6 +405,9 @@
 
 #include "BenchmarkHelpers.h"
 #include <SPI.h>
+#if !defined(ARDUINO_UNO_Q)
+#include <Wire.h>
+#endif
 
 #if defined(ESP32)
 #include <HEXBuilder.h>
@@ -717,6 +720,32 @@ void benchmarkCPUStress() {
 #ifndef BOARD_SMALL_FLASH
 void benchmarkSerial() {
   printHeader("I/O: SERIAL COMMUNICATION");
+
+  SERIAL_OUT.print(F_STR("Baud rate: "));
+  SERIAL_OUT.println(SERIAL_BAUD);
+
+  SERIAL_OUT.print(F_STR("TX buffer: "));
+#if defined(SERIAL_TX_BUFFER_SIZE)
+  SERIAL_OUT.print(SERIAL_TX_BUFFER_SIZE);
+  SERIAL_OUT.println(F_STR(" bytes"));
+#elif defined(SERIAL_BUFFER_SIZE)
+  SERIAL_OUT.print(SERIAL_BUFFER_SIZE);
+  SERIAL_OUT.println(F_STR(" bytes"));
+#else
+  SERIAL_OUT.println(F_STR("unknown"));
+#endif
+
+  SERIAL_OUT.print(F_STR("RX buffer: "));
+#if defined(SERIAL_RX_BUFFER_SIZE)
+  SERIAL_OUT.print(SERIAL_RX_BUFFER_SIZE);
+  SERIAL_OUT.println(F_STR(" bytes"));
+#elif defined(SERIAL_BUFFER_SIZE)
+  SERIAL_OUT.print(SERIAL_BUFFER_SIZE);
+  SERIAL_OUT.println(F_STR(" bytes"));
+#else
+  SERIAL_OUT.println(F_STR("unknown"));
+#endif
+  SERIAL_OUT.println();
 
   // Calculate expected bytes
   int expectedBytes = 0;
@@ -3627,6 +3656,108 @@ void benchmarkUnoR4BLE() {
 #endif
 
 #endif  // ARDUINO_UNOR4_WIFI || ARDUINO_UNOR4_MINIMA
+// ==================== I2C WIRE COMMUNICATION ====================
+
+#if !defined(ARDUINO_UNO_Q)
+void benchmarkWireI2C() {
+  printHeader("I/O: WIRE I2C COMMUNICATION");
+
+  // Number of I2C buses
+  SERIAL_OUT.print(F_STR("I2C buses: "));
+#if defined(WIRE_INTERFACES_COUNT)
+  SERIAL_OUT.println(WIRE_INTERFACES_COUNT);
+#elif defined(ESP32)
+  SERIAL_OUT.println(2);
+#elif defined(ARDUINO_ARCH_RP2040)
+  SERIAL_OUT.println(2);
+#elif defined(ARDUINO_SAM_DUE)
+  SERIAL_OUT.println(2);
+#elif defined(BOARD_STM32H7)
+  SERIAL_OUT.println(3);
+#elif defined(BOARD_NRF52)
+  SERIAL_OUT.println(2);
+#else
+  SERIAL_OUT.println(1);
+#endif
+
+  // Internal buffer size
+  SERIAL_OUT.print(F_STR("Buffer size: "));
+#if defined(BUFFER_LENGTH)
+  SERIAL_OUT.print(BUFFER_LENGTH);
+  SERIAL_OUT.println(F_STR(" bytes"));
+#elif defined(I2C_BUFFER_LENGTH)
+  SERIAL_OUT.print(I2C_BUFFER_LENGTH);
+  SERIAL_OUT.println(F_STR(" bytes"));
+#elif defined(WIRE_BUFFER_LENGTH)
+  SERIAL_OUT.print(WIRE_BUFFER_LENGTH);
+  SERIAL_OUT.println(F_STR(" bytes"));
+#else
+  SERIAL_OUT.println(F_STR("unknown"));
+#endif
+
+  Wire.begin();
+
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("Testing I2C transaction speed"));
+  SERIAL_OUT.println(F_STR("(No device - measuring bus overhead)"));
+  SERIAL_OUT.println();
+
+  // Standard mode (100 kHz)
+  Wire.setClock(100000);
+  startBenchmark();
+  for (int i = 0; i < 1000; i++) {
+    Wire.beginTransmission(0x08);
+    Wire.write(i & 0xFF);
+    Wire.endTransmission();
+  }
+  unsigned long stdTime = endBenchmark();
+
+  SERIAL_OUT.print(F_STR("100 kHz: "));
+  SERIAL_OUT.print(stdTime);
+  SERIAL_OUT.print(F_STR(" us for 1000 writes ("));
+  SERIAL_OUT.print(1000.0 / stdTime * 1000);
+  SERIAL_OUT.println(F_STR(" txn/ms)"));
+
+  // Fast mode (400 kHz)
+  Wire.setClock(400000);
+  startBenchmark();
+  for (int i = 0; i < 1000; i++) {
+    Wire.beginTransmission(0x08);
+    Wire.write(i & 0xFF);
+    Wire.endTransmission();
+  }
+  unsigned long fastTime = endBenchmark();
+
+  SERIAL_OUT.print(F_STR("400 kHz: "));
+  SERIAL_OUT.print(fastTime);
+  SERIAL_OUT.print(F_STR(" us for 1000 writes ("));
+  SERIAL_OUT.print(1000.0 / fastTime * 1000);
+  SERIAL_OUT.println(F_STR(" txn/ms)"));
+
+#if defined(ESP32) || defined(ARDUINO_ARCH_RP2040) || defined(BOARD_STM32H7)
+  // Fast mode plus (1 MHz) on capable boards
+  Wire.setClock(1000000);
+  startBenchmark();
+  for (int i = 0; i < 1000; i++) {
+    Wire.beginTransmission(0x08);
+    Wire.write(i & 0xFF);
+    Wire.endTransmission();
+  }
+  unsigned long fastPlusTime = endBenchmark();
+
+  SERIAL_OUT.print(F_STR("1 MHz:   "));
+  SERIAL_OUT.print(fastPlusTime);
+  SERIAL_OUT.print(F_STR(" us for 1000 writes ("));
+  SERIAL_OUT.print(1000.0 / fastPlusTime * 1000);
+  SERIAL_OUT.println(F_STR(" txn/ms)"));
+#endif
+
+#if defined(ESP32) && !defined(CONFIG_IDF_TARGET_ESP32C3) && !defined(CONFIG_IDF_TARGET_ESP32C6) && !defined(CONFIG_IDF_TARGET_ESP32H2)
+  Wire.end();
+#endif
+}
+#endif
+// Watchdog Timer Benchmark
 #ifndef BOARD_SMALL_FLASH
 void benchmarkWatchdog() {
   printHeader("SYSTEM: WATCHDOG TIMER");
@@ -4030,7 +4161,6 @@ void printSystemInfo() {
   SERIAL_OUT.println(__TIME__);
 }
 
-// ==================== MAIN FUNCTIONS ====================
 
 // ==================== MAIN FUNCTIONS ====================
 
@@ -4043,13 +4173,6 @@ void setup() {
   delay(3000);  // ESP32 needs extra time for serial initialization
 #else
   SERIAL_OUT.begin(SERIAL_BAUD);
-  // ATmega32U4 boards (Yun, Leonardo, Micro) and other native USB boards
-  // have a virtual USB CDC serial port that doesn't exist until the host
-  // USB connection is negotiated. Without this wait, all Serial output is
-  // lost because the port isn't ready yet. A fixed delay() is insufficient
-  // because USB enumeration timing varies. The while(!Serial) loop blocks
-  // until the port is actually connected. Timeout after 10s so the sketch
-  // can still run standalone (without Serial Monitor) if needed.
 #if defined(USBCON)
   {
     unsigned long waitStart = millis();
@@ -4160,6 +4283,11 @@ void setup() {
 #if defined(ARDUINO_UNOR4_WIFI)
   benchmarkUnoR4BLE();
 #endif
+#endif
+
+  // I2C Wire communication
+#if !defined(ARDUINO_UNO_Q)
+  benchmarkWireI2C();
 #endif
 
   // Power management

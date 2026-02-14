@@ -405,6 +405,9 @@
 
 #include "BenchmarkHelpers.h"
 #include <SPI.h>
+#if !defined(ARDUINO_UNO_Q)
+#include <Wire.h>
+#endif
 
 #if defined(ESP32)
 #include <HEXBuilder.h>
@@ -874,6 +877,16 @@ void benchmarkFloatOps() {
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println(fresult);
 
+  // Float division
+  fresult = 1000000.0f;
+  startBenchmark();
+  for (uint32_t i = 0; i < BENCHMARK_ITERATIONS / 10; i++) {
+    fresult /= 1.0001f;
+  }
+  unsigned long fdivTime = endBenchmark();
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println(fresult);
+
 #if !defined(ARDUINO_UNO_Q) && !defined(ARDUINO_UNO_Q_MCU)
   // Sqrt - accumulate to prevent optimization (skipped on Uno Q - no libm)
   fresult = 0.0f;
@@ -912,6 +925,14 @@ void benchmarkFloatOps() {
   SERIAL_OUT.print((float)(BENCHMARK_ITERATIONS / 10) / fmulTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
 
+  SERIAL_OUT.print(F_STR("Float Division ("));
+  SERIAL_OUT.print(BENCHMARK_ITERATIONS / 10);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(fdivTime);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print((float)(BENCHMARK_ITERATIONS / 10) / fdivTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
 #if !defined(ARDUINO_UNO_Q) && !defined(ARDUINO_UNO_Q_MCU)
   SERIAL_OUT.print(F_STR("Square Root ("));
   SERIAL_OUT.print(sqrtResult.totalOps);
@@ -930,6 +951,91 @@ void benchmarkFloatOps() {
   SERIAL_OUT.println(F_STR(" ops/ms)"));
 #else
   SERIAL_OUT.println(F_STR("Sqrt/Sin/Cos: Skipped (Uno Q - no libm)"));
+#endif
+
+  SERIAL_OUT.println();
+  SERIAL_OUT.print(F_STR("sizeof(float):  "));
+  SERIAL_OUT.println(sizeof(float));
+  SERIAL_OUT.print(F_STR("sizeof(double): "));
+  SERIAL_OUT.println(sizeof(double));
+
+#if !defined(ARDUINO_UNO_Q) && !defined(ARDUINO_UNO_Q_MCU) && defined(__SIZEOF_DOUBLE__) && __SIZEOF_DOUBLE__ >= 8
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("8-byte double detected - double precision tests:"));
+
+  // Double multiplication
+  volatile double dresult = 1.0;
+  startBenchmark();
+  for (uint32_t i = 0; i < BENCHMARK_ITERATIONS / 10; i++) {
+    dresult *= 1.0001;
+  }
+  unsigned long dmulTime = endBenchmark();
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println((float)dresult);
+
+  // Double division
+  dresult = 1000000.0;
+  startBenchmark();
+  for (uint32_t i = 0; i < BENCHMARK_ITERATIONS / 10; i++) {
+    dresult /= 1.0001;
+  }
+  unsigned long ddivTime = endBenchmark();
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println((float)dresult);
+
+  // Double sqrt
+  dresult = 0.0;
+  TimedLoopResult dsqrtResult = runTimedLoop(minDurationMs, 100, [&]() {
+    for (uint32_t i = 0; i < 100; i++) {
+      dresult += sqrt((double)i);
+    }
+  });
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println((float)dresult);
+
+  // Double sin/cos
+  dresult = 0.0;
+  TimedLoopResult dtrigResult = runTimedLoop(minDurationMs, 100, [&]() {
+    for (uint32_t i = 0; i < 100; i++) {
+      dresult += sin((double)i / 100.0) + cos((double)i / 100.0);
+    }
+  });
+  SERIAL_OUT.print(F_STR("Checksum: "));
+  SERIAL_OUT.println((float)dresult);
+
+  SERIAL_OUT.print(F_STR("Double Multiply ("));
+  SERIAL_OUT.print(BENCHMARK_ITERATIONS / 10);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(dmulTime);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print((float)(BENCHMARK_ITERATIONS / 10) / dmulTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
+  SERIAL_OUT.print(F_STR("Double Division ("));
+  SERIAL_OUT.print(BENCHMARK_ITERATIONS / 10);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(ddivTime);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print((float)(BENCHMARK_ITERATIONS / 10) / ddivTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
+  SERIAL_OUT.print(F_STR("Double Sqrt ("));
+  SERIAL_OUT.print(dsqrtResult.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(dsqrtResult.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(dsqrtResult.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
+  SERIAL_OUT.print(F_STR("Double Sin/Cos ("));
+  SERIAL_OUT.print(dtrigResult.totalOps);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(dtrigResult.elapsedMicros);
+  SERIAL_OUT.print(F_STR(" μs ("));
+  SERIAL_OUT.print(dtrigResult.opsPerMs);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+#elif !defined(ARDUINO_UNO_Q) && !defined(ARDUINO_UNO_Q_MCU)
+  SERIAL_OUT.println(F_STR("4-byte double (same as float) - double tests skipped"));
 #endif
 }
 
@@ -1770,6 +1876,32 @@ void benchmarkAnalogIO() {
 #ifndef BOARD_SMALL_FLASH
 void benchmarkSerial() {
   printHeader("I/O: SERIAL COMMUNICATION");
+
+  SERIAL_OUT.print(F_STR("Baud rate: "));
+  SERIAL_OUT.println(SERIAL_BAUD);
+
+  SERIAL_OUT.print(F_STR("TX buffer: "));
+#if defined(SERIAL_TX_BUFFER_SIZE)
+  SERIAL_OUT.print(SERIAL_TX_BUFFER_SIZE);
+  SERIAL_OUT.println(F_STR(" bytes"));
+#elif defined(SERIAL_BUFFER_SIZE)
+  SERIAL_OUT.print(SERIAL_BUFFER_SIZE);
+  SERIAL_OUT.println(F_STR(" bytes"));
+#else
+  SERIAL_OUT.println(F_STR("unknown"));
+#endif
+
+  SERIAL_OUT.print(F_STR("RX buffer: "));
+#if defined(SERIAL_RX_BUFFER_SIZE)
+  SERIAL_OUT.print(SERIAL_RX_BUFFER_SIZE);
+  SERIAL_OUT.println(F_STR(" bytes"));
+#elif defined(SERIAL_BUFFER_SIZE)
+  SERIAL_OUT.print(SERIAL_BUFFER_SIZE);
+  SERIAL_OUT.println(F_STR(" bytes"));
+#else
+  SERIAL_OUT.println(F_STR("unknown"));
+#endif
+  SERIAL_OUT.println();
 
   // Calculate expected bytes
   int expectedBytes = 0;
@@ -5065,6 +5197,108 @@ void benchmarkSPI() {
   SPI.end();
 }
 
+// ==================== I2C WIRE COMMUNICATION ====================
+
+#if !defined(ARDUINO_UNO_Q)
+void benchmarkWireI2C() {
+  printHeader("I/O: WIRE I2C COMMUNICATION");
+
+  // Number of I2C buses
+  SERIAL_OUT.print(F_STR("I2C buses: "));
+#if defined(WIRE_INTERFACES_COUNT)
+  SERIAL_OUT.println(WIRE_INTERFACES_COUNT);
+#elif defined(ESP32)
+  SERIAL_OUT.println(2);
+#elif defined(ARDUINO_ARCH_RP2040)
+  SERIAL_OUT.println(2);
+#elif defined(ARDUINO_SAM_DUE)
+  SERIAL_OUT.println(2);
+#elif defined(BOARD_STM32H7)
+  SERIAL_OUT.println(3);
+#elif defined(BOARD_NRF52)
+  SERIAL_OUT.println(2);
+#else
+  SERIAL_OUT.println(1);
+#endif
+
+  // Internal buffer size
+  SERIAL_OUT.print(F_STR("Buffer size: "));
+#if defined(BUFFER_LENGTH)
+  SERIAL_OUT.print(BUFFER_LENGTH);
+  SERIAL_OUT.println(F_STR(" bytes"));
+#elif defined(I2C_BUFFER_LENGTH)
+  SERIAL_OUT.print(I2C_BUFFER_LENGTH);
+  SERIAL_OUT.println(F_STR(" bytes"));
+#elif defined(WIRE_BUFFER_LENGTH)
+  SERIAL_OUT.print(WIRE_BUFFER_LENGTH);
+  SERIAL_OUT.println(F_STR(" bytes"));
+#else
+  SERIAL_OUT.println(F_STR("unknown"));
+#endif
+
+  Wire.begin();
+
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("Testing I2C transaction speed"));
+  SERIAL_OUT.println(F_STR("(No device - measuring bus overhead)"));
+  SERIAL_OUT.println();
+
+  // Standard mode (100 kHz)
+  Wire.setClock(100000);
+  startBenchmark();
+  for (int i = 0; i < 1000; i++) {
+    Wire.beginTransmission(0x08);
+    Wire.write(i & 0xFF);
+    Wire.endTransmission();
+  }
+  unsigned long stdTime = endBenchmark();
+
+  SERIAL_OUT.print(F_STR("100 kHz: "));
+  SERIAL_OUT.print(stdTime);
+  SERIAL_OUT.print(F_STR(" us for 1000 writes ("));
+  SERIAL_OUT.print(1000.0 / stdTime * 1000);
+  SERIAL_OUT.println(F_STR(" txn/ms)"));
+
+  // Fast mode (400 kHz)
+  Wire.setClock(400000);
+  startBenchmark();
+  for (int i = 0; i < 1000; i++) {
+    Wire.beginTransmission(0x08);
+    Wire.write(i & 0xFF);
+    Wire.endTransmission();
+  }
+  unsigned long fastTime = endBenchmark();
+
+  SERIAL_OUT.print(F_STR("400 kHz: "));
+  SERIAL_OUT.print(fastTime);
+  SERIAL_OUT.print(F_STR(" us for 1000 writes ("));
+  SERIAL_OUT.print(1000.0 / fastTime * 1000);
+  SERIAL_OUT.println(F_STR(" txn/ms)"));
+
+#if defined(ESP32) || defined(ARDUINO_ARCH_RP2040) || defined(BOARD_STM32H7)
+  // Fast mode plus (1 MHz) on capable boards
+  Wire.setClock(1000000);
+  startBenchmark();
+  for (int i = 0; i < 1000; i++) {
+    Wire.beginTransmission(0x08);
+    Wire.write(i & 0xFF);
+    Wire.endTransmission();
+  }
+  unsigned long fastPlusTime = endBenchmark();
+
+  SERIAL_OUT.print(F_STR("1 MHz:   "));
+  SERIAL_OUT.print(fastPlusTime);
+  SERIAL_OUT.print(F_STR(" us for 1000 writes ("));
+  SERIAL_OUT.print(1000.0 / fastPlusTime * 1000);
+  SERIAL_OUT.println(F_STR(" txn/ms)"));
+#endif
+
+#if defined(ESP32) && !defined(CONFIG_IDF_TARGET_ESP32C3) && !defined(CONFIG_IDF_TARGET_ESP32C6) && !defined(CONFIG_IDF_TARGET_ESP32H2)
+  Wire.end();
+#endif
+}
+#endif
+
 // Watchdog Timer Benchmark
 #ifndef BOARD_SMALL_FLASH
 void benchmarkWatchdog() {
@@ -5616,6 +5850,9 @@ void setup() {
   benchmarkPWM();
   benchmarkInterruptLatency();
   benchmarkSPI();
+#if !defined(ARDUINO_UNO_Q)
+  benchmarkWireI2C();
+#endif
 #ifndef BOARD_SMALL_FLASH
   benchmarkWatchdog();
   benchmarkSleepModes();

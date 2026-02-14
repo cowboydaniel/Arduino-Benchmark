@@ -2720,6 +2720,118 @@ void benchmarkTimingPrecision() {
   SERIAL_OUT.println(F_STR("%"));
 }
 
+// ==================== DELAY TIMING BENCHMARKS ====================
+
+void benchmarkDelayTiming() {
+  printHeader("TIMING: delay() and delayMicroseconds() Accuracy");
+
+  // --- delay() accuracy: test delay(0) .. delay(50) ---
+  SERIAL_OUT.println(F_STR("delay(ms)  actual(ms)  error(ms)"));
+
+  long delayErrorSum = 0;
+  long delayMaxError = 0;
+  const int delaySteps = 51;  // 0..50
+
+  for (int ms = 0; ms < delaySteps; ms++) {
+    unsigned long t1 = micros();
+    delay(ms);
+    unsigned long t2 = micros();
+    long actual = (long)(t2 - t1);                      // in microseconds
+    long expected = (long)ms * 1000L;                    // in microseconds
+    long err = actual - expected;                        // signed error
+
+    long absErr = err < 0 ? -err : err;
+    delayErrorSum += absErr;
+    if (absErr > delayMaxError) delayMaxError = absErr;
+
+    SERIAL_OUT.print(F_STR("  "));
+    if (ms < 10) SERIAL_OUT.print(' ');
+    SERIAL_OUT.print(ms);
+    SERIAL_OUT.print(F_STR("        "));
+    // Print actual in ms with 3 decimals
+    SERIAL_OUT.print(actual / 1000.0f, 3);
+    SERIAL_OUT.print(F_STR("     "));
+    // Print signed error in ms with 3 decimals
+    if (err >= 0) SERIAL_OUT.print('+');
+    SERIAL_OUT.println(err / 1000.0f, 3);
+
+#if defined(ESP32) || defined(ESP8266) || defined(ARDUINO_ARCH_RP2040)
+    yield();
+#endif
+  }
+
+  float delayAvgError = delayErrorSum / (float)delaySteps / 1000.0f;  // in ms
+  float delayMaxErrorMs = delayMaxError / 1000.0f;
+
+  SERIAL_OUT.println();
+  SERIAL_OUT.print(F_STR("delay() avg absolute error: "));
+  SERIAL_OUT.print(delayAvgError, 3);
+  SERIAL_OUT.println(F_STR(" ms"));
+  SERIAL_OUT.print(F_STR("delay() max absolute error: "));
+  SERIAL_OUT.print(delayMaxErrorMs, 3);
+  SERIAL_OUT.println(F_STR(" ms"));
+
+  // --- delayMicroseconds() accuracy: test 0..50 us ---
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("delayMicroseconds(us)  actual(us)  error(us)"));
+
+  long dusErrorSum = 0;
+  long dusMaxError = 0;
+  const int dusSteps = 51;  // 0..50
+
+  for (int us = 0; us < dusSteps; us++) {
+    // Take median of 5 measurements to reduce jitter
+    long measurements[5];
+    for (uint8_t trial = 0; trial < 5; trial++) {
+      unsigned long t1 = micros();
+      delayMicroseconds(us);
+      unsigned long t2 = micros();
+      measurements[trial] = (long)(t2 - t1);
+    }
+    // Simple insertion sort for 5 elements
+    for (uint8_t i = 1; i < 5; i++) {
+      long key = measurements[i];
+      int8_t j = i - 1;
+      while (j >= 0 && measurements[j] > key) {
+        measurements[j + 1] = measurements[j];
+        j--;
+      }
+      measurements[j + 1] = key;
+    }
+    long actual = measurements[2];  // median
+    long expected = (long)us;
+    long err = actual - expected;
+
+    long absErr = err < 0 ? -err : err;
+    dusErrorSum += absErr;
+    if (absErr > dusMaxError) dusMaxError = absErr;
+
+    SERIAL_OUT.print(F_STR("  "));
+    if (us < 10) SERIAL_OUT.print(' ');
+    SERIAL_OUT.print(us);
+    SERIAL_OUT.print(F_STR("                    "));
+    if (actual < 10) SERIAL_OUT.print(' ');
+    SERIAL_OUT.print(actual);
+    SERIAL_OUT.print(F_STR("          "));
+    if (err >= 0) SERIAL_OUT.print('+');
+    SERIAL_OUT.println(err);
+
+#if defined(ESP32) || defined(ESP8266) || defined(ARDUINO_ARCH_RP2040)
+    yield();
+#endif
+  }
+
+  float dusAvgError = dusErrorSum / (float)dusSteps;
+
+  SERIAL_OUT.println();
+  SERIAL_OUT.print(F_STR("delayMicroseconds() avg absolute error: "));
+  SERIAL_OUT.print(dusAvgError, 1);
+  SERIAL_OUT.println(F_STR(" us"));
+  SERIAL_OUT.print(F_STR("delayMicroseconds() max absolute error: "));
+  SERIAL_OUT.print(dusMaxError);
+  SERIAL_OUT.println(F_STR(" us"));
+}
+
 // ==================== STACK DEPTH BENCHMARK ====================
 
 volatile int recursionCounter = 0;
@@ -5187,6 +5299,7 @@ void setup() {
 #ifndef BOARD_SMALL_FLASH
   benchmarkAdvancedMath();
   benchmarkTimingPrecision();
+  benchmarkDelayTiming();
   benchmarkStackDepth();
 #endif
 #if defined(ARDUINO_ARCH_RP2040)

@@ -869,7 +869,6 @@ void benchmarkFloatOps() {
 #endif
 }
 
-#ifndef BOARD_SMALL_FLASH
 void benchmarkStringOps() {
   printHeader("CPU: STRING OPERATIONS");
 
@@ -942,7 +941,6 @@ void benchmarkStringOps() {
   SERIAL_OUT.print(itoaResult.opsPerMs);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
 }
-#endif  // BOARD_SMALL_FLASH
 // ==================== MEMORY BENCHMARKS ====================
 
 void benchmarkSRAM() {
@@ -1558,7 +1556,6 @@ void benchmarkDigitalIO() {
 #endif
 }
 
-#ifndef BOARD_SMALL_FLASH
 void benchmarkAnalogIO() {
   printHeader("I/O: ANALOG OPERATIONS");
 
@@ -1708,7 +1705,6 @@ void benchmarkAnalogIO() {
 #endif
   }
 }
-#endif  // BOARD_SMALL_FLASH
 
 void benchmarkFlash() {
   printHeader("STORAGE: Flash Information");
@@ -2312,9 +2308,7 @@ void setup() {
   // CPU benchmarks
   benchmarkIntegerOps();
   benchmarkFloatOps();
-#ifndef BOARD_SMALL_FLASH
   benchmarkStringOps();
-#endif
 
   // Memory benchmarks
   benchmarkSRAM();
@@ -2327,9 +2321,7 @@ void setup() {
 
   // I/O benchmarks
   benchmarkDigitalIO();
-#ifndef BOARD_SMALL_FLASH
   benchmarkAnalogIO();
-#endif
 
   // Storage info
   benchmarkFlash();

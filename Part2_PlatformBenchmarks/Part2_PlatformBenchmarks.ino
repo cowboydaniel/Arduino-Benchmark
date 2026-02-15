@@ -1113,14 +1113,13 @@ void benchmarkBLE() {
 void benchmarkAdvancedMath() {
   printHeader("ADVANCED MATH: Transcendental Functions");
 
-#if defined(__AVR__) || defined(ARDUINO_UNO_Q) || defined(ARDUINO_UNO_Q_MCU)
-  // Skip on AVR to save flash (atan2/log/exp/pow add ~1.5KB of libm)
-  // See Float benchmark for sin/cos/sqrt performance
-  SERIAL_OUT.println(F_STR("Skipped (see Float ops benchmark)"));
-  return;
-#else
-
   volatile float checksum = 0;
+
+#if defined(ARDUINO_UNO_Q) || defined(ARDUINO_UNO_Q_MCU)
+  // Uno Q (Zephyr) lacks standard libm; skip transcendentals
+  SERIAL_OUT.println(F_STR("Skipped (no libm on this platform)"));
+  return;
+#endif
 
   // atan2 test
   startBenchmark();
@@ -1195,7 +1194,6 @@ void benchmarkAdvancedMath() {
   SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(1000.0 / fmodTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
-#endif
 }
 #if defined(ARDUINO_ARCH_RP2040)
 void benchmarkSHA1() {

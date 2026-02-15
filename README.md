@@ -22,6 +22,8 @@ Boards are detected automatically at compile time using preprocessor macros — 
 ├── BenchmarkHelpers.h               # Shared timing utilities
 ├── Part1_CoreBenchmarks_Results.xlsx # Core benchmark results spreadsheet
 ├── Part2_PlatformBenchmarks_Results.xlsx # Platform benchmark results spreadsheet
+├── reports/                          # Raw Serial Monitor output per board
+├── BOARD_STATUS.md                   # Board testing tracker (priority + status)
 └── CONTRIBUTING.md                   # Guide for contributors
 ```
 
@@ -56,9 +58,12 @@ Advanced and board-specific tests:
 5. Open **Serial Monitor** at **115200 baud**
 6. Wait for all tests to complete
 7. Repeat with `Part2_PlatformBenchmarks/Part2_PlatformBenchmarks.ino`
-8. Record Part 1 results in `Part1_CoreBenchmarks_Results.xlsx` and Part 2 results in `Part2_PlatformBenchmarks_Results.xlsx`
+8. Save the full Serial Monitor output to `reports/<board>/<version>.txt`
+9. Record Part 1 results in `Part1_CoreBenchmarks_Results.xlsx` and Part 2 results in `Part2_PlatformBenchmarks_Results.xlsx`
 
 Results are printed as operations per millisecond (ops/ms), timing in microseconds, and other metrics depending on the test.
+
+See [BOARD_STATUS.md](BOARD_STATUS.md) for which boards have been tested and which still need results.
 
 ## Measurement Methodology
 

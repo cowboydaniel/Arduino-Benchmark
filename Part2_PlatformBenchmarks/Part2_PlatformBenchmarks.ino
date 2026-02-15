@@ -193,6 +193,8 @@
 #define HAS_BLE
 #define HAS_DUAL_CORE
 #define BOARD_STM32H7
+#define USBCON
+#include <WiFi.h>
 #elif defined(ARDUINO_PORTENTA_C33)
 #define BOARD_NAME "Arduino Portenta C33"
 #define HAS_WIFI
@@ -205,6 +207,8 @@
 #define HAS_BLE
 #define HAS_DUAL_CORE
 #define BOARD_STM32H7
+#define USBCON
+#include <WiFi.h>
 
 // Arduino Mega + WiFi
 #elif defined(ARDUINO_AVR_MEGA2560)
@@ -435,6 +439,11 @@
 #include <avr/wdt.h>
 #endif
 
+#if defined(BOARD_STM32H7)
+#include <mbed.h>
+#include "stm32h7xx_ll_adc.h"
+#endif
+
 
 // ==================== SERIAL OUTPUT ABSTRACTION ====================
 // Uno Q uses Monitor instead of Serial for output
@@ -563,6 +572,8 @@ void benchmarkCPUStress() {
   hasTempSensor = false;  // RA4M1 has sensor but not easily accessible
 #elif defined(BOARD_TEENSY) && defined(__IMXRT1062__)
   hasTempSensor = true;  // Teensy 4.x has temp sensor
+#elif defined(ARDUINO_GIGA)
+  hasTempSensor = true;  // STM32H7 internal temp sensor via HAL
 #endif
 
   if (!hasTempSensor) {
@@ -571,6 +582,10 @@ void benchmarkCPUStress() {
 
   // Initial temperature reading
   float startTemp = 0;
+#if defined(ARDUINO_GIGA)
+  mbed::AnalogIn mcuADCVref(ADC_VREF), mcuADCTemp(ADC_TEMP);
+  int mcuVref = __LL_ADC_CALC_VREFANALOG_VOLTAGE(mcuADCVref.read_u16(), ADC_RESOLUTION_16B);
+#endif
 #if defined(ESP32)
   startTemp = temperatureRead();
   SERIAL_OUT.print(F_STR("Start Temperature: "));
@@ -593,6 +608,11 @@ void benchmarkCPUStress() {
   }
 #elif defined(BOARD_TEENSY) && defined(__IMXRT1062__)
   startTemp = tempmonGetTemp();
+  SERIAL_OUT.print(F_STR("Start Temperature: "));
+  SERIAL_OUT.print(startTemp);
+  SERIAL_OUT.println(F_STR(" °C"));
+#elif defined(ARDUINO_GIGA)
+  startTemp = __HAL_ADC_CALC_TEMPERATURE(mcuVref, mcuADCTemp.read_u16(), ADC_RESOLUTION_16B);
   SERIAL_OUT.print(F_STR("Start Temperature: "));
   SERIAL_OUT.print(startTemp);
   SERIAL_OUT.println(F_STR(" °C"));
@@ -696,6 +716,8 @@ void benchmarkCPUStress() {
     }
 #elif defined(BOARD_TEENSY) && defined(__IMXRT1062__)
     endTemp = tempmonGetTemp();
+#elif defined(ARDUINO_GIGA)
+    endTemp = __HAL_ADC_CALC_TEMPERATURE(mcuVref, mcuADCTemp.read_u16(), ADC_RESOLUTION_16B);
 #endif
 
     SERIAL_OUT.println();
@@ -1886,6 +1908,19 @@ static size_t getStackBudget(uintptr_t callerFrame) {
   // typically 8-16 KB; use 4 KB to stay well within bounds.
   (void)callerFrame;
   return 4096;
+#elif defined(BOARD_STM32H7)
+  // Arduino Mbed OS boards (Portenta H7, Giga R1): thread stacks are
+  // managed by the RTOS in a separate region from the heap.  sbrk(0) is
+  // not meaningful here.  Use CMSIS-RTOS2 to query remaining stack space.
+  (void)callerFrame;
+  {
+    osThreadId_t tid = osThreadGetId();
+    if (tid) {
+      size_t space = (size_t)osThreadGetStackSpace(tid);
+      if (space > 1024) return space;
+    }
+  }
+  return 8192;  // conservative fallback
 #elif defined(ARDUINO_SAM_DUE) || defined(ARDUINO_ARCH_RP2040)     \
    || defined(BOARD_STM32U5) || defined(BOARD_SAMD)                 \
    || defined(BOARD_NRF52)                                          \
@@ -4037,7 +4072,7 @@ void printSystemInfo() {
   SERIAL_OUT.print(F_STR("MCU: STM32H7 (ARM Cortex-M7)"));
   SERIAL_OUT.println();
   SERIAL_OUT.print(F_STR("CPU Frequency: "));
-  SERIAL_OUT.print(F_CPU / 1000000);
+  SERIAL_OUT.print(SystemCoreClock / 1000000);
   SERIAL_OUT.println(F_STR(" MHz"));
 #ifdef HAS_DUAL_CORE
   SERIAL_OUT.println(F_STR("Cores: Dual Core (M7 + M4)"));

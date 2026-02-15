@@ -20,7 +20,8 @@ Boards are detected automatically at compile time using preprocessor macros — 
 │   ├── Part2_PlatformBenchmarks.ino # Platform-specific tests
 │   └── BenchmarkHelpers.h
 ├── BenchmarkHelpers.h               # Shared timing utilities
-├── Arduino_Benchmark_Comparison.xlsx # Results spreadsheet
+├── Part1_CoreBenchmarks_Results.xlsx # Core benchmark results spreadsheet
+├── Part2_PlatformBenchmarks_Results.xlsx # Platform benchmark results spreadsheet
 └── CONTRIBUTING.md                   # Guide for contributors
 ```
 
@@ -55,7 +56,7 @@ Advanced and board-specific tests:
 5. Open **Serial Monitor** at **115200 baud**
 6. Wait for all tests to complete
 7. Repeat with `Part2_PlatformBenchmarks/Part2_PlatformBenchmarks.ino`
-8. Record results in `Arduino_Benchmark_Comparison.xlsx`
+8. Record Part 1 results in `Part1_CoreBenchmarks_Results.xlsx` and Part 2 results in `Part2_PlatformBenchmarks_Results.xlsx`
 
 Results are printed as operations per millisecond (ops/ms), timing in microseconds, and other metrics depending on the test.
 

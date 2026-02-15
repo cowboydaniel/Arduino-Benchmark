@@ -1,0 +1,371 @@
+
+
+========================================
+  UNIVERSAL ARDUINO BENCHMARK SUITE
+  Part 1: Core Performance
+========================================
+
+
+========================================
+SYSTEM INFORMATION
+========================================
+Board: Arduino Uno R4 WiFi
+MCU: Renesas RA4M1 (ARM Cortex-M4)
+CPU Frequency: 48 MHz
+Features: WiFi (ESP32-S3), 12x8 LED Matrix
+Free RAM: 32 KB (RA4M1)
+Compile Date: Feb 16 2026 03:31:57
+
+========================================
+CPU: INTEGER OPERATIONS
+========================================
+Checksum: 49995000
+Checksum: 2082398021
+Checksum: 100
+Addition (10000 ops): 1678 μs (5959.48 ops/ms)
+Multiplication (23900 ops): 5005 μs (4775.22 ops/ms)
+Division (16200 ops): 5025 μs (3223.88 ops/ms)
+
+========================================
+CPU: FLOATING POINT OPERATIONS
+========================================
+Checksum: 3141.60
+Checksum: 1.11
+Checksum: 904826.94
+Checksum: 26458.37
+Checksum: 1169.32
+Float Addition (1000 ops): 154 μs (6493.51 ops/ms)
+Float Multiply (1000 ops): 172 μs (5813.95 ops/ms)
+Float Division (1000 ops): 443 μs (2257.34 ops/ms)
+Square Root (4000 ops): 5109 μs (782.93 ops/ms)
+Sin/Cos (900 ops): 5016 μs (179.43 ops/ms)
+
+sizeof(float):  4
+sizeof(double): 8
+
+8-byte double detected - double precision tests:
+Checksum: 1.11
+Checksum: 904841.94
+Checksum: 1322.93
+Checksum: 129.92
+Double Multiply (1000 ops): 1844 μs (542.30 ops/ms)
+Double Division (1000 ops): 14878 μs (67.21 ops/ms)
+Double Sqrt (200 ops): 5088 μs (39.31 ops/ms)
+Double Sin/Cos (100 ops): 9443 μs (10.59 ops/ms)
+
+========================================
+CPU: STRING OPERATIONS
+========================================
+Concatenation (16500 ops): 50154 us (328.99 ops/ms)
+Comparison (15000 ops): 50797 us (295.29 ops/ms)
+Int to String (4000 ops): 52367 us (76.38 ops/ms)
+itoa fixed buf (18000 ops): 52516 us (342.75 ops/ms)
+
+========================================
+MEMORY: SRAM READ/WRITE
+========================================
+Read checksum: 3264000
+Random checksum: 2937600
+Sequential Write (37376 ops): 5005 μs (7467.73 ops/ms)
+Sequential Read (25600 ops): 5034 μs (5085.42 ops/ms)
+Random Access (23040 ops): 5019 μs (median 4590.56 ops/ms, 5 trials)
+
+--- Memory Bandwidth Tests ---
+Detected free heap: 15720 bytes
+Using 11788 byte buffer (~75% free heap)
+memcpy (589200 bytes): 86204 μs (6.83 MB/s)
+memset (1178800 bytes): 172402 μs (6.84 MB/s)
+RAM Write Bandwidth: 27.35 MB/s
+RAM Read Bandwidth: 21.27 MB/s
+
+========================================
+MEMORY: EEPROM
+========================================
+EEPROM Size: 8192 bytes
+Hardware Write (64 bytes): 40602 μs (1.58 ops/ms)
+Read (64 bytes): 1685 μs (37.98 ops/ms)
+Read checksum: 2016
+
+========================================
+I/O: DIGITAL PIN OPERATIONS
+========================================
+digitalWrite() (2000 ops): 1675 μs (median 1194.03 ops/ms, 5 trials)
+
+========================================
+I/O: ANALOG OPERATIONS
+========================================
+analogRead() (2105 ops): 50020 μs (42.08 ops/ms)
+ADC average: 192
+analogWrite() (1808 ops): 50022 μs (36.14 ops/ms)
+
+========================================
+STORAGE: Flash Information
+========================================
+Flash info not available on this platform
+
+========================================
+I/O: PWM PERFORMANCE
+========================================
+Testing PWM on pin 3
+analogWrite() (10000 ops): 256083 us (39.05 ops/ms)
+PWM ramp (100 cycles): 653313 us (39.18 ops/ms)
+Time per update: 25.520 us
+
+========================================
+TIMING: INTERRUPT LATENCY
+========================================
+Jumper 3 -> 2
+Using pin 2
+
+Pass 1 – digitalWrite trigger (100/100):
+  Avg latency: 5.49 us (includes digitalWrite overhead)
+Pass 2 – direct port trigger (100/100):
+  Avg latency: 5.53 us (pure ISR entry latency)
+
+digitalWrite overhead: ~-0.04 us
+
+========================================
+I/O: SPI PERFORMANCE
+========================================
+Testing SPI transaction speed
+(No loopback - measuring CPU overhead)
+
+1 MHz: 10551 us for 1000 bytes (94.78 KB/s effective)
+4 MHz: 4400 us for 1000 bytes (227.27 KB/s effective)
+8 MHz: 3395 us for 1000 bytes (294.55 KB/s effective)
+16 MHz: 3144 us for 1000 bytes (318.07 KB/s effective)
+
+Bulk transfer (256 bytes):
+Throughput: 448.0 KB/s
+
+========================================
+PART 1 BENCHMARK COMPLETE!
+========================================
+Core benchmarks finished.
+Upload Part 2 for remaining benchmarks.
+
+To run again, press the RESET button or
+re-upload the sketch.
+========================================
+
+
+========================================
+  UNIVERSAL ARDUINO BENCHMARK SUITE
+  Part 2: Connectivity, Platform & Power
+========================================
+
+
+========================================
+SYSTEM INFORMATION
+========================================
+Board: Arduino Uno R4 WiFi
+MCU: Renesas RA4M1 (ARM Cortex-M4)
+CPU Frequency: 48 MHz
+Features: WiFi (ESP32-S3), 12x8 LED Matrix
+Free RAM: 32 KB (RA4M1)
+Compile Date: Feb 16 2026 03:32:14
+
+========================================
+CPU: STRESS TEST with Temperature
+========================================
+No temp sensor, stress only
+Running 10s stress test...
+
+Done: 758100 iters in 10000 ms
+Rate: 75.81 iters/ms
+
+========================================
+ADVANCED MATH: Transcendental Functions
+========================================
+Checksum: 254435.33
+exp() (100 ops): 2713 us (36.86 ops/ms)
+log() (100 ops): 2646 us (37.79 ops/ms)
+log10() (100 ops): 2652 us (37.71 ops/ms)
+pow() (100 ops): 5744 us (17.41 ops/ms)
+atan2() (100 ops): 575 us (173.91 ops/ms)
+asin() (100 ops): 502 us (199.20 ops/ms)
+acos() (100 ops): 486 us (205.76 ops/ms)
+tan() (100 ops): 466 us (214.59 ops/ms)
+fmod() (1000 ops): 4740 us (210.97 ops/ms)
+
+========================================
+I/O: SERIAL COMMUNICATION
+========================================
+Baud rate: 115200
+TX buffer: 512 bytes
+RX buffer: 512 bytes
+
+01234567891011121314151617181920212223242526272829303132333435363738394041424344454647484950515253545556575859606162636465666768697071727374757677787980818283848586878889909192939495969798990123456789101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899012345678910111213141516171819202122232425262728293031323334353637383940414243444546474849505152535455565758596061626364656667686970717273747576777879808182838485868788899091929394959697989901234567891011121314151617181920212223242526272829303132333435363738394041424344454647484950515253545556575859606162636465666768697071727374757677787980818283848586878889909192939495969798990123456789101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899
+Enqueue (190 B): 16432 us (median 11.56 B/ms)
+flush(): 75 us
+Wire time: 16493 us
+Throughput: 11.52 B/ms (11520 B/s max)
+Ratio: 99.63% (buffered)
+
+========================================
+DISPLAY: LED Matrix (Uno R4)
+========================================
+12x8 LED Matrix Available: YES
+Running LED animation test...
+Blink animation (20 cycles): 2000 ms
+Pattern switching (100 frames): 621 μs (161.03 ops/ms)
+Bitmap rendering (50 frames): 1887 μs (26.50 ops/ms)
+
+========================================
+WIRELESS: WiFi CAPABILITIES
+========================================
+WiFi Available: YES (ESP32-S3 via WiFiS3)
+MAC Address: 50:59:6F:FA:12:F4
+Scanning networks... 2 networks found
+Strongest 3 networks:
+  1: AraratHotelGuest (-70 dBm)
+  2: AraratHotelStar (-92 dBm)
+
+========================================
+CRYPTO: SoftwareATSE (Uno R4 WiFi)
+========================================
+Initializing SoftwareATSE...
+SoftwareATSE initialized successfully!
+
+--- Public Key Generation ---
+SoftwareATSE: Public key generation (ms): 194
+  Rate: 5.155 keys/sec
+
+--- Secure Storage Operations ---
+Config write (µs): 2
+  (ms): 0.002
+  Write speed: 128000000.00 bytes/sec
+
+--- EC Signing ---
+EC signing (avg ms/op): 193.786
+  Rate: 5.16 ops/sec
+  Successful operations: 10/10
+
+--- Secure Random Number Generator ---
+RNG checksum: 650718
+Secure RNG throughput: 9142.04 bytes/sec
+  Total bytes generated: 5120
+  Time: 560.05 ms
+  Successful reads: 20/20
+Distribution test (first 1000 bytes):
+  Bin 0: 269 (26.9%)
+  Bin 1: 256 (25.6%)
+  Bin 2: 232 (23.2%)
+  Bin 3: 243 (24.3%)
+  (Ideal: 25% each bin)
+
+SoftwareATSE benchmarks complete
+
+========================================
+TIMING: millis() and micros() Precision
+========================================
+millis() 1s: 1000 ms (+/-0 ms)
+micros() res: 2 us (1 reads)
+Min step: 2 us
+micros() 1ms: 1051 us (+/-51 us)
+
+Clock accuracy: 100.00%
+
+========================================
+TIMING: delay() and delayMicroseconds() Accuracy
+========================================
+delay(0) call overhead: 0.003 ms
+delay(1..50) avg deviation: 0.006 ms
+delay(1..50) max deviation: 0.006 ms
+delayMicroseconds(0) call overhead: 4 us
+delayMicroseconds(1..50) avg deviation: 0.5 us
+delayMicroseconds(1..50) max deviation: 2 us
+
+========================================
+MEMORY: Stack Depth Test
+========================================
+Probing stack limit...
+Stack budget: 18799 bytes
+Max safe depth: 325
+Per-frame cost: 56 bytes
+Stack used:     18256 / 18799 bytes
+Timing at depth 292...
+Recursion (292 deep): 179.0 us
+Per level: 0.61 us
+
+========================================
+I/O: DAC OUTPUT (Uno R4)
+========================================
+Renesas RA4M1 has 1x 12-bit DAC on pin A0/DAC
+analogWrite() 12-bit (10000 ops): 98187 us (101.85 ops/ms)
+DAC ramp (10 cycles, 2560 writes): 24819 us (103.15 ops/ms)
+Effective sample rate: 103.1 kHz
+
+========================================
+TIMING: INTERNAL RTC (Uno R4)
+========================================
+Renesas RA4M1 has built-in RTC
+RTC.getTime() (1000 ops): 16587 us (60.29 ops/ms)
+RTC.setTime() (100 ops): 18217 us (5.49 ops/ms)
+
+RTC tick accuracy (1 second test):
+  1 RTC second = 995687 us (-0.431% error)
+Checksum: 0
+
+========================================
+WIRELESS: BLE (Uno R4 WiFi)
+========================================
+Uno R4 WiFi has BLE via ESP32-S3 module
+BLE requires ArduinoBLE library
+
+Running BLE discovery benchmark with ArduinoBLE...
+Calling BLE.scan() for device discovery (5 sec)...
+  Found #1: (unnamed) [4f:e2:71:2d:99:43]
+  Found #2: (unnamed) [50:00:72:22:97:65]
+  Found #3: (unnamed) [6e:00:70:01:03:54]
+  Found #4: (unnamed) [06:9c:c2:71:13:ae]
+  Found #5: (unnamed) [f7:cd:f2:d1:91:40]
+  Found #6: (unnamed) [df:ed:7f:98:0b:72]
+Discovered devices: 6
+Scan elapsed: 5068.28 ms
+
+========================================
+I/O: WIRE I2C COMMUNICATION
+========================================
+I2C buses: 2
+Buffer size: 255 bytes
+
+Testing I2C transaction speed
+(No device - measuring bus overhead)
+
+100 kHz: 10104 us for 10 writes (0.99 txn/ms)
+  Status codes: ok=0, addrNACK=0, dataNACK=0, other=0, timeout=10
+  Early stop: repeated bus errors/timeouts
+400 kHz: 10105 us for 10 writes (0.99 txn/ms)
+  Status codes: ok=0, addrNACK=0, dataNACK=0, other=0, timeout=10
+  Early stop: repeated bus errors/timeouts
+
+========================================
+SYSTEM: WATCHDOG TIMER
+========================================
+Renesas RA4M1 Watchdog:
+  Independent WDT (IWDT)
+  Configurable timeout periods
+
+Use WDT library for configuration
+
+========================================
+POWER: SLEEP MODE TIMING
+========================================
+Renesas RA4M1 Sleep (WFI / WFE):
+
+  WFI single wake: 86 us
+  100x WFI: 98140 us
+  WFE single wake: 86 us
+  100x WFE: 98882 us
+
+========================================
+PART 2 BENCHMARK COMPLETE!
+========================================
+Platform benchmarks finished.
+Both parts complete! All benchmarks have been run.
+
+To run again, press the RESET button or
+re-upload the sketch.
+========================================
+

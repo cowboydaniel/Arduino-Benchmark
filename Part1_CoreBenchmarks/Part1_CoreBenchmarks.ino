@@ -1939,60 +1939,152 @@ void benchmarkInterruptLatency() {
   attachInterrupt(interruptNumber, latencyISR, RISING);
 #endif
 
-  // Measure interrupt latency
-  unsigned long totalLatency = 0;
-  int successfulMeasurements = 0;
+  // ====== Pass 1: digitalWrite trigger (includes its overhead) ======
+  unsigned long totalLatencyDW = 0;
+  int successDW = 0;
   const int iterations = 100;
 
   for (int i = 0; i < iterations; i++) {
     isrFired = false;
 
-    // Trigger the interrupt
     isrStartTime = micros();
 #if defined(__AVR__)
-    digitalWrite(triggerPin, LOW);  // FALLING edge for AVR
+    digitalWrite(triggerPin, LOW);   // FALLING edge
 #else
-    digitalWrite(triggerPin, HIGH);  // RISING edge for others
+    digitalWrite(triggerPin, HIGH);  // RISING edge
 #endif
 
-    // Wait for ISR (with timeout)
-    unsigned long timeout = micros() + 1000;  // 1ms timeout
-    while (!isrFired && micros() < timeout) {
-      // Spin
-    }
+    unsigned long timeout = micros() + 1000;
+    while (!isrFired && micros() < timeout) {}
 
 #if defined(__AVR__)
-    digitalWrite(triggerPin, HIGH);  // Reset for next FALLING edge
+    digitalWrite(triggerPin, HIGH);  // Reset
 #else
-    digitalWrite(triggerPin, LOW);   // Reset for next RISING edge
+    digitalWrite(triggerPin, LOW);
 #endif
 
     if (isrFired) {
-      unsigned long latency = isrEndTime - isrStartTime;
-      totalLatency += latency;
-      successfulMeasurements++;
+      totalLatencyDW += isrEndTime - isrStartTime;
+      successDW++;
     }
-
-    delayMicroseconds(100);  // Small delay between tests
+    delayMicroseconds(100);
   }
 
   detachInterrupt(interruptNumber);
 
-  if (successfulMeasurements > 0) {
-    float avgLatency = (float)totalLatency / successfulMeasurements;
+  // ====== Pass 2: direct port/register trigger (pure ISR entry) ======
+  // Re-attach for pass 2
+#if defined(__AVR__)
+  attachInterrupt(interruptNumber, latencyISR, FALLING);
+#else
+  attachInterrupt(interruptNumber, latencyISR, RISING);
+#endif
 
-    SERIAL_OUT.print(F_STR("Successful measurements: "));
-    SERIAL_OUT.print(successfulMeasurements);
+  unsigned long totalLatencyDirect = 0;
+  int successDirect = 0;
+
+  // Pre-compute register pointers / masks for the trigger pin
+#if defined(__AVR__)
+  volatile uint8_t *trigPort = portOutputRegister(digitalPinToPort(triggerPin));
+  uint8_t trigMask = digitalPinToBitMask(triggerPin);
+  // AVR FALLING: clear the bit to trigger
+  #define DIRECT_TRIGGER()  (*trigPort &= ~trigMask)
+  #define DIRECT_RESET()    (*trigPort |=  trigMask)
+#elif defined(ESP32)
+  // ESP32 RISING: set the GPIO
+  #if defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32C5) \
+   || defined(CONFIG_IDF_TARGET_ESP32H2) || defined(CONFIG_IDF_TARGET_ESP32C3)
+    #define DIRECT_TRIGGER() do { GPIO.out_w1ts.val = 1u << triggerPin; } while(0)
+    #define DIRECT_RESET()   do { GPIO.out_w1tc.val = 1u << triggerPin; } while(0)
+  #elif ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 0, 0)
+    #define DIRECT_TRIGGER() do { if (triggerPin < 32) GPIO.out_w1ts = 1u << triggerPin; \
+                                  else GPIO.out1_w1ts.data = 1u << (triggerPin - 32); } while(0)
+    #define DIRECT_RESET()   do { if (triggerPin < 32) GPIO.out_w1tc = 1u << triggerPin; \
+                                  else GPIO.out1_w1tc.data = 1u << (triggerPin - 32); } while(0)
+  #else
+    #define DIRECT_TRIGGER() digitalWrite(triggerPin, HIGH)
+    #define DIRECT_RESET()   digitalWrite(triggerPin, LOW)
+  #endif
+#elif defined(ARDUINO_ARCH_RP2040)
+  // RP2040 RISING: SIO direct set/clear
+  #define DIRECT_TRIGGER() do { sio_hw->gpio_set = 1ul << triggerPin; } while(0)
+  #define DIRECT_RESET()   do { sio_hw->gpio_clr = 1ul << triggerPin; } while(0)
+#else
+  // Fallback for boards without known direct-register access
+  #if defined(__AVR__)
+    // already handled above
+  #else
+    #define DIRECT_TRIGGER() digitalWrite(triggerPin, HIGH)
+    #define DIRECT_RESET()   digitalWrite(triggerPin, LOW)
+  #endif
+#endif
+
+  for (int i = 0; i < iterations; i++) {
+    isrFired = false;
+
+    isrStartTime = micros();
+    DIRECT_TRIGGER();
+
+    unsigned long timeout = micros() + 1000;
+    while (!isrFired && micros() < timeout) {}
+
+    DIRECT_RESET();
+
+    if (isrFired) {
+      totalLatencyDirect += isrEndTime - isrStartTime;
+      successDirect++;
+    }
+    delayMicroseconds(100);
+  }
+
+  detachInterrupt(interruptNumber);
+
+  // Clean up macros
+#undef DIRECT_TRIGGER
+#undef DIRECT_RESET
+
+  // ====== Report ======
+  SERIAL_OUT.println();
+
+  if (successDW > 0) {
+    float avgDW = (float)totalLatencyDW / successDW;
+    SERIAL_OUT.print(F_STR("Pass 1 – digitalWrite trigger ("));
+    SERIAL_OUT.print(successDW);
     SERIAL_OUT.print(F_STR("/"));
-    SERIAL_OUT.println(iterations);
-
-    SERIAL_OUT.print(F_STR("Average interrupt latency: "));
-    SERIAL_OUT.print(avgLatency, 2);
-    SERIAL_OUT.println(F_STR(" us"));
-
-    SERIAL_OUT.println();
-    SERIAL_OUT.println(F_STR("Note: Includes digitalWrite + ISR entry overhead"));
+    SERIAL_OUT.print(iterations);
+    SERIAL_OUT.println(F_STR("):"));
+    SERIAL_OUT.print(F_STR("  Avg latency: "));
+    SERIAL_OUT.print(avgDW, 2);
+    SERIAL_OUT.println(F_STR(" us (includes digitalWrite overhead)"));
   } else {
+    SERIAL_OUT.println(F_STR("Pass 1 – digitalWrite trigger: FAILED"));
+  }
+
+  if (successDirect > 0) {
+    float avgDirect = (float)totalLatencyDirect / successDirect;
+    SERIAL_OUT.print(F_STR("Pass 2 – direct port trigger ("));
+    SERIAL_OUT.print(successDirect);
+    SERIAL_OUT.print(F_STR("/"));
+    SERIAL_OUT.print(iterations);
+    SERIAL_OUT.println(F_STR("):"));
+    SERIAL_OUT.print(F_STR("  Avg latency: "));
+    SERIAL_OUT.print(avgDirect, 2);
+    SERIAL_OUT.println(F_STR(" us (pure ISR entry latency)"));
+  } else {
+    SERIAL_OUT.println(F_STR("Pass 2 – direct port trigger: FAILED"));
+  }
+
+  if (successDW > 0 && successDirect > 0) {
+    float avgDW = (float)totalLatencyDW / successDW;
+    float avgDirect = (float)totalLatencyDirect / successDirect;
+    float overhead = avgDW - avgDirect;
+    SERIAL_OUT.println();
+    SERIAL_OUT.print(F_STR("digitalWrite overhead: ~"));
+    SERIAL_OUT.print(overhead, 2);
+    SERIAL_OUT.println(F_STR(" us"));
+  }
+
+  if (successDW == 0 && successDirect == 0) {
     SERIAL_OUT.println(F_STR("Interrupt measurement failed"));
     SERIAL_OUT.println(F_STR("(Pin may not support interrupts)"));
   }

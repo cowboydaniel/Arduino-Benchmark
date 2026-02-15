@@ -3834,7 +3834,7 @@ void benchmarkUnoR4BLE() {
 // ==================== I2C WIRE COMMUNICATION ====================
 
 #if !defined(ARDUINO_UNO_Q)
-static void runI2CWriteBenchmark(const __FlashStringHelper* label, uint32_t clockHz, int iterations) {
+static void runI2CWriteBenchmark(const __FlashStringHelper* label, uint32_t clockHz, int iterations, int progressStep) {
   uint16_t statusCounts[6] = {0, 0, 0, 0, 0, 0};
 
   Wire.setClock(clockHz);
@@ -3842,6 +3842,9 @@ static void runI2CWriteBenchmark(const __FlashStringHelper* label, uint32_t cloc
 
   int completed = 0;
   for (int i = 0; i < iterations; i++) {
+    if (progressStep > 0 && i > 0 && (i % progressStep) == 0) {
+      SERIAL_OUT.print(F_STR("."));
+    }
     Wire.beginTransmission(0x08);
     Wire.write(i & 0xFF);
     uint8_t status = Wire.endTransmission();
@@ -3861,6 +3864,10 @@ static void runI2CWriteBenchmark(const __FlashStringHelper* label, uint32_t cloc
   }
 
   unsigned long elapsed = endBenchmark();
+
+  if (progressStep > 0) {
+    SERIAL_OUT.println();
+  }
 
   SERIAL_OUT.print(label);
   SERIAL_OUT.print(F_STR(": "));
@@ -3935,12 +3942,20 @@ void benchmarkWireI2C() {
   SERIAL_OUT.println(F_STR("(No device - measuring bus overhead)"));
   SERIAL_OUT.println();
 
+#if defined(ARDUINO_AVR_YUN)
+  const int i2cIterations = 60;
+  const int i2cProgressStep = 5;
+  SERIAL_OUT.println(F_STR("Yun profile: reduced iterations to avoid long blocking waits"));
+#else
   const int i2cIterations = 1000;
-  runI2CWriteBenchmark(F_STR("100 kHz"), 100000, i2cIterations);
-  runI2CWriteBenchmark(F_STR("400 kHz"), 400000, i2cIterations);
+  const int i2cProgressStep = 0;
+#endif
+
+  runI2CWriteBenchmark(F_STR("100 kHz"), 100000, i2cIterations, i2cProgressStep);
+  runI2CWriteBenchmark(F_STR("400 kHz"), 400000, i2cIterations, i2cProgressStep);
 
 #if defined(ESP32) || defined(ARDUINO_ARCH_RP2040) || defined(BOARD_STM32H7)
-  runI2CWriteBenchmark(F_STR("1 MHz"), 1000000, i2cIterations);
+  runI2CWriteBenchmark(F_STR("1 MHz"), 1000000, i2cIterations, i2cProgressStep);
 #endif
 
 #if defined(ESP32) && !defined(CONFIG_IDF_TARGET_ESP32C3) && !defined(CONFIG_IDF_TARGET_ESP32C6) && !defined(CONFIG_IDF_TARGET_ESP32H2)

@@ -138,14 +138,8 @@ static void benchmarkWireI2C() {
   SERIAL_OUT.println(F_STR("(No device - measuring bus overhead)"));
   SERIAL_OUT.println();
 
-#if defined(ARDUINO_AVR_YUN)
-  const int i2cIterations = 60;
-  const int i2cProgressStep = 5;
-  SERIAL_OUT.println(F_STR("Yun profile: reduced iterations to avoid long blocking waits"));
-#else
   const int i2cIterations = 1000;
   const int i2cProgressStep = 0;
-#endif
 
   runI2CWriteBenchmark(F_STR("100 kHz"), 100000, i2cIterations, i2cProgressStep);
   runI2CWriteBenchmark(F_STR("400 kHz"), 400000, i2cIterations, i2cProgressStep);

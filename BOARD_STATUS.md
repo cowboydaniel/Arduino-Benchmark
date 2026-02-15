@@ -2,11 +2,11 @@
 
 Tracks which boards have been benchmarked. Pick a board, run both sketches, save the Serial Monitor output to `reports/<board>/<version>.txt`, and update this file.
 
-Report path convention: `reports/<board_slug>/<core_version>.txt` (e.g. `reports/uno/1.8.19.txt`).
+Report path convention: `reports/<board_slug>-<core_version>.txt` (e.g. `reports/uno-1.8.19.txt`).
 
 | Board | Core/IDE Version | Status | Report |
 |-------|-----------------|--------|--------|
-| Arduino Uno (R3) | - | - | - |
+| Arduino Uno (R3) | 2.3.7 | passed | - |
 | Arduino Uno R4 WiFi | - | - | - |
 | Arduino Uno R4 Minima | - | - | - |
 | Arduino Uno Mini LE | - | - | - |

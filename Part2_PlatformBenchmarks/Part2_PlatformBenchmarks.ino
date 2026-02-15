@@ -121,6 +121,10 @@
 #include <WiFiS3.h>
 #include <EEPROM.h>
 #include "Arduino_LED_Matrix.h"
+#if __has_include(<ArduinoBLE.h>)
+#include <ArduinoBLE.h>
+#define HAS_ARDUINO_BLE_LIB
+#endif
 #elif defined(ARDUINO_UNOR4_MINIMA)
 #define BOARD_NAME "Arduino Uno R4 Minima"
 #define HAS_LED_MATRIX
@@ -3783,6 +3787,51 @@ void benchmarkUnoR4BLE() {
   SERIAL_OUT.println(F_STR("Uno R4 WiFi has BLE via ESP32-S3 module"));
   SERIAL_OUT.println(F_STR("BLE requires ArduinoBLE library"));
   SERIAL_OUT.println();
+
+#ifdef HAS_ARDUINO_BLE_LIB
+  SERIAL_OUT.println(F_STR("ArduinoBLE detected. Running BLE discovery benchmark..."));
+
+  if (!BLE.begin()) {
+    SERIAL_OUT.println(F_STR("BLE.begin() failed"));
+    return;
+  }
+
+  SERIAL_OUT.println(F_STR("Calling BLE.scan() for device discovery (5 sec)..."));
+  unsigned long startMicros = micros();
+  BLE.scan();
+
+  int discovered = 0;
+  unsigned long scanStartMs = millis();
+  while (millis() - scanStartMs < 5000) {
+    BLEDevice peripheral = BLE.available();
+    if (!peripheral) {
+      continue;
+    }
+
+    discovered++;
+    SERIAL_OUT.print(F_STR("  Found #"));
+    SERIAL_OUT.print(discovered);
+    SERIAL_OUT.print(F_STR(": "));
+    if (peripheral.localName().length()) {
+      SERIAL_OUT.print(peripheral.localName());
+    } else {
+      SERIAL_OUT.print(F_STR("(unnamed)"));
+    }
+    SERIAL_OUT.print(F_STR(" ["));
+    SERIAL_OUT.print(peripheral.address());
+    SERIAL_OUT.println(F_STR("]"));
+  }
+
+  BLE.stopScan();
+  BLE.end();
+
+  unsigned long elapsedMicros = micros() - startMicros;
+  SERIAL_OUT.print(F_STR("Discovered devices: "));
+  SERIAL_OUT.println(discovered);
+  SERIAL_OUT.print(F_STR("Scan elapsed: "));
+  SERIAL_OUT.print(elapsedMicros / 1000.0f, 2);
+  SERIAL_OUT.println(F_STR(" ms"));
+#else
   SERIAL_OUT.println(F_STR("To use BLE on Uno R4 WiFi:"));
   SERIAL_OUT.println(F_STR("  1. Install ArduinoBLE library"));
   SERIAL_OUT.println(F_STR("  2. #include <ArduinoBLE.h>"));
@@ -3790,6 +3839,7 @@ void benchmarkUnoR4BLE() {
   SERIAL_OUT.println(F_STR("  4. Use BLE.scan() for device discovery"));
   SERIAL_OUT.println();
   SERIAL_OUT.println(F_STR("Note: Full BLE benchmark requires ArduinoBLE"));
+#endif
 }
 #endif
 

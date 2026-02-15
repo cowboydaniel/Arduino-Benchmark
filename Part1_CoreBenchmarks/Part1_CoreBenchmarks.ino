@@ -550,28 +550,28 @@ void benchmarkIntegerOps() {
 
   const uint32_t minDurationMs = 5;
 
-  // Addition - use volatile uint64_t to prevent optimization and overflow
-  volatile uint64_t acc = 0;
+  // Addition - volatile prevents optimization; uint32_t matches native word size
+  volatile uint32_t acc = 0;
   startBenchmark();
   for (uint32_t i = 0; i < BENCHMARK_ITERATIONS; i++) {
     acc += i;
   }
   unsigned long addTime = endBenchmark();
   SERIAL_OUT.print(F_STR("Checksum: "));
-  SERIAL_OUT.println((uint32_t)(acc & 0xFFFFFFFF));
+  SERIAL_OUT.println(acc);
 
-  // Multiplication - use LCG-style updates to prevent optimization
+  // Multiplication - LCG-style updates prevent optimization
   acc = 1;
   TimedLoopResult mulResult = runTimedLoop(minDurationMs, 100, [&]() {
     for (uint32_t i = 1; i <= 100; i++) {
-      acc = (acc * (i | 1)) & 0xFFFFFFFF;  // Ensure odd multiplier, prevent overflow
+      acc *= (i | 1);  // Ensure odd multiplier, natural uint32_t wrapping
     }
   });
   SERIAL_OUT.print(F_STR("Checksum: "));
-  SERIAL_OUT.println((uint32_t)acc);
+  SERIAL_OUT.println(acc);
 
   // Division - vary both dividend and divisor
-  acc = 0xFFFFFFFFULL;
+  acc = 0xFFFFFFFF;
   TimedLoopResult divResult = runTimedLoop(minDurationMs, 100, [&]() {
     for (uint32_t i = 1; i <= 100; i++) {
       uint32_t divisor = (i % 127) + 2;  // 2-128, avoid div-by-1
@@ -579,7 +579,7 @@ void benchmarkIntegerOps() {
     }
   });
   SERIAL_OUT.print(F_STR("Checksum: "));
-  SERIAL_OUT.println((uint32_t)acc);
+  SERIAL_OUT.println(acc);
 
   SERIAL_OUT.print(F_STR("Addition ("));
   SERIAL_OUT.print(BENCHMARK_ITERATIONS);

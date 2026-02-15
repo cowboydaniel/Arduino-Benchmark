@@ -569,12 +569,12 @@ void calibrateBenchmarkTime() {
 }
 // ==================== CPU BENCHMARKS ====================
 
-// ATmega328P/2560/32U4 have an internal die temperature sensor on ADC
-// channel 8, read against the internal 1.1V bandgap reference.
+// ATmega328P/2560/1284 families have an internal die temperature sensor on
+// ADC channel 8, read against the internal 1.1V bandgap reference.
 // Absolute accuracy is ±10°C without per-chip calibration, but relative
 // measurements (temperature gain during stress) are much tighter.
 #if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega328__) || \
-    defined(__AVR_ATmega2560__) || defined(__AVR_ATmega32U4__) || \
+    defined(__AVR_ATmega2560__) || \
     defined(__AVR_ATmega1284P__) || defined(__AVR_ATmega1284__)
 #define AVR_HAS_TEMP_SENSOR
 static float readAVRTemperature() {

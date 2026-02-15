@@ -277,7 +277,9 @@
 #elif defined(ARDUINO_AVR_YUN)
 #define BOARD_NAME "Arduino Yun"
 #include <EEPROM.h>
+#include <Bridge.h>
 #define BOARD_AVR
+#define HAS_YUN_BRIDGE
 
 // Arduino Leonardo/Micro
 #elif defined(ARDUINO_AVR_LEONARDO)
@@ -2903,6 +2905,118 @@ void benchmarkArduinoBridge() {
 }
 
 #endif  // BOARD_STM32U5 && HAS_DUAL_PROCESSOR
+
+// ==================== ARDUINO YUN BRIDGE (MCU<->LINUX VIA SERIAL1) ====================
+
+#if defined(HAS_YUN_BRIDGE)
+void benchmarkYunBridge() {
+  printHeader("YUN SERIAL1/BRIDGE KILLER TEST");
+
+  SERIAL_OUT.println(F_STR("Initializing Bridge daemon link..."));
+  Bridge.begin();
+  delay(200);
+  SERIAL_OUT.println(F_STR("Bridge ready."));
+  SERIAL_OUT.println();
+
+  // Test 1: Round-trip latency using Bridge key/value operations.
+  SERIAL_OUT.println(F_STR("1. MCU<->Linux round-trip latency (Bridge.put + Bridge.get)"));
+
+  const int LATENCY_ITERS = 50;
+  const char *latencyKey = "bench.lat";
+  unsigned long latencyTotal = 0;
+  unsigned long latencyMin = ULONG_MAX;
+  unsigned long latencyMax = 0;
+  int latencySuccess = 0;
+
+  char writeValue[20];
+  char readBuffer[24];
+
+  for (int i = 0; i < LATENCY_ITERS; i++) {
+    snprintf(writeValue, sizeof(writeValue), "pkt_%d", i);
+
+    unsigned long t0 = micros();
+    Bridge.put(latencyKey, writeValue);
+    Bridge.get(latencyKey, readBuffer, sizeof(readBuffer));
+    unsigned long elapsed = micros() - t0;
+
+    if (strcmp(readBuffer, writeValue) == 0) {
+      latencySuccess++;
+      latencyTotal += elapsed;
+      if (elapsed < latencyMin) latencyMin = elapsed;
+      if (elapsed > latencyMax) latencyMax = elapsed;
+    }
+
+    if ((i % 10) == 0) {
+      yield();
+    }
+  }
+
+  SERIAL_OUT.print(F_STR("  Successful round-trips: "));
+  SERIAL_OUT.print(latencySuccess);
+  SERIAL_OUT.print(F_STR("/"));
+  SERIAL_OUT.println(LATENCY_ITERS);
+
+  if (latencySuccess > 0) {
+    SERIAL_OUT.print(F_STR("  Avg latency: "));
+    SERIAL_OUT.print(latencyTotal / latencySuccess);
+    SERIAL_OUT.println(F_STR(" us"));
+    SERIAL_OUT.print(F_STR("  Min latency: "));
+    SERIAL_OUT.print(latencyMin);
+    SERIAL_OUT.println(F_STR(" us"));
+    SERIAL_OUT.print(F_STR("  Max latency: "));
+    SERIAL_OUT.print(latencyMax);
+    SERIAL_OUT.println(F_STR(" us"));
+  } else {
+    SERIAL_OUT.println(F_STR("  ERROR: Bridge round-trip validation failed."));
+  }
+  SERIAL_OUT.println();
+
+  // Test 2: Throughput test for MCU->Linux transfer (Bridge.put payload stream).
+  SERIAL_OUT.println(F_STR("2. MCU->Linux throughput (Bridge.put payload stream)"));
+
+  const int THROUGHPUT_ITERS = 100;
+  const int PAYLOAD_BYTES = 64;
+  char payload[PAYLOAD_BYTES + 1];
+  for (int i = 0; i < PAYLOAD_BYTES; i++) {
+    payload[i] = 'A' + (i % 26);
+  }
+  payload[PAYLOAD_BYTES] = '\0';
+
+  unsigned long throughputStart = micros();
+  for (int i = 0; i < THROUGHPUT_ITERS; i++) {
+    Bridge.put("bench.tp", payload);
+    if ((i % 20) == 0) {
+      yield();
+    }
+  }
+  unsigned long throughputTime = micros() - throughputStart;
+
+  unsigned long totalBytes = (unsigned long)THROUGHPUT_ITERS * PAYLOAD_BYTES;
+  float bytesPerSecond = (throughputTime > 0)
+                           ? (totalBytes * 1000000.0f) / throughputTime
+                           : 0.0f;
+
+  SERIAL_OUT.print(F_STR("  Payload size: "));
+  SERIAL_OUT.print(PAYLOAD_BYTES);
+  SERIAL_OUT.println(F_STR(" bytes"));
+  SERIAL_OUT.print(F_STR("  Total bytes sent: "));
+  SERIAL_OUT.println(totalBytes);
+  SERIAL_OUT.print(F_STR("  Total time: "));
+  SERIAL_OUT.print(throughputTime / 1000.0f, 2);
+  SERIAL_OUT.println(F_STR(" ms"));
+  SERIAL_OUT.print(F_STR("  Throughput: "));
+  SERIAL_OUT.print(bytesPerSecond, 1);
+  SERIAL_OUT.println(F_STR(" bytes/sec"));
+
+  SERIAL_OUT.println();
+  SERIAL_OUT.println(F_STR("Yun Bridge killer test complete."));
+}
+#else
+void benchmarkYunBridge() {
+  // Stub for non-Yun boards.
+}
+#endif
+
 // ==================== MULTIDUINO-SPECIFIC BENCHMARKS ====================
 
 #ifdef HAS_RTC
@@ -4652,6 +4766,7 @@ void printSystemInfo() {
 #if defined(ARDUINO_AVR_YUN)
   SERIAL_OUT.println(F_STR("Linux: AR9331 400MHz, 64MB RAM, 16MB Flash"));
   SERIAL_OUT.println(F_STR("WiFi + USB Host (OpenWrt)"));
+  SERIAL_OUT.println(F_STR("Bridge: Serial1 MCU<->Linux link (killer test enabled)"));
 #endif
 
   // RAM Info
@@ -4793,6 +4908,10 @@ void setup() {
 
 #if defined(BOARD_STM32U5) && defined(HAS_DUAL_PROCESSOR)
   //benchmarkArduinoBridge();
+#endif
+
+#if defined(HAS_YUN_BRIDGE)
+  benchmarkYunBridge();
 #endif
 
   // Multiduino-specific benchmarks

@@ -1070,89 +1070,99 @@ void benchmarkSRAM() {
     SERIAL_OUT.println(F_STR(" bytes"));
   }
 
+  // Allocate a single large buffer to maximize usable size, especially on
+  // RAM-constrained boards like AVR Uno (2KB SRAM). For memcpy we split it
+  // into two halves; for memset and direct R/W we use the full buffer.
+  //
+  // NOTE: On 16-bit platforms (AVR), size_t is only 16 bits (max 65535).
+  // All bufSize*iterations products MUST use unsigned long to avoid overflow
+  // that would produce wildly inaccurate bandwidth figures.
   size_t bufSize = 0;
   if (freeHeapBytes > 0) {
-    // Use ~75% of free heap across two buffers (leave headroom for stack/overhead).
-    bufSize = (freeHeapBytes * 3) / 8;
-    bufSize = (bufSize / 4) * 4;
+    // Use ~75% of free heap for a single buffer (leave headroom for stack).
+    bufSize = (freeHeapBytes * 3) / 4;
+    bufSize = (bufSize / 4) * 4;  // 4-byte align
     if (bufSize < 128) {
       bufSize = 128;
     }
     SERIAL_OUT.print(F_STR("Using "));
     SERIAL_OUT.print(bufSize);
-    SERIAL_OUT.println(F_STR(" byte buffers (~75% free heap total)"));
+    SERIAL_OUT.println(F_STR(" byte buffer (~75% free heap)"));
   }
 
-  // Allocate buffers on heap for safety
   if (bufSize == 0) {
     bufSize = 512;
-    SERIAL_OUT.println(F_STR("Using 512 byte buffers (fallback)"));
+    SERIAL_OUT.println(F_STR("Using 512 byte buffer (fallback)"));
   }
 
-  uint8_t *largeSrc = NULL;
-  uint8_t *largeDst = NULL;
+  uint8_t *buf = NULL;
   size_t attemptSize = bufSize;
-  while (attemptSize >= 64 && (!largeSrc || !largeDst)) {
-    largeSrc = (uint8_t *)malloc(attemptSize);
-    largeDst = (uint8_t *)malloc(attemptSize);
-    if (largeSrc && largeDst) {
+  while (attemptSize >= 64 && !buf) {
+    buf = (uint8_t *)malloc(attemptSize);
+    if (buf) {
       bufSize = attemptSize;
       break;
-    }
-    if (largeSrc) {
-      free(largeSrc);
-      largeSrc = NULL;
-    }
-    if (largeDst) {
-      free(largeDst);
-      largeDst = NULL;
     }
     attemptSize /= 2;
   }
 
-  if (largeSrc == NULL || largeDst == NULL) {
-    SERIAL_OUT.println(F_STR("ERROR: Could not allocate test buffers"));
-    if (largeSrc) free(largeSrc);
-    if (largeDst) free(largeDst);
+  if (buf == NULL) {
+    SERIAL_OUT.println(F_STR("ERROR: Could not allocate test buffer"));
   } else {
-    // Initialize source buffer
+    // Initialize buffer
     for (size_t i = 0; i < bufSize; i++) {
-      largeSrc[i] = (uint8_t)(i & 0xFF);
+      buf[i] = (uint8_t)(i & 0xFF);
     }
 
-    // memcpy throughput test
-    int iterations = (bufSize >= 1024) ? 100 : 200;  // More iterations for small buffers
+    // Scale iterations so total transfer is at least 128KB, ensuring
+    // per-call overhead and timer granularity don't dominate the result.
+    unsigned long minTotalBytes = 131072UL;  // 128KB
+    int iterations = (int)(minTotalBytes / (unsigned long)bufSize);
+    if (iterations < 100) iterations = 100;
+    if (iterations > 5000) iterations = 5000;
+
+    // --- memcpy throughput test ---
+    // Use two non-overlapping halves of the buffer as src and dst.
+    size_t copySize = (bufSize / 2) & ~((size_t)3);  // Half buffer, 4-byte aligned
+    uint8_t *cpySrc = buf;
+    uint8_t *cpyDst = buf + copySize;
+    int cpyIterations = (int)(minTotalBytes / (unsigned long)copySize);
+    if (cpyIterations < 100) cpyIterations = 100;
+    if (cpyIterations > 5000) cpyIterations = 5000;
+
     startBenchmark();
-    for (int iter = 0; iter < iterations; iter++) {
-      memcpy(largeDst, largeSrc, bufSize);
+    for (int iter = 0; iter < cpyIterations; iter++) {
+      memcpy(cpyDst, cpySrc, copySize);
     }
     unsigned long memcpyTime = endBenchmark();
 
+    unsigned long cpyTotalBytes = (unsigned long)copySize * cpyIterations;
     SERIAL_OUT.print(F_STR("memcpy ("));
-    SERIAL_OUT.print(bufSize * iterations);
+    SERIAL_OUT.print(cpyTotalBytes);
     SERIAL_OUT.print(F_STR(" bytes): "));
     SERIAL_OUT.print(memcpyTime);
     SERIAL_OUT.print(F_STR(" μs ("));
-    SERIAL_OUT.print((bufSize * iterations * 1.0) / memcpyTime);
+    SERIAL_OUT.print((cpyTotalBytes * 1.0) / memcpyTime);
     SERIAL_OUT.println(F_STR(" MB/s)"));
 
-    // memset throughput test
+    // --- memset throughput test (full buffer) ---
+    unsigned long totalBytes = (unsigned long)bufSize * iterations;
     startBenchmark();
     for (int iter = 0; iter < iterations; iter++) {
-      memset(largeDst, 0xAA, bufSize);
+      memset(buf, 0xAA, bufSize);
     }
     unsigned long memsetTime = endBenchmark();
 
     SERIAL_OUT.print(F_STR("memset ("));
-    SERIAL_OUT.print(bufSize * iterations);
+    SERIAL_OUT.print(totalBytes);
     SERIAL_OUT.print(F_STR(" bytes): "));
     SERIAL_OUT.print(memsetTime);
     SERIAL_OUT.print(F_STR(" μs ("));
-    SERIAL_OUT.print((bufSize * iterations * 1.0) / memsetTime);
+    SERIAL_OUT.print((totalBytes * 1.0) / memsetTime);
     SERIAL_OUT.println(F_STR(" MB/s)"));
 
-    // Memory bandwidth test - tight loop
-    volatile uint32_t *ramPtr = (volatile uint32_t *)largeDst;
+    // --- Direct RAM bandwidth test (full buffer) ---
+    volatile uint32_t *ramPtr = (volatile uint32_t *)buf;
     const size_t numWords = bufSize / 4;
 
     startBenchmark();
@@ -1173,16 +1183,15 @@ void benchmarkSRAM() {
     unsigned long bandwidthReadTime = endBenchmark();
 
     SERIAL_OUT.print(F_STR("RAM Write Bandwidth: "));
-    SERIAL_OUT.print((bufSize * iterations * 1.0) / bandwidthWriteTime);
+    SERIAL_OUT.print((totalBytes * 1.0) / bandwidthWriteTime);
     SERIAL_OUT.println(F_STR(" MB/s"));
 
     SERIAL_OUT.print(F_STR("RAM Read Bandwidth: "));
-    SERIAL_OUT.print((bufSize * iterations * 1.0) / bandwidthReadTime);
+    SERIAL_OUT.print((totalBytes * 1.0) / bandwidthReadTime);
     SERIAL_OUT.println(F_STR(" MB/s"));
 
     // Clean up
-    free(largeSrc);
-    free(largeDst);
+    free(buf);
   }
 }
 

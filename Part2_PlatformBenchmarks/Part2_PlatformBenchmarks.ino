@@ -1121,35 +1121,59 @@ void benchmarkAdvancedMath() {
   return;
 #endif
 
-  // atan2 test
+  // --- Exponential / Logarithmic ---
   startBenchmark();
   for (int i = 0; i < 100; i++) {
-    checksum += atan2((float)i, (float)(100 - i));
-  }
-  unsigned long atan2Time = endBenchmark();
-
-  // log test
-  startBenchmark();
-  for (int i = 1; i <= 100; i++) {
-    checksum += log((float)i);
-  }
-  unsigned long logTime = endBenchmark();
-
-  // exp test
-  startBenchmark();
-  for (int i = 0; i < 100; i++) {
-    checksum += exp((float)i / 10.0f);
+    checksum += expf((float)i / 10.0f);
   }
   unsigned long expTime = endBenchmark();
 
-  // pow test
   startBenchmark();
   for (int i = 1; i <= 100; i++) {
-    checksum += pow((float)i, 1.5f);
+    checksum += logf((float)i);
+  }
+  unsigned long logTime = endBenchmark();
+
+  startBenchmark();
+  for (int i = 1; i <= 100; i++) {
+    checksum += log10f((float)i);
+  }
+  unsigned long log10Time = endBenchmark();
+
+  // --- Power ---
+  startBenchmark();
+  for (int i = 1; i <= 100; i++) {
+    checksum += powf((float)i, 1.5f);
   }
   unsigned long powTime = endBenchmark();
 
-  // fmod test
+  // --- Inverse trig ---
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    checksum += atan2f((float)i, (float)(100 - i));
+  }
+  unsigned long atan2Time = endBenchmark();
+
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    checksum += asinf((float)i / 100.0f);
+  }
+  unsigned long asinTime = endBenchmark();
+
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    checksum += acosf((float)i / 100.0f);
+  }
+  unsigned long acosTime = endBenchmark();
+
+  // --- Additional trig ---
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    checksum += tanf((float)i / 100.0f);
+  }
+  unsigned long tanTime = endBenchmark();
+
+  // --- Misc ---
   startBenchmark();
   for (int i = 0; i < 1000; i++) {
 #if defined(__ZEPHYR__) || defined(BOARD_STM32U5)
@@ -1157,7 +1181,7 @@ void benchmarkAdvancedMath() {
     float divisor = 7.3f;
     checksum += val - ((int)(val / divisor)) * divisor;
 #else
-    checksum += fmod((float)i, 7.3f);
+    checksum += fmodf((float)i, 7.3f);
 #endif
   }
   unsigned long fmodTime = endBenchmark();
@@ -1165,10 +1189,10 @@ void benchmarkAdvancedMath() {
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println(checksum);
 
-  SERIAL_OUT.print(F_STR("atan2() (100 ops): "));
-  SERIAL_OUT.print(atan2Time);
+  SERIAL_OUT.print(F_STR("exp() (100 ops): "));
+  SERIAL_OUT.print(expTime);
   SERIAL_OUT.print(F_STR(" us ("));
-  SERIAL_OUT.print(100.0 / atan2Time * 1000);
+  SERIAL_OUT.print(100.0 / expTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
 
   SERIAL_OUT.print(F_STR("log() (100 ops): "));
@@ -1177,16 +1201,40 @@ void benchmarkAdvancedMath() {
   SERIAL_OUT.print(100.0 / logTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
 
-  SERIAL_OUT.print(F_STR("exp() (100 ops): "));
-  SERIAL_OUT.print(expTime);
+  SERIAL_OUT.print(F_STR("log10() (100 ops): "));
+  SERIAL_OUT.print(log10Time);
   SERIAL_OUT.print(F_STR(" us ("));
-  SERIAL_OUT.print(100.0 / expTime * 1000);
+  SERIAL_OUT.print(100.0 / log10Time * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
 
   SERIAL_OUT.print(F_STR("pow() (100 ops): "));
   SERIAL_OUT.print(powTime);
   SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(100.0 / powTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
+  SERIAL_OUT.print(F_STR("atan2() (100 ops): "));
+  SERIAL_OUT.print(atan2Time);
+  SERIAL_OUT.print(F_STR(" us ("));
+  SERIAL_OUT.print(100.0 / atan2Time * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
+  SERIAL_OUT.print(F_STR("asin() (100 ops): "));
+  SERIAL_OUT.print(asinTime);
+  SERIAL_OUT.print(F_STR(" us ("));
+  SERIAL_OUT.print(100.0 / asinTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
+  SERIAL_OUT.print(F_STR("acos() (100 ops): "));
+  SERIAL_OUT.print(acosTime);
+  SERIAL_OUT.print(F_STR(" us ("));
+  SERIAL_OUT.print(100.0 / acosTime * 1000);
+  SERIAL_OUT.println(F_STR(" ops/ms)"));
+
+  SERIAL_OUT.print(F_STR("tan() (100 ops): "));
+  SERIAL_OUT.print(tanTime);
+  SERIAL_OUT.print(F_STR(" us ("));
+  SERIAL_OUT.print(100.0 / tanTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
 
   SERIAL_OUT.print(F_STR("fmod() (1000 ops): "));

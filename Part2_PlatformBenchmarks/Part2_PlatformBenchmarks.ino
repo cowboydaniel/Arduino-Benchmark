@@ -121,10 +121,7 @@
 #include <WiFiS3.h>
 #include <EEPROM.h>
 #include "Arduino_LED_Matrix.h"
-#if __has_include(<ArduinoBLE.h>)
 #include <ArduinoBLE.h>
-#define HAS_ARDUINO_BLE_LIB
-#endif
 #elif defined(ARDUINO_UNOR4_MINIMA)
 #define BOARD_NAME "Arduino Uno R4 Minima"
 #define HAS_LED_MATRIX
@@ -3788,11 +3785,10 @@ void benchmarkUnoR4BLE() {
   SERIAL_OUT.println(F_STR("BLE requires ArduinoBLE library"));
   SERIAL_OUT.println();
 
-#ifdef HAS_ARDUINO_BLE_LIB
-  SERIAL_OUT.println(F_STR("ArduinoBLE detected. Running BLE discovery benchmark..."));
+  SERIAL_OUT.println(F_STR("Running BLE discovery benchmark with ArduinoBLE..."));
 
   if (!BLE.begin()) {
-    SERIAL_OUT.println(F_STR("BLE.begin() failed"));
+    SERIAL_OUT.println(F_STR("BLE.begin() failed (check firmware/module state)"));
     return;
   }
 
@@ -3831,15 +3827,6 @@ void benchmarkUnoR4BLE() {
   SERIAL_OUT.print(F_STR("Scan elapsed: "));
   SERIAL_OUT.print(elapsedMicros / 1000.0f, 2);
   SERIAL_OUT.println(F_STR(" ms"));
-#else
-  SERIAL_OUT.println(F_STR("To use BLE on Uno R4 WiFi:"));
-  SERIAL_OUT.println(F_STR("  1. Install ArduinoBLE library"));
-  SERIAL_OUT.println(F_STR("  2. #include <ArduinoBLE.h>"));
-  SERIAL_OUT.println(F_STR("  3. Call BLE.begin()"));
-  SERIAL_OUT.println(F_STR("  4. Use BLE.scan() for device discovery"));
-  SERIAL_OUT.println();
-  SERIAL_OUT.println(F_STR("Note: Full BLE benchmark requires ArduinoBLE"));
-#endif
 }
 #endif
 

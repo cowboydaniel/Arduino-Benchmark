@@ -444,6 +444,22 @@
 #include "stm32h7xx_ll_adc.h"
 #endif
 
+#if defined(BOARD_SAMD)
+#include <samd.h>  // PM->SLEEP.reg, SCB->SCR
+#endif
+
+#if defined(BOARD_NRF52)
+#include <nrf.h>   // NRF_POWER, __WFE
+#endif
+
+#if defined(ESP8266)
+#include <user_interface.h>  // wifi_set_sleep_type, light_sleep
+#endif
+
+#if defined(TEENSYDUINO) && defined(__IMXRT1062__)
+#include <imxrt.h>  // Teensy 4.x ARM registers
+#endif
+
 
 // ==================== SERIAL OUTPUT ABSTRACTION ====================
 // Uno Q uses Monitor instead of Serial for output
@@ -4022,70 +4038,452 @@ void benchmarkWatchdog() {
 void benchmarkSleepModes() {
   printHeader("POWER: SLEEP MODE TIMING");
 
+  // ----------------------------------------------------------------
+  // Helper lambdas would be nice but we keep plain C for AVR compat.
+  // Strategy: enter the lightest sleep that preserves micros() tick
+  // (idle / WFI), measure wake-up time, then repeat for a batch.
+  // Deep-sleep / power-down modes reset the MCU so we skip those.
+  // ----------------------------------------------------------------
+
 #if defined(ESP32)
   // Already covered in benchmarkESP32Sleep()
   SERIAL_OUT.println(F_STR("See ESP32 Light Sleep benchmark above"));
 
-#elif defined(ARDUINO_ARCH_RP2040)
-  SERIAL_OUT.println(F_STR("RP2040 Sleep Modes:"));
-  SERIAL_OUT.println(F_STR("  DORMANT: Deep sleep, wake on GPIO/RTC"));
-  SERIAL_OUT.println(F_STR("  SLEEP: WFI/WFE, wake on interrupt"));
+#elif defined(ESP8266)
+  // ESP8266 light-sleep (modem sleep keeps CPU, light sleep halts it)
+  // Timer1 generates the wake interrupt that keeps millis()/micros() alive.
+  SERIAL_OUT.println(F_STR("ESP8266 Light Sleep (timer wake):"));
   SERIAL_OUT.println();
 
-  // Measure __wfi timing
-  SERIAL_OUT.println(F_STR("Testing WFI (Wait For Interrupt):"));
+  // Single wake latency
+  unsigned long esp8266Start = micros();
+  delay(1);  // enters idle/modem-sleep automatically via yield()
+  unsigned long esp8266Wake = micros() - esp8266Start;
 
-  // Set up a timer to wake us
-  unsigned long wakeTime = 0;
-  unsigned long sleepStart = 0;
+  SERIAL_OUT.print(F_STR("  Idle-yield wake: "));
+  SERIAL_OUT.print(esp8266Wake);
+  SERIAL_OUT.println(F_STR(" us (target 1000 us)"));
 
-  // Use systick interrupt to wake (happens every 1ms)
-  sleepStart = micros();
-  __wfi();
-  wakeTime = micros() - sleepStart;
+  // Batch WFI via inline asm – available on Xtensa LX106
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    asm volatile("waiti 0");   // wait-for-interrupt, level 0
+  }
+  unsigned long esp8266WfiTime = endBenchmark();
 
-  SERIAL_OUT.print(F_STR("  WFI wake time: "));
-  SERIAL_OUT.print(wakeTime);
+  SERIAL_OUT.print(F_STR("  100x waiti 0: "));
+  SERIAL_OUT.print(esp8266WfiTime);
   SERIAL_OUT.println(F_STR(" us"));
 
-  // Multiple WFI cycles
+#elif defined(ARDUINO_ARCH_RP2040)
+  SERIAL_OUT.println(F_STR("RP2040 Sleep (WFI / WFE):"));
+  SERIAL_OUT.println();
+
+  // --- WFI (Wait For Interrupt) - wakes on SysTick every 1 ms ---
+  unsigned long wfiSingle = 0;
+  {
+    unsigned long t = micros();
+    __wfi();
+    wfiSingle = micros() - t;
+  }
+  SERIAL_OUT.print(F_STR("  WFI single wake: "));
+  SERIAL_OUT.print(wfiSingle);
+  SERIAL_OUT.println(F_STR(" us"));
+
   startBenchmark();
   for (int i = 0; i < 100; i++) {
     __wfi();
   }
-  unsigned long wfiTime = endBenchmark();
+  unsigned long wfiTime100 = endBenchmark();
+  SERIAL_OUT.print(F_STR("  100x WFI: "));
+  SERIAL_OUT.print(wfiTime100);
+  SERIAL_OUT.println(F_STR(" us"));
 
-  SERIAL_OUT.print(F_STR("  100x WFI cycles: "));
-  SERIAL_OUT.print(wfiTime);
+  // --- WFE (Wait For Event) - lighter, wakes on any pending event ---
+  unsigned long wfeSingle = 0;
+  {
+    __sev();  // set event flag so first WFE clears it, second actually sleeps
+    __wfe();  // clear event flag
+    unsigned long t = micros();
+    __wfe();  // real sleep until next event/interrupt
+    wfeSingle = micros() - t;
+  }
+  SERIAL_OUT.print(F_STR("  WFE single wake: "));
+  SERIAL_OUT.print(wfeSingle);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    __sev();
+    __wfe();
+    __wfe();
+  }
+  unsigned long wfeTime100 = endBenchmark();
+  SERIAL_OUT.print(F_STR("  100x WFE: "));
+  SERIAL_OUT.print(wfeTime100);
   SERIAL_OUT.println(F_STR(" us"));
 
 #elif defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
-  SERIAL_OUT.println(F_STR("Renesas RA4M1 Low Power Modes:"));
-  SERIAL_OUT.println(F_STR("  Sleep: CPU stopped, peripherals active"));
-  SERIAL_OUT.println(F_STR("  Deep Sleep: Most peripherals stopped"));
-  SERIAL_OUT.println(F_STR("  Software Standby: Lowest power"));
+  // Renesas RA4M1 – WFI is available via CMSIS on this Arm core.
+  // The SysTick keeps running so micros() survives.
+  SERIAL_OUT.println(F_STR("Renesas RA4M1 Sleep (WFI / WFE):"));
   SERIAL_OUT.println();
-  SERIAL_OUT.println(F_STR("Use LowPower library for sleep control"));
 
-#elif defined(__AVR__)
-  SERIAL_OUT.println(F_STR("Modes: IDLE/ADC_NR/Power-down/Power-save/Standby"));
-
-  // Test idle mode timing
-  set_sleep_mode(SLEEP_MODE_IDLE);
-
-  // Use Timer0 interrupt to wake (happens frequently)
-  unsigned long idleStart = micros();
-  sleep_enable();
-  sleep_cpu();
-  sleep_disable();
-  unsigned long idleTime = micros() - idleStart;
-
-  SERIAL_OUT.print(F_STR("Idle wake: "));
-  SERIAL_OUT.print(idleTime);
+  // Single WFI (SysTick wakes us ~every 1 ms)
+  unsigned long ra4m1WfiSingle;
+  {
+    unsigned long t = micros();
+    __WFI();
+    ra4m1WfiSingle = micros() - t;
+  }
+  SERIAL_OUT.print(F_STR("  WFI single wake: "));
+  SERIAL_OUT.print(ra4m1WfiSingle);
   SERIAL_OUT.println(F_STR(" us"));
 
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    __WFI();
+  }
+  unsigned long ra4m1WfiTime = endBenchmark();
+  SERIAL_OUT.print(F_STR("  100x WFI: "));
+  SERIAL_OUT.print(ra4m1WfiTime);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  // WFE
+  unsigned long ra4m1WfeSingle;
+  {
+    __SEV();
+    __WFE();
+    unsigned long t = micros();
+    __WFE();
+    ra4m1WfeSingle = micros() - t;
+  }
+  SERIAL_OUT.print(F_STR("  WFE single wake: "));
+  SERIAL_OUT.print(ra4m1WfeSingle);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    __SEV();
+    __WFE();
+    __WFE();
+  }
+  unsigned long ra4m1WfeTime = endBenchmark();
+  SERIAL_OUT.print(F_STR("  100x WFE: "));
+  SERIAL_OUT.print(ra4m1WfeTime);
+  SERIAL_OUT.println(F_STR(" us"));
+
+#elif defined(BOARD_SAMD)
+  // SAMD21/51 – Cortex-M0+/M4: IDLE modes keep SysTick running.
+  // PM->SLEEP.reg selects idle depth (IDLE0/1/2 on SAMD21, IDLE on SAMD51).
+  SERIAL_OUT.println(F_STR("SAMD Sleep (IDLE + WFI/WFE):"));
+  SERIAL_OUT.println();
+
+  // --- Idle 0 (CPU halted, AHB/APB clocks run) ---
+#if defined(__SAMD51__)
+  PM->SLEEPCFG.reg = PM_SLEEPCFG_SLEEPMODE_IDLE;
+  while (PM->SLEEPCFG.reg != PM_SLEEPCFG_SLEEPMODE_IDLE) {}  // sync
 #else
-  SERIAL_OUT.println(F_STR("Sleep mode info not available for this board"));
+  // SAMD21: Use SCB directly, PM->SLEEP.reg for idle depth
+  SCB->SCR &= ~SCB_SCR_SLEEPDEEP_Msk;  // select idle (not standby)
+  PM->SLEEP.reg = PM_SLEEP_IDLE_CPU;    // IDLE 0: halt CPU only
+#endif
+
+  unsigned long samdIdleSingle;
+  {
+    unsigned long t = micros();
+    __WFI();
+    samdIdleSingle = micros() - t;
+  }
+  SERIAL_OUT.print(F_STR("  IDLE WFI single: "));
+  SERIAL_OUT.print(samdIdleSingle);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    __WFI();
+  }
+  unsigned long samdWfiTime = endBenchmark();
+  SERIAL_OUT.print(F_STR("  100x IDLE WFI: "));
+  SERIAL_OUT.print(samdWfiTime);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  // WFE
+  unsigned long samdWfeSingle;
+  {
+    __SEV();
+    __WFE();
+    unsigned long t = micros();
+    __WFE();
+    samdWfeSingle = micros() - t;
+  }
+  SERIAL_OUT.print(F_STR("  IDLE WFE single: "));
+  SERIAL_OUT.print(samdWfeSingle);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    __SEV();
+    __WFE();
+    __WFE();
+  }
+  unsigned long samdWfeTime = endBenchmark();
+  SERIAL_OUT.print(F_STR("  100x IDLE WFE: "));
+  SERIAL_OUT.print(samdWfeTime);
+  SERIAL_OUT.println(F_STR(" us"));
+
+#if !defined(__SAMD51__)
+  // SAMD21 deeper idle: IDLE 2 (CPU + AHB halted, APB still runs)
+  PM->SLEEP.reg = PM_SLEEP_IDLE_APB;  // IDLE 2
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    __WFI();
+  }
+  unsigned long samdIdle2Time = endBenchmark();
+  SERIAL_OUT.print(F_STR("  100x IDLE2 WFI: "));
+  SERIAL_OUT.print(samdIdle2Time);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  // Restore IDLE 0
+  PM->SLEEP.reg = PM_SLEEP_IDLE_CPU;
+#endif
+
+#elif defined(BOARD_NRF52)
+  // nRF52840 – Cortex-M4F: System ON idle mode (WFI).
+  // SysTick keeps running; "System ON" is the only mode that preserves it.
+  // "System OFF" is a deep-sleep reset – we skip that.
+  SERIAL_OUT.println(F_STR("nRF52 Sleep (System ON, WFI/WFE):"));
+  SERIAL_OUT.println();
+
+  unsigned long nrfWfiSingle;
+  {
+    unsigned long t = micros();
+    __WFI();
+    nrfWfiSingle = micros() - t;
+  }
+  SERIAL_OUT.print(F_STR("  WFI single wake: "));
+  SERIAL_OUT.print(nrfWfiSingle);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    __WFI();
+  }
+  unsigned long nrfWfiTime = endBenchmark();
+  SERIAL_OUT.print(F_STR("  100x WFI: "));
+  SERIAL_OUT.print(nrfWfiTime);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  // WFE
+  unsigned long nrfWfeSingle;
+  {
+    __SEV();
+    __WFE();
+    unsigned long t = micros();
+    __WFE();
+    nrfWfeSingle = micros() - t;
+  }
+  SERIAL_OUT.print(F_STR("  WFE single wake: "));
+  SERIAL_OUT.print(nrfWfeSingle);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    __SEV();
+    __WFE();
+    __WFE();
+  }
+  unsigned long nrfWfeTime = endBenchmark();
+  SERIAL_OUT.print(F_STR("  100x WFE: "));
+  SERIAL_OUT.print(nrfWfeTime);
+  SERIAL_OUT.println(F_STR(" us"));
+
+#elif defined(BOARD_STM32H7)
+  // STM32H7 (Portenta H7, Giga R1) – Cortex-M7
+  // D1 domain CSTOP = idle-sleep; deeper modes reset or need complex setup.
+  // HAL_PWR_EnterSLEEPMode keeps SysTick alive.
+  SERIAL_OUT.println(F_STR("STM32H7 Sleep (WFI/WFE):"));
+  SERIAL_OUT.println();
+
+  unsigned long stm32WfiSingle;
+  {
+    unsigned long t = micros();
+    __WFI();
+    stm32WfiSingle = micros() - t;
+  }
+  SERIAL_OUT.print(F_STR("  WFI single wake: "));
+  SERIAL_OUT.print(stm32WfiSingle);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    __WFI();
+  }
+  unsigned long stm32WfiTime = endBenchmark();
+  SERIAL_OUT.print(F_STR("  100x WFI: "));
+  SERIAL_OUT.print(stm32WfiTime);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  unsigned long stm32WfeSingle;
+  {
+    __SEV();
+    __WFE();
+    unsigned long t = micros();
+    __WFE();
+    stm32WfeSingle = micros() - t;
+  }
+  SERIAL_OUT.print(F_STR("  WFE single wake: "));
+  SERIAL_OUT.print(stm32WfeSingle);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    __SEV();
+    __WFE();
+    __WFE();
+  }
+  unsigned long stm32WfeTime = endBenchmark();
+  SERIAL_OUT.print(F_STR("  100x WFE: "));
+  SERIAL_OUT.print(stm32WfeTime);
+  SERIAL_OUT.println(F_STR(" us"));
+
+#elif defined(TEENSYDUINO) && defined(__IMXRT1062__)
+  // Teensy 4.0/4.1 – Cortex-M7 (iMXRT1062)
+  // WFI enters "wait mode"; SysTick keeps ticking.
+  SERIAL_OUT.println(F_STR("Teensy 4.x Sleep (WFI/WFE):"));
+  SERIAL_OUT.println();
+
+  unsigned long teensyWfiSingle;
+  {
+    unsigned long t = micros();
+    asm volatile("wfi");
+    teensyWfiSingle = micros() - t;
+  }
+  SERIAL_OUT.print(F_STR("  WFI single wake: "));
+  SERIAL_OUT.print(teensyWfiSingle);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    asm volatile("wfi");
+  }
+  unsigned long teensyWfiTime = endBenchmark();
+  SERIAL_OUT.print(F_STR("  100x WFI: "));
+  SERIAL_OUT.print(teensyWfiTime);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  unsigned long teensyWfeSingle;
+  {
+    asm volatile("sev");
+    asm volatile("wfe");
+    unsigned long t = micros();
+    asm volatile("wfe");
+    teensyWfeSingle = micros() - t;
+  }
+  SERIAL_OUT.print(F_STR("  WFE single wake: "));
+  SERIAL_OUT.print(teensyWfeSingle);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    asm volatile("sev");
+    asm volatile("wfe");
+    asm volatile("wfe");
+  }
+  unsigned long teensyWfeTime = endBenchmark();
+  SERIAL_OUT.print(F_STR("  100x WFE: "));
+  SERIAL_OUT.print(teensyWfeTime);
+  SERIAL_OUT.println(F_STR(" us"));
+
+#elif defined(TEENSYDUINO)
+  // Teensy 3.x (Cortex-M4) – same WFI approach
+  SERIAL_OUT.println(F_STR("Teensy 3.x Sleep (WFI):"));
+  SERIAL_OUT.println();
+
+  unsigned long t3WfiSingle;
+  {
+    unsigned long t = micros();
+    asm volatile("wfi");
+    t3WfiSingle = micros() - t;
+  }
+  SERIAL_OUT.print(F_STR("  WFI single wake: "));
+  SERIAL_OUT.print(t3WfiSingle);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    asm volatile("wfi");
+  }
+  unsigned long t3WfiTime = endBenchmark();
+  SERIAL_OUT.print(F_STR("  100x WFI: "));
+  SERIAL_OUT.print(t3WfiTime);
+  SERIAL_OUT.println(F_STR(" us"));
+
+#elif defined(__AVR__)
+  // AVR – IDLE keeps Timer0 (millis/micros tick) alive.
+  // ADC Noise Reduction also keeps Timer0 but halts more peripherals.
+  // Power-down/save/standby stop Timer0 → we can't measure those with micros().
+  SERIAL_OUT.println(F_STR("AVR Sleep Modes (timer-based wake):"));
+  SERIAL_OUT.println();
+
+  // --- SLEEP_MODE_IDLE ---
+  set_sleep_mode(SLEEP_MODE_IDLE);
+  unsigned long avrIdleSingle;
+  {
+    unsigned long t = micros();
+    sleep_enable();
+    sleep_cpu();
+    sleep_disable();
+    avrIdleSingle = micros() - t;
+  }
+  SERIAL_OUT.print(F_STR("  IDLE single wake: "));
+  SERIAL_OUT.print(avrIdleSingle);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    sleep_enable();
+    sleep_cpu();
+    sleep_disable();
+  }
+  unsigned long avrIdleTime = endBenchmark();
+  SERIAL_OUT.print(F_STR("  100x IDLE: "));
+  SERIAL_OUT.print(avrIdleTime);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  // --- SLEEP_MODE_ADC (ADC Noise Reduction) ---
+  // Only available on mega-class AVR (ATmega328P, ATmega2560, etc.)
+#if defined(SLEEP_MODE_ADC)
+  set_sleep_mode(SLEEP_MODE_ADC);
+  unsigned long avrAdcSingle;
+  {
+    unsigned long t = micros();
+    sleep_enable();
+    sleep_cpu();
+    sleep_disable();
+    avrAdcSingle = micros() - t;
+  }
+  SERIAL_OUT.print(F_STR("  ADC NR single wake: "));
+  SERIAL_OUT.print(avrAdcSingle);
+  SERIAL_OUT.println(F_STR(" us"));
+
+  startBenchmark();
+  for (int i = 0; i < 100; i++) {
+    sleep_enable();
+    sleep_cpu();
+    sleep_disable();
+  }
+  unsigned long avrAdcTime = endBenchmark();
+  SERIAL_OUT.print(F_STR("  100x ADC NR: "));
+  SERIAL_OUT.print(avrAdcTime);
+  SERIAL_OUT.println(F_STR(" us"));
+#endif
+
+  // Restore idle mode
+  set_sleep_mode(SLEEP_MODE_IDLE);
+
+#else
+  SERIAL_OUT.println(F_STR("Sleep mode test not available for this board"));
 #endif
 }
 // ==================== SYSTEM INFO ====================

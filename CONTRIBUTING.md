@@ -29,7 +29,7 @@ For new benchmarks or new board support:
 
 ### Spreadsheet Data Issues
 
-If you notice incorrect or missing data in `Arduino_Benchmark_Comparison.xlsx`:
+If you notice incorrect or missing data in the results spreadsheets:
 
 1. Identify the **board name**, **test category**, and **test name**
 2. Provide the **correct value** with Serial Monitor output as evidence
@@ -90,7 +90,7 @@ If you notice incorrect or missing data in `Arduino_Benchmark_Comparison.xlsx`:
 
 ## Adding Boards to the Spreadsheet
 
-The file `Arduino_Benchmark_Comparison.xlsx` tracks benchmark results across boards. To add a new board or update existing results:
+Two spreadsheets track benchmark results across boards: `Part1_CoreBenchmarks_Results.xlsx` for core benchmarks and `Part2_PlatformBenchmarks_Results.xlsx` for platform-specific benchmarks. To add a new board or update existing results:
 
 ### Running the Benchmarks
 
@@ -106,7 +106,7 @@ The file `Arduino_Benchmark_Comparison.xlsx` tracks benchmark results across boa
 
 ### Formatting Results
 
-- Open `Arduino_Benchmark_Comparison.xlsx`
+- Open `Part1_CoreBenchmarks_Results.xlsx` for Part 1 results and `Part2_PlatformBenchmarks_Results.xlsx` for Part 2 results
 - Add a new column for your board, or update an existing column
 - Fill in each row with the corresponding value from your Serial Monitor output
 - Use the same units as existing entries (ops/ms, microseconds, etc.)

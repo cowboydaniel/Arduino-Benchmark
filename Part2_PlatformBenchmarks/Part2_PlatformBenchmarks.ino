@@ -4421,10 +4421,11 @@ void benchmarkSleepModes() {
 
 #elif defined(__AVR__)
   // AVR – IDLE keeps Timer0 (millis/micros tick) alive.
-  // ADC Noise Reduction also keeps Timer0 but halts more peripherals.
   // Power-down/save/standby stop Timer0 → we can't measure those with micros().
+  // ADC Noise Reduction (SLEEP_MODE_ADC) does NOT wake from Timer0 overflow
+  // or USART TX on ATmega328P, so it would hang; we skip it.
   SERIAL_OUT.println(F_STR("AVR Sleep Modes (timer-based wake):"));
-  SERIAL_OUT.println();
+  SERIAL_OUT.flush();  // drain TX buffer before entering any sleep mode
 
   // --- SLEEP_MODE_IDLE ---
   set_sleep_mode(SLEEP_MODE_IDLE);
@@ -4439,6 +4440,7 @@ void benchmarkSleepModes() {
   SERIAL_OUT.print(F_STR("  IDLE single wake: "));
   SERIAL_OUT.print(avrIdleSingle);
   SERIAL_OUT.println(F_STR(" us"));
+  SERIAL_OUT.flush();
 
   startBenchmark();
   for (int i = 0; i < 100; i++) {
@@ -4450,37 +4452,6 @@ void benchmarkSleepModes() {
   SERIAL_OUT.print(F_STR("  100x IDLE: "));
   SERIAL_OUT.print(avrIdleTime);
   SERIAL_OUT.println(F_STR(" us"));
-
-  // --- SLEEP_MODE_ADC (ADC Noise Reduction) ---
-  // Only available on mega-class AVR (ATmega328P, ATmega2560, etc.)
-#if defined(SLEEP_MODE_ADC)
-  set_sleep_mode(SLEEP_MODE_ADC);
-  unsigned long avrAdcSingle;
-  {
-    unsigned long t = micros();
-    sleep_enable();
-    sleep_cpu();
-    sleep_disable();
-    avrAdcSingle = micros() - t;
-  }
-  SERIAL_OUT.print(F_STR("  ADC NR single wake: "));
-  SERIAL_OUT.print(avrAdcSingle);
-  SERIAL_OUT.println(F_STR(" us"));
-
-  startBenchmark();
-  for (int i = 0; i < 100; i++) {
-    sleep_enable();
-    sleep_cpu();
-    sleep_disable();
-  }
-  unsigned long avrAdcTime = endBenchmark();
-  SERIAL_OUT.print(F_STR("  100x ADC NR: "));
-  SERIAL_OUT.print(avrAdcTime);
-  SERIAL_OUT.println(F_STR(" us"));
-#endif
-
-  // Restore idle mode
-  set_sleep_mode(SLEEP_MODE_IDLE);
 
 #else
   SERIAL_OUT.println(F_STR("Sleep mode test not available for this board"));

@@ -552,7 +552,45 @@ void calibrateBenchmarkTime() {
 }
 // ==================== CPU BENCHMARKS ====================
 
-#ifndef BOARD_SMALL_FLASH
+// ATmega328P/2560/32U4 have an internal die temperature sensor on ADC
+// channel 8, read against the internal 1.1V bandgap reference.
+// Absolute accuracy is ±10°C without per-chip calibration, but relative
+// measurements (temperature gain during stress) are much tighter.
+#if defined(__AVR_ATmega328P__) || defined(__AVR_ATmega328__) || \
+    defined(__AVR_ATmega2560__) || defined(__AVR_ATmega32U4__) || \
+    defined(__AVR_ATmega1284P__) || defined(__AVR_ATmega1284__)
+#define AVR_HAS_TEMP_SENSOR
+static float readAVRTemperature() {
+  uint8_t savedADMUX = ADMUX;
+  uint8_t savedADCSRA = ADCSRA;
+
+  // Internal 1.1V reference (REFS = 11), MUX = 1000 = temp sensor
+  ADMUX = (1 << REFS1) | (1 << REFS0) | 0x08;
+  ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);  // Enable, prescaler 128
+
+  delay(25);  // Reference + sensor settle time
+
+  // Discard first conversion after reference switch
+  ADCSRA |= (1 << ADSC);
+  while (ADCSRA & (1 << ADSC));
+
+  // Average 4 readings for noise reduction
+  long sum = 0;
+  for (uint8_t i = 0; i < 4; i++) {
+    ADCSRA |= (1 << ADSC);
+    while (ADCSRA & (1 << ADSC));
+    sum += ADC;
+  }
+
+  // Restore previous ADC state
+  ADMUX = savedADMUX;
+  ADCSRA = savedADCSRA;
+
+  // Datasheet typical: T(°C) = (ADC - 324.31) / 1.22
+  return (sum / 4.0f - 324.31f) / 1.22f;
+}
+#endif
+
 void benchmarkCPUStress() {
   printHeader("CPU: STRESS TEST with Temperature");
 
@@ -574,6 +612,8 @@ void benchmarkCPUStress() {
   hasTempSensor = true;  // Teensy 4.x has temp sensor
 #elif defined(ARDUINO_GIGA)
   hasTempSensor = true;  // STM32H7 internal temp sensor via HAL
+#elif defined(AVR_HAS_TEMP_SENSOR)
+  hasTempSensor = true;  // ATmega die temp sensor (ADC channel 8)
 #endif
 
   if (!hasTempSensor) {
@@ -616,6 +656,11 @@ void benchmarkCPUStress() {
   SERIAL_OUT.print(F_STR("Start Temperature: "));
   SERIAL_OUT.print(startTemp);
   SERIAL_OUT.println(F_STR(" °C"));
+#elif defined(AVR_HAS_TEMP_SENSOR)
+  startTemp = readAVRTemperature();
+  SERIAL_OUT.print(F_STR("Start Temperature: ~"));
+  SERIAL_OUT.print(startTemp);
+  SERIAL_OUT.println(F_STR(" °C (die, uncalibrated)"));
 #endif
 
   SERIAL_OUT.println(F_STR("Running 10s stress test..."));
@@ -718,6 +763,8 @@ void benchmarkCPUStress() {
     endTemp = tempmonGetTemp();
 #elif defined(ARDUINO_GIGA)
     endTemp = __HAL_ADC_CALC_TEMPERATURE(mcuVref, mcuADCTemp.read_u16(), ADC_RESOLUTION_16B);
+#elif defined(AVR_HAS_TEMP_SENSOR)
+    endTemp = readAVRTemperature();
 #endif
 
     SERIAL_OUT.println();
@@ -738,8 +785,7 @@ void benchmarkCPUStress() {
     }
   }
 }
-#endif  // BOARD_SMALL_FLASH
-#ifndef BOARD_SMALL_FLASH
+
 void benchmarkSerial() {
   printHeader("I/O: SERIAL COMMUNICATION");
 
@@ -834,7 +880,6 @@ void benchmarkSerial() {
     SERIAL_OUT.println(F_STR("CPU-bound)"));
   }
 }
-#endif  // BOARD_SMALL_FLASH
 // ==================== BOARD-SPECIFIC BENCHMARKS ====================
 
 #ifdef HAS_LED_MATRIX
@@ -1065,7 +1110,6 @@ void benchmarkBLE() {
 #endif
 // ==================== ADVANCED MATH BENCHMARKS ====================
 
-#ifndef BOARD_SMALL_FLASH
 void benchmarkAdvancedMath() {
   printHeader("ADVANCED MATH: Transcendental Functions");
 
@@ -1153,7 +1197,6 @@ void benchmarkAdvancedMath() {
   SERIAL_OUT.println(F_STR(" ops/ms)"));
 #endif
 }
-#endif  // BOARD_SMALL_FLASH
 #if defined(ARDUINO_ARCH_RP2040)
 void benchmarkSHA1() {
   printHeader("CRYPTO: SHA1");
@@ -1581,7 +1624,6 @@ void benchmarkESP32Crypto() {
 #endif
 // ==================== TIMING PRECISION BENCHMARKS ====================
 
-#ifndef BOARD_SMALL_FLASH
 void benchmarkTimingPrecision() {
   printHeader("TIMING: millis() and micros() Precision");
 
@@ -2034,7 +2076,6 @@ void benchmarkStackDepth() {
     SERIAL_OUT.println(F_STR(" us"));
   }
 }
-#endif  // BOARD_SMALL_FLASH
 // ==================== MULTI-CORE BENCHMARKS ====================
 
 #if defined(ESP32) || defined(ARDUINO_ARCH_RP2040)
@@ -3793,7 +3834,6 @@ void benchmarkWireI2C() {
 }
 #endif
 // Watchdog Timer Benchmark
-#ifndef BOARD_SMALL_FLASH
 void benchmarkWatchdog() {
   printHeader("SYSTEM: WATCHDOG TIMER");
 
@@ -4002,7 +4042,6 @@ void benchmarkSleepModes() {
   SERIAL_OUT.println(F_STR("Sleep mode info not available for this board"));
 #endif
 }
-#endif  // BOARD_SMALL_FLASH
 // ==================== SYSTEM INFO ====================
 
 void printSystemInfo() {
@@ -4233,15 +4272,11 @@ void setup() {
   printSystemInfo();
 
   // Advanced CPU benchmarks
-#ifndef BOARD_SMALL_FLASH
   benchmarkCPUStress();
   benchmarkAdvancedMath();
-#endif
 
   // Communication benchmarks
-#ifndef BOARD_SMALL_FLASH
   benchmarkSerial();
-#endif
 
   // Board-specific connectivity
 #ifdef HAS_LED_MATRIX
@@ -4270,11 +4305,9 @@ void setup() {
 #endif
 
   // System diagnostics
-#ifndef BOARD_SMALL_FLASH
   benchmarkTimingPrecision();
   benchmarkDelayTiming();
   benchmarkStackDepth();
-#endif
 
   // Multi-core benchmarks
 #if defined(ESP32) || defined(ARDUINO_ARCH_RP2040)
@@ -4326,10 +4359,8 @@ void setup() {
 #endif
 
   // Power management
-#ifndef BOARD_SMALL_FLASH
   benchmarkWatchdog();
   benchmarkSleepModes();
-#endif
 
   // Final summary
   printHeader("PART 2 BENCHMARK COMPLETE!");

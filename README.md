@@ -1,22 +1,14 @@
 # Arduino Universal Benchmark Suite
 
-A comprehensive benchmarking framework for comparing performance across Arduino-compatible boards. Upload a sketch, open Serial Monitor, and get detailed metrics — on any board from a classic Uno to an ESP32-S3.
+A comprehensive benchmarking framework for Arduino-compatible boards. The goal is to support every Arduino-compatible board — upload a sketch, open Serial Monitor, and get detailed performance metrics for any board you have on hand.
 
-## Supported Boards (30+)
+## What Is This?
 
-| Family | Boards |
-|---|---|
-| **ESP** | ESP32 (all variants: C3, S2, S3, C6, H2), ESP8266 |
-| **Arduino Classic** | Uno, Nano, Mega, Leonardo, Micro, Pro, Mini |
-| **Arduino Modern** | Uno R4 WiFi/Minima, Portenta H7/C33, Giga, Due, Zero |
-| **Arduino IoT** | Nano 33 IoT, MKR WiFi1010, MKR FOX/WAN/GSM/NB, Vidor 4000 |
-| **RP2040** | Raspberry Pi Pico, Pico W, Nano RP2040 Connect, XIAO RP2040 |
-| **nRF52** | Nano 33 BLE |
-| **STM32** | Blue Pill, Black Pill, Nucleo, Uno Q (STM32U585) |
-| **Teensy** | 3.x, 4.0, 4.1 |
-| **Other** | Adafruit Feather, Seeed XIAO, Arduino Yun, Multiduino, INK4u |
+This is a standardized benchmark suite that measures the real-world performance of Arduino-compatible boards. It runs a set of CPU, memory, I/O, and platform-specific tests, then prints the results over Serial so you can compare boards side by side.
 
-Board detection is automatic via compiler macros — no manual configuration needed.
+The suite is split into two sketches. Part 1 covers core benchmarks that apply to any board (integer math, floating-point, memory, digital/analog I/O). Part 2 covers platform-specific features like WiFi, BLE, cryptography, multi-core, and other capabilities that vary from board to board. Results are collected in a shared spreadsheet for easy comparison.
+
+Boards are detected automatically at compile time using preprocessor macros — no manual configuration needed. If your board isn't detected yet, it's straightforward to add (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
 ## Repository Structure
 

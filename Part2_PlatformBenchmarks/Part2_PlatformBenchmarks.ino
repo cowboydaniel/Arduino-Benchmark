@@ -241,7 +241,11 @@
 #define HAS_RTC
 #define RTC_I2C_ADDRESS 0x68  // Standard DS1307 I2C address
 
-// Arduino Uno
+// Arduino Uno family
+#elif defined(ARDUINO_AVR_UNO_MINI_LIMITED_EDITION) || defined(ARDUINO_AVR_UNO_MINI_LE) || defined(ARDUINO_AVR_UNO_MINI)
+#define BOARD_NAME "Arduino Uno Mini LE"
+#include <EEPROM.h>
+#define BOARD_AVR
 #elif defined(ARDUINO_AVR_UNO)
 #define BOARD_NAME "Arduino Uno"
 #include <EEPROM.h>

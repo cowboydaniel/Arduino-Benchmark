@@ -86,6 +86,7 @@ The **Benchmark Version** column records which version of the benchmark suite wa
 | ESP32-S2-Saola-1 | - | - | - | - |
 | ESP32-S3-DevKitC-1 | - | - | - | - |
 | ESP32-S3-DevKitM-1 | - | - | - | - |
+| ESP32-C3-Dev-Module | - | 1.0.0 | passed | - |
 | ESP32-C3-DevKitM-1 | - | - | - | - |
 | ESP32-C3-DevKitC-02 | - | - | - | - |
 | ESP32-C6-DevKitC-1 | - | - | - | - |

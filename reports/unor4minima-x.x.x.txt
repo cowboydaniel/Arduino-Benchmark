@@ -1,0 +1,308 @@
+========================================
+  UNIVERSAL ARDUINO BENCHMARK SUITE
+  Part 1: Core Performance
+========================================
+
+
+========================================
+SYSTEM INFORMATION
+========================================
+Board: Arduino Uno R4 Minima
+MCU: Renesas RA4M1 (ARM Cortex-M4)
+CPU Frequency: 48 MHz
+Features: 12x8 LED Matrix
+Free RAM: 32 KB (RA4M1)
+Compile Date: Feb 16 2026 13:06:19
+Benchmark Version: 1.0.0
+
+========================================
+CPU: INTEGER OPERATIONS
+========================================
+Checksum: 49995000
+Checksum: 932004569
+Checksum: 100
+Addition (10000 ops): 1674 μs (5973.72 ops/ms)
+Multiplication (23800 ops): 5010 μs (4750.50 ops/ms)
+Division (16200 ops): 5016 μs (3229.67 ops/ms)
+
+========================================
+CPU: FLOATING POINT OPERATIONS
+========================================
+Checksum: 3141.60
+Checksum: 1.11
+Checksum: 904826.94
+Checksum: 27781.28
+Checksum: 1169.32
+Float Addition (1000 ops): 148 μs (6756.76 ops/ms)
+Float Multiply (1000 ops): 170 μs (5882.35 ops/ms)
+Float Division (1000 ops): 440 μs (2272.73 ops/ms)
+Square Root (4200 ops): 5015 μs (837.49 ops/ms)
+Sin/Cos (900 ops): 5014 μs (179.50 ops/ms)
+
+sizeof(float):  4
+sizeof(double): 8
+
+8-byte double detected - double precision tests:
+Checksum: 1.11
+Checksum: 904841.94
+Checksum: 1322.93
+Checksum: 129.92
+Double Multiply (1000 ops): 1882 μs (531.35 ops/ms)
+Double Division (1000 ops): 14918 μs (67.03 ops/ms)
+Double Sqrt (200 ops): 5085 μs (39.33 ops/ms)
+Double Sin/Cos (100 ops): 9447 μs (10.59 ops/ms)
+
+========================================
+CPU: STRING OPERATIONS
+========================================
+Concatenation (16100 ops): 50271 us (320.26 ops/ms)
+Comparison (17000 ops): 51890 us (327.62 ops/ms)
+Int to String (4000 ops): 52289 us (76.50 ops/ms)
+itoa fixed buf (17000 ops): 50312 us (337.89 ops/ms)
+
+========================================
+MEMORY: SRAM READ/WRITE
+========================================
+Read checksum: 3264000
+Random checksum: 2937600
+Sequential Write (37376 ops): 5001 μs (7473.71 ops/ms)
+Sequential Read (25600 ops): 5030 μs (5089.46 ops/ms)
+Random Access (23040 ops): 5020 μs (median 4589.64 ops/ms, 5 trials)
+
+--- Memory Bandwidth Tests ---
+Detected free heap: 15720 bytes
+Using 11788 byte buffer (~75% free heap)
+memcpy (589200 bytes): 86214 μs (6.83 MB/s)
+memset (1178800 bytes): 147789 μs (7.98 MB/s)
+RAM Write Bandwidth: 27.35 MB/s
+RAM Read Bandwidth: 21.27 MB/s
+
+========================================
+MEMORY: EEPROM
+========================================
+EEPROM Size: 8192 bytes
+Hardware Write (64 bytes): 40608 μs (1.58 ops/ms)
+Read (64 bytes): 1690 μs (37.87 ops/ms)
+Read checksum: 2016
+
+========================================
+I/O: DIGITAL PIN OPERATIONS
+========================================
+digitalWrite() (2000 ops): 1716 μs (median 1165.50 ops/ms, 5 trials)
+
+========================================
+I/O: ANALOG OPERATIONS
+========================================
+analogRead() (2100 ops): 50020 μs (41.98 ops/ms)
+ADC average: 196
+analogWrite() (1818 ops): 50001 μs (36.36 ops/ms)
+
+========================================
+STORAGE: Flash Information
+========================================
+Flash info not available on this platform
+
+========================================
+I/O: PWM PERFORMANCE
+========================================
+Testing PWM on pin 3
+analogWrite() (10000 ops): 254449 us (39.30 ops/ms)
+PWM ramp (100 cycles): 649572 us (39.41 ops/ms)
+Time per update: 25.374 us
+
+========================================
+TIMING: INTERRUPT LATENCY
+========================================
+Jumper 3 -> 2
+Using pin 2
+
+Pass 1 – digitalWrite trigger (100/100):
+  Avg latency: 5.59 us (includes digitalWrite overhead)
+Pass 2 – direct port trigger (100/100):
+  Avg latency: 5.63 us (pure ISR entry latency)
+
+digitalWrite overhead: ~-0.04 us
+
+========================================
+I/O: SPI PERFORMANCE
+========================================
+Testing SPI transaction speed
+(No loopback - measuring CPU overhead)
+
+1 MHz: 10550 us for 1000 bytes (94.79 KB/s effective)
+4 MHz: 4395 us for 1000 bytes (227.53 KB/s effective)
+8 MHz: 3392 us for 1000 bytes (294.81 KB/s effective)
+16 MHz: 3142 us for 1000 bytes (318.27 KB/s effective)
+
+Bulk transfer (256 bytes):
+Throughput: 448.1 KB/s
+
+========================================
+PART 1 BENCHMARK COMPLETE!
+========================================
+Core benchmarks finished.
+Upload Part 2 for remaining benchmarks.
+
+To run again, press the RESET button or
+re-upload the sketch.
+========================================
+
+
+========================================
+  UNIVERSAL ARDUINO BENCHMARK SUITE
+  Part 2: Connectivity, Platform & Power
+========================================
+
+
+========================================
+SYSTEM INFORMATION
+========================================
+Board: Arduino Uno R4 Minima
+MCU: Renesas RA4M1 (ARM Cortex-M4)
+CPU Frequency: 48 MHz
+Features: 12x8 LED Matrix
+Free RAM: 32 KB (RA4M1)
+Compile Date: Feb 16 2026 13:19:47
+Benchmark Version: 1.0.0
+
+========================================
+CPU: STRESS TEST with Temperature
+========================================
+No temp sensor, stress only
+Running 10s stress test...
+
+Done: 764000 iters in 10000 ms
+Rate: 76.40 iters/ms
+
+========================================
+ADVANCED MATH: Transcendental Functions
+========================================
+Checksum: 254435.33
+exp() (100 ops): 2746 us (36.42 ops/ms)
+log() (100 ops): 2678 us (37.34 ops/ms)
+log10() (100 ops): 2686 us (37.23 ops/ms)
+pow() (100 ops): 5799 us (17.24 ops/ms)
+atan2() (100 ops): 575 us (173.91 ops/ms)
+asin() (100 ops): 502 us (199.20 ops/ms)
+acos() (100 ops): 487 us (205.34 ops/ms)
+tan() (100 ops): 465 us (215.05 ops/ms)
+fmod() (1000 ops): 4739 us (211.01 ops/ms)
+
+========================================
+I/O: SERIAL COMMUNICATION
+========================================
+Baud rate: 115200
+TX buffer: 512 bytes
+RX buffer: 512 bytes
+
+01234567891011121314151617181920212223242526272829303132333435363738394041424344454647484950515253545556575859606162636465666768697071727374757677787980818283848586878889909192939495969798990123456789101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899012345678910111213141516171819202122232425262728293031323334353637383940414243444546474849505152535455565758596061626364656667686970717273747576777879808182838485868788899091929394959697989901234567891011121314151617181920212223242526272829303132333435363738394041424344454647484950515253545556575859606162636465666768697071727374757677787980818283848586878889909192939495969798990123456789101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899
+Enqueue (190 B): 7002 us (median 27.14 B/ms)
+flush(): 4 us
+Wire time: 16493 us
+Throughput: 11.52 B/ms (11520 B/s max)
+Ratio: 42.45% (buffered)
+
+========================================
+DISPLAY: LED Matrix (Uno R4)
+========================================
+12x8 LED Matrix Available: YES
+Running LED animation test...
+Blink animation (20 cycles): 2000 ms
+Pattern switching (100 frames): 593 μs (168.63 ops/ms)
+Bitmap rendering (50 frames): 1874 μs (26.68 ops/ms)
+
+========================================
+TIMING: millis() and micros() Precision
+========================================
+millis() 1s: 1000 ms (+/-0 ms)
+micros() res: 2 us (1 reads)
+Min step: 2 us
+micros() 1ms: 1048 us (+/-48 us)
+
+Clock accuracy: 100.00%
+
+========================================
+TIMING: delay() and delayMicroseconds() Accuracy
+========================================
+delay(0) call overhead: 0.003 ms
+delay(1..50) avg deviation: 0.005 ms
+delay(1..50) max deviation: 0.006 ms
+delayMicroseconds(0) call overhead: 3 us
+delayMicroseconds(1..50) avg deviation: 1.2 us
+delayMicroseconds(1..50) max deviation: 2 us
+
+========================================
+MEMORY: Stack Depth Test
+========================================
+Probing stack limit...
+Stack budget: 26699 bytes
+Max safe depth: 466
+Per-frame cost: 56 bytes
+Stack used:     26152 / 26699 bytes
+Timing at depth 419...
+Recursion (419 deep): 256.0 us
+Per level: 0.61 us
+
+========================================
+I/O: DAC OUTPUT (Uno R4)
+========================================
+Renesas RA4M1 has 1x 12-bit DAC on pin A0/DAC
+analogWrite() 12-bit (10000 ops): 98605 us (101.41 ops/ms)
+DAC ramp (10 cycles, 2560 writes): 24923 us (102.72 ops/ms)
+Effective sample rate: 102.7 kHz
+
+========================================
+TIMING: INTERNAL RTC (Uno R4)
+========================================
+Renesas RA4M1 has built-in RTC
+RTC.getTime() (1000 ops): 15796 us (63.31 ops/ms)
+RTC.setTime() (100 ops): 17703 us (5.65 ops/ms)
+
+RTC tick accuracy (1 second test):
+  1 RTC second = 966002 us (-3.400% error)
+Checksum: 0
+
+========================================
+I/O: WIRE I2C COMMUNICATION
+========================================
+I2C buses: 1
+Buffer size: 255 bytes
+
+Testing I2C transaction speed
+(No device - measuring bus overhead)
+
+100 kHz: 1345 us for 10 writes (7.43 txn/ms)
+  Status codes: ok=0, addrNACK=0, dataNACK=0, other=9, timeout=1
+  Early stop: repeated bus errors/timeouts
+400 kHz: 10105 us for 10 writes (0.99 txn/ms)
+  Status codes: ok=0, addrNACK=0, dataNACK=0, other=0, timeout=10
+  Early stop: repeated bus errors/timeouts
+
+========================================
+SYSTEM: WATCHDOG TIMER
+========================================
+Renesas RA4M1 Watchdog:
+  Independent WDT (IWDT)
+  Configurable timeout periods
+
+Use WDT library for configuration
+
+========================================
+POWER: SLEEP MODE TIMING
+========================================
+Renesas RA4M1 Sleep (WFI / WFE):
+
+  WFI single wake: 93 us
+  100x WFI: 99738 us
+  WFE single wake: 631 us
+  100x WFE: 99730 us
+
+========================================
+PART 2 BENCHMARK COMPLETE!
+========================================
+Platform benchmarks finished.
+Both parts complete! All benchmarks have been run.
+
+To run again, press the RESET button or
+re-upload the sketch.
+========================================

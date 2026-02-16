@@ -111,10 +111,9 @@ TIMING: INTERRUPT LATENCY
 Jumper 3 -> 2
 Using pin 2
 
-Pass 1 – digitalWrite trigger: FAILED
+Pass 1 – digitalWrite trigger (26/100):
+  Avg latency: 23.38 us (includes digitalWrite overhead)
 Pass 2 – direct port trigger: FAILED
-Interrupt measurement failed
-(Pin may not support interrupts)
 
 ========================================
 I/O: SPI PERFORMANCE

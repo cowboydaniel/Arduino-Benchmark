@@ -4829,6 +4829,9 @@ void printSystemInfo() {
   SERIAL_OUT.print(__DATE__);
   SERIAL_OUT.print(F_STR(" "));
   SERIAL_OUT.println(__TIME__);
+
+  SERIAL_OUT.print(F_STR("Benchmark Version: "));
+  SERIAL_OUT.println(F_STR(BENCHMARK_VERSION));
 }
 
 

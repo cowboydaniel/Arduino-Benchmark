@@ -15,7 +15,7 @@ Linux: AR9331 400MHz, 64MB RAM, 16MB Flash
 WiFi + USB Host (OpenWrt)
 Free RAM: 1402 bytes
 Total RAM: 2.5 KB
-Compile Date: Feb 16 2026 11:41:33
+Compile Date: Feb 16 2026 12:01:50
 
 ========================================
 CPU: INTEGER OPERATIONS
@@ -23,7 +23,7 @@ CPU: INTEGER OPERATIONS
 Checksum: 49995000
 Checksum: 1609443109
 Checksum: 100
-Addition (10000 ops): 24656 μs (405.58 ops/ms)
+Addition (10000 ops): 24664 μs (405.45 ops/ms)
 Multiplication (700 ops): 5004 μs (139.89 ops/ms)
 Division (200 ops): 7852 μs (25.47 ops/ms)
 
@@ -35,10 +35,10 @@ Checksum: 1.11
 Checksum: 904826.93
 Checksum: 1322.93
 Checksum: 129.92
-Float Addition (1000 ops): 9436 μs (105.98 ops/ms)
+Float Addition (1000 ops): 9444 μs (105.89 ops/ms)
 Float Multiply (1000 ops): 11008 μs (90.84 ops/ms)
-Float Division (1000 ops): 32460 μs (30.81 ops/ms)
-Square Root (200 ops): 8736 μs (22.89 ops/ms)
+Float Division (1000 ops): 32456 μs (30.81 ops/ms)
+Square Root (200 ops): 8728 μs (22.91 ops/ms)
 Sin/Cos (100 ops): 27164 μs (3.68 ops/ms)
 
 sizeof(float):  4
@@ -49,9 +49,9 @@ sizeof(double): 4
 CPU: STRING OPERATIONS
 ========================================
 Concatenation (2600 ops): 20128 us (129.17 ops/ms)
-Comparison (3000 ops): 29424 us (101.96 ops/ms)
+Comparison (3000 ops): 29428 us (101.94 ops/ms)
 Int to String (1000 ops): 67600 us (14.79 ops/ms)
-itoa fixed buf (1000 ops): 33564 us (29.79 ops/ms)
+itoa fixed buf (1000 ops): 33556 us (29.80 ops/ms)
 
 ========================================
 MEMORY: SRAM READ/WRITE
@@ -59,14 +59,14 @@ MEMORY: SRAM READ/WRITE
 Read checksum: 326400
 Random checksum: 261120
 Sequential Write (8448 ops): 5028 μs (1680.19 ops/ms)
-Sequential Read (2560 ops): 5244 μs (488.18 ops/ms)
-Random Access (2048 ops): 5472 μs (median 374.27 ops/ms, 5 trials)
+Sequential Read (2560 ops): 5240 μs (488.55 ops/ms)
+Random Access (2048 ops): 5476 μs (median 374.00 ops/ms, 5 trials)
 
 --- Memory Bandwidth Tests ---
 Detected free heap: 1465 bytes
 Using 1096 byte buffer (~75% free heap)
 memcpy (130972 bytes): 66632 μs (1.97 MB/s)
-memset (130424 bytes): 49676 μs (2.63 MB/s)
+memset (130424 bytes): 49668 μs (2.63 MB/s)
 RAM Write Bandwidth: 3.95 MB/s
 RAM Read Bandwidth: 1.51 MB/s
 
@@ -74,23 +74,23 @@ RAM Read Bandwidth: 1.51 MB/s
 MEMORY: EEPROM
 ========================================
 EEPROM Size: 1024 bytes
-Hardware Write (64 bytes): 214104 μs (0.30 ops/ms)
+Hardware Write (64 bytes): 213640 μs (0.30 ops/ms)
 Read (64 bytes): 228 μs (280.70 ops/ms)
 Read checksum: 2016
 
 ========================================
 I/O: DIGITAL PIN OPERATIONS
 ========================================
-digitalWrite() (2000 ops): 13028 μs (median 153.52 ops/ms, 5 trials)
-Direct Port (6000 ops): 5328 μs (median 1126.13 ops/ms, 5 trials)
+digitalWrite() (2000 ops): 13032 μs (median 153.47 ops/ms, 5 trials)
+Direct Port (6000 ops): 5324 μs (median 1126.97 ops/ms, 5 trials)
 Speedup: 7.34x faster
 
 ========================================
 I/O: ANALOG OPERATIONS
 ========================================
-analogRead() (167 ops): 20108 μs (8.31 ops/ms)
-ADC average: 533
-analogWrite() (1456 ops): 20000 μs (72.80 ops/ms)
+analogRead() (167 ops): 20116 μs (8.30 ops/ms)
+ADC average: 427
+analogWrite() (1456 ops): 20004 μs (72.79 ops/ms)
 
 ========================================
 STORAGE: Flash Information
@@ -101,8 +101,8 @@ Flash info not available on this platform
 I/O: PWM PERFORMANCE
 ========================================
 Testing PWM on pin 9
-analogWrite() (10000 ops): 95664 us (104.53 ops/ms)
-PWM ramp (100 cycles): 238412 us (107.38 ops/ms)
+analogWrite() (10000 ops): 95672 us (104.52 ops/ms)
+PWM ramp (100 cycles): 238408 us (107.38 ops/ms)
 Time per update: 9.313 us
 
 ========================================
@@ -112,11 +112,11 @@ Jumper 3 -> 2
 Using pin 2
 
 Pass 1 – digitalWrite trigger (100/100):
-  Avg latency: 12.00 us (includes digitalWrite overhead)
+  Avg latency: 11.36 us (includes digitalWrite overhead)
 Pass 2 – direct port trigger (100/100):
-  Avg latency: 7.12 us (pure ISR entry latency)
+  Avg latency: 7.28 us (pure ISR entry latency)
 
-digitalWrite overhead: ~4.88 us
+digitalWrite overhead: ~4.08 us
 
 ========================================
 I/O: SPI PERFORMANCE
@@ -124,8 +124,8 @@ I/O: SPI PERFORMANCE
 Testing SPI transaction speed
 (No loopback - measuring CPU overhead)
 
-1 MHz: 11136 us for 1000 bytes (89.80 KB/s effective)
-2 MHz: 7136 us for 1000 bytes (140.13 KB/s effective)
+1 MHz: 11140 us for 1000 bytes (89.77 KB/s effective)
+2 MHz: 7140 us for 1000 bytes (140.06 KB/s effective)
 4 MHz: 5124 us for 1000 bytes (195.16 KB/s effective)
 8 MHz: 4112 us for 1000 bytes (243.19 KB/s effective)
 
@@ -159,7 +159,7 @@ WiFi + USB Host (OpenWrt)
 Bridge: Serial1 MCU<->Linux link (killer test enabled)
 Free RAM: 1385 bytes
 Total RAM: 2.5 KB
-Compile Date: Feb 16 2026 11:42:26
+Compile Date: Feb 16 2026 12:02:04
 
 ========================================
 CPU: STRESS TEST with Temperature
@@ -170,19 +170,19 @@ Running 10s stress test...
 Done: 34300 iters in 10008 ms
 Rate: 3.43 iters/ms
 
-========
+========================================
 ADVANCED MATH: Transcendental Functions
 ========================================
 Checksum: 254435.21
-exp() (100 ops): 22036 us (4.54 ops/ms)
-log() (100 ops): 16180 us (6.18 ops/ms)
-log10() (100 ops): 16996 us (5.88 ops/ms)
+exp() (100 ops): 22044 us (4.54 ops/ms)
+log() (100 ops): 16184 us (6.18 ops/ms)
+log10() (100 ops): 16992 us (5.89 ops/ms)
 pow() (100 ops): 34892 us (2.87 ops/ms)
-atan2() (100 ops): 19856 us (5.04 ops/ms)
+atan2() (100 ops): 19852 us (5.04 ops/ms)
 asin() (100 ops): 18260 us (5.48 ops/ms)
 acos() (100 ops): 19944 us (5.01 ops/ms)
 tan() (100 ops): 16836 us (5.94 ops/ms)
-fmod() (1000 ops): 28440 us (35.16 ops/ms)
+fmod() (1000 ops): 28424 us (35.18 ops/ms)
 
 ========================================
 I/O: SERIAL COMMUNICATION
@@ -201,10 +201,10 @@ Ratio: 55.81% (buffered)
 ========================================
 TIMING: millis() and micros() Precision
 ========================================
-millis() 1s: 999 ms (+/-1 ms)
+millis() 1s: 1001 ms (+/-1 ms)
 micros() res: 4 us (1 reads)
 Min step: 4 us
-micros() 1ms: 1020 us (+/-20 us)
+micros() 1ms: 1016 us (+/-16 us)
 
 Clock accuracy: 99.90%
 
@@ -215,7 +215,7 @@ delay(0) call overhead: 0.008 ms
 delay(1..50) avg deviation: 0.002 ms
 delay(1..50) max deviation: 0.004 ms
 delayMicroseconds(0) call overhead: 4 us
-delayMicroseconds(1..50) avg deviation: 1.8 us
+delayMicroseconds(1..50) avg deviation: 2.1 us
 delayMicroseconds(1..50) max deviation: 4 us
 
 ========================================
@@ -234,15 +234,17 @@ Per level: 4.71 us
 YUN SERIAL1/BRIDGE KILLER TEST
 ========================================
 Initializing Bridge daemon link...
- Bridge.get)
+Bridge ready.
+
+1. MCU<->Linux round-trip latency (Bridge.put + Bridge.get)
   Successful round-trips: 50/50
-  Avg latency: 19544 us
-  Min latency: 18436 us
-  Max latency: 20248 us
+  Avg latency: 22324 us
+  Min latency: 18588 us
+  Max latency: 150260 us
 
 2. MCU->Linux throughput (Bridge.put payload stream)
-: 3274.28 ms
-  Throughput: 1954.6 bytes/sec
+: 3381.94 ms
+  Throughput: 1892.4 bytes/sec
 
 Yun Bridge killer test complete.
 
@@ -255,4 +257,31 @@ Buffer size: 32 bytes
 Testing I2C transaction speed
 (No device - measuring bus overhead)
 
+100 kHz: 135808 us for 1000 writes (7.36 txn/ms)
+  Status codes: ok=0, addrNACK=1000, dataNACK=0, other=0, timeout=0
+400 kHz: 61892 us for 1000 writes (16.16 txn/ms)
+  Status codes: ok=0, addrNACK=1000, dataNACK=0, other=0, timeout=0
+
+========================================
+SYSTEM: WATCHDOG TIMER
+========================================
+AVR WDT: 16ms-8s, reset or IRQ
+Reset cause: 
+
+========================================
+POWER: SLEEP MODE TIMING
+========================================
+AVR Sleep Modes (timer-based wake):
+  IDLE single wake: 660 us
+  100x IDLE: 50788 us
+
+========================================
+PART 2 BENCHMARK COMPLETE!
+========================================
+Platform benchmarks finished.
+Both parts complete! All benchmarks have been run.
+
+To run again, press the RESET button or
+re-upload the sketch.
+========================================
 

@@ -1,0 +1,421 @@
+
+
+========================================
+  UNIVERSAL ARDUINO BENCHMARK SUITE
+  Part 1: Core Performance
+========================================
+
+
+========================================
+SYSTEM INFORMATION
+========================================
+Board: Arduino Nano ESP32
+Chip Model: ESP32-S3
+Chip Revision: 2
+CPU Frequency: 240 MHz
+Cores: 2
+SDK Version: v5.5.2-729-g87912cd291
+Free RAM: 279 KB
+Total Heap: 323 KB
+Min Free Heap: 273 KB
+Compile Date: Feb 16 2026 17:59:00
+Benchmark Version: 1.0.0
+
+========================================
+CPU: INTEGER OPERATIONS
+========================================
+Checksum: 49995000
+Checksum: 2090555601
+Checksum: 100
+Addition (10000 ops): 437 μs (22883.29 ops/ms)
+Multiplication (53200 ops): 5000 μs (10640.00 ops/ms)
+Division (51500 ops): 5008 μs (10283.55 ops/ms)
+
+========================================
+CPU: FLOATING POINT OPERATIONS
+========================================
+Checksum: 3141.60
+Checksum: 1.11
+Checksum: 904826.94
+Checksum: 77390.90
+Checksum: 4677.29
+Float Addition (1000 ops): 84 μs (11904.76 ops/ms)
+Float Multiply (1000 ops): 113 μs (8849.56 ops/ms)
+Float Division (1000 ops): 330 μs (3030.30 ops/ms)
+Square Root (11700 ops): 5035 μs (2323.73 ops/ms)
+Sin/Cos (3600 ops): 5020 μs (717.13 ops/ms)
+
+sizeof(float):  4
+sizeof(double): 8
+
+8-byte double detected - double precision tests:
+Checksum: 1.11
+Checksum: 904841.94
+Checksum: 7937.56
+Checksum: 519.70
+Double Multiply (1000 ops): 541 μs (1848.43 ops/ms)
+Double Division (1000 ops): 2361 μs (423.55 ops/ms)
+Double Sqrt (1200 ops): 5395 μs (222.43 ops/ms)
+Double Sin/Cos (400 ops): 6405 μs (62.45 ops/ms)
+
+========================================
+CPU: STRING OPERATIONS
+========================================
+Concatenation (5200 ops): 5061 us (1027.46 ops/ms)
+Comparison (8000 ops): 5175 us (1545.89 ops/ms)
+Int to String (2000 ops): 6827 us (292.95 ops/ms)
+itoa fixed buf (7000 ops): 5553 us (1260.58 ops/ms)
+
+========================================
+MEMORY: SRAM READ/WRITE
+========================================
+Read checksum: 10281600
+Random checksum: 10314240
+Sequential Write (151552 ops): 5003 μs (30292.22 ops/ms)
+Sequential Read (80640 ops): 5001 μs (16124.78 ops/ms)
+Random Access (80896 ops): 5013 μs (median 16134.02 ops/ms, 5 trials)
+
+--- Memory Bandwidth Tests ---
+Detected free heap: 285836 bytes
+Using 214376 byte buffer (~75% free heap)
+memcpy (10718800 bytes): 479462 μs (22.36 MB/s)
+memset (21437600 bytes): 613562 μs (34.94 MB/s)
+RAM Write Bandwidth: 34.93 MB/s
+RAM Read Bandwidth: 44.70 MB/s
+
+========================================
+MEMORY: EEPROM
+========================================
+EEPROM Size: 512 bytes
+RAM Buffer Write (64 bytes): 20 μs (3200.00 ops/ms)
+Flash Commit Test (10 commits):
+  Min: 2256 μs (2.26 ms)
+  Median: 2312 μs (2.31 ms)
+  Max: 26195 μs (26.19 ms) ← Includes erase
+Read (64 bytes): 14 μs (4571.43 ops/ms)
+Read checksum: 16320
+
+========================================
+MEMORY: PSRAM
+========================================
+PSRAM Size: 8192 KB
+Free PSRAM: 8189 KB
+Write (4096 bytes): 94 μs (43574.47 ops/ms)
+Read (4096 bytes): 172 μs (23813.95 ops/ms)
+Read checksum: 522240
+
+========================================
+I/O: DIGITAL PIN OPERATIONS
+========================================
+digitalWrite() (2000 ops): 1160 μs (median 1724.14 ops/ms, 5 trials)
+Direct Register (78000 ops): 5096 μs (median 15306.12 ops/ms, 5 trials)
+Speedup: 8.88x faster
+
+========================================
+I/O: ANALOG OPERATIONS
+========================================
+analogRead() (98 ops): 5043 μs (19.43 ops/ms)
+ADC average: 38
+
+========================================
+STORAGE: Flash Information
+========================================
+Flash Size: 16384 KB
+Flash Speed: 80 MHz
+Sketch Size: 981 KB
+Free Sketch Space: 3072 KB
+
+========================================
+I/O: PWM PERFORMANCE
+========================================
+Testing PWM on pin 2
+LEDC duty update (10000 ops): 3887 us (2572.68 ops/ms)
+PWM ramp (100 cycles): 8828 us (2899.86 ops/ms)
+Time per update: 0.345 us
+
+========================================
+TIMING: INTERRUPT LATENCY
+========================================
+Jumper 5 -> 4
+Using pin 4
+
+Pass 1 – digitalWrite trigger: FAILED
+Pass 2 – direct port trigger: FAILED
+Interrupt measurement failed
+(Pin may not support interrupts)
+
+========================================
+I/O: SPI PERFORMANCE
+========================================
+Testing SPI transaction speed
+(No loopback - measuring CPU overhead)
+
+1 MHz: 19640 us for 1000 bytes (50.92 KB/s effective)
+4 MHz: 12881 us for 1000 bytes (77.63 KB/s effective)
+10 MHz: 11455 us for 1000 bytes (87.30 KB/s effective)
+20 MHz: 11023 us for 1000 bytes (90.72 KB/s effective)
+40 MHz: 10754 us for 1000 bytes (92.99 KB/s effective)
+
+Bulk transfer (256 bytes):
+Throughput: 1079.3 KB/s
+
+========================================
+PART 1 BENCHMARK COMPLETE!
+========================================
+Core benchmarks finished.
+Upload Part 2 for remaining benchmarks.
+
+To run again, press the RESET button or
+re-upload the sketch.
+========================================
+
+
+========================================
+  UNIVERSAL ARDUINO BENCHMARK SUITE
+  Part 2: Connectivity, Platform & Power
+========================================
+
+
+========================================
+SYSTEM INFORMATION
+========================================
+Board: Arduino Nano ESP32
+Chip Model: ESP32-S3
+Chip Revision: 2
+CPU Frequency: 240 MHz
+Cores: 2
+SDK Version: v5.5.2-729-g87912cd291
+Free RAM: 258 KB
+Total Heap: 302 KB
+Min Free Heap: 252 KB
+Compile Date: Feb 16 2026 18:01:43
+Benchmark Version: 1.0.0
+
+========================================
+CPU: STRESS TEST with Temperature
+========================================
+Start Temperature: 32.40 °C
+Running 10s stress test...
+
+Done: 3977700 iters in 10000 ms
+Rate: 397.77 iters/ms
+
+Final Temperature: 35.40 °C
+Total Temperature Gain: +3.00 °C
+Good thermal performance
+
+========================================
+ADVANCED MATH: Transcendental Functions
+========================================
+Checksum: 254435.33
+exp() (100 ops): 233 us (429.18 ops/ms)
+log() (100 ops): 117 us (854.70 ops/ms)
+log10() (100 ops): 128 us (781.25 ops/ms)
+pow() (100 ops): 334 us (299.40 ops/ms)
+atan2() (100 ops): 165 us (606.06 ops/ms)
+asin() (100 ops): 171 us (584.80 ops/ms)
+acos() (100 ops): 159 us (628.93 ops/ms)
+tan() (100 ops): 126 us (793.65 ops/ms)
+fmod() (1000 ops): 793 us (1261.03 ops/ms)
+
+========================================
+I/O: SERIAL COMMUNICATION
+========================================
+Baud rate: 115200
+TX buffer: unknown
+RX buffer: unknown
+
+01234567891011121314151617181920212223242526272829303132333435363738394041424344454647484950515253545556575859606162636465666768697071727374757677787980818283848586878889909192939495969798990123456789101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899012345678910111213141516171819202122232425262728293031323334353637383940414243444546474849505152535455565758596061626364656667686970717273747576777879808182838485868788899091929394959697989901234567891011121314151617181920212223242526272829303132333435363738394041424344454647484950515253545556575859606162636465666768697071727374757677787980818283848586878889909192939495969798990123456789101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899
+Enqueue (190 B): 3401 us (median 55.87 B/ms)
+flush(): 6 us
+Wire time: 16493 us
+Throughput: 11.52 B/ms (11520 B/s max)
+Ratio: 20.62% (buffered)
+
+========================================
+WIRELESS: WiFi CAPABILITIES
+========================================
+WiFi Available: YES (Native)
+MAC Address: 10:B4:1D:C5:D8:28
+Scanning networks... 2 networks found
+Strongest 3 networks:
+  1: AraratHotelGuest (-73 dBm)
+  2: AraratHotelStar (-96 dBm)
+
+========================================
+WIRELESS: Bluetooth LE
+========================================
+BLE Available: YES
+Initializing BLE...
+Scanning for BLE devices (5 sec)... 4 devices found
+Discovered devices:
+  1: Unknown [1c:d9:da:c8:8f:da] RSSI: -78 dBm
+  2: Unknown [23:ef:d1:1c:ba:13] RSSI: -85 dBm
+  3: Unknown [57:21:bf:68:ad:ab] RSSI: -86 dBm
+  4: Unknown [d7:7d:48:fe:1d:e3] RSSI: -92 dBm
+
+========================================
+CRYPTO: Hashing (ESP32)
+========================================
+Example digests:
+MD5: 9699e36529556c9352c707c6efad30dc
+SHA1: 1ff043261f4af33c1e4ce68ca2b2ce77a8bf4cf3
+SHA256: d2102eb1ca93268fd3a1dc13b92cb9dc87ab169934952950e2c06e19dc9797a2
+SHA512: 20e72a61af48834e18f1c94805d8d3b855188f21567fcc6a4da18d410beca7e9058e2f3c4adb1d35ca1c6f71c469d3b548febf090af55dc935c3b387a7206dec
+SHA3-256: not available in this build
+...running HEX encode
+...running MD5
+...running SHA1
+...running SHA256
+...running SHA512
+...running PBKDF2-HMAC-SHA256
+Checksum: 347152
+HEX encode (60 ops): 23922 μs (2.51 ops/ms)
+MD5 (1250 ops): 20138 μs (62.07 ops/ms)
+SHA1 (600 ops): 20093 μs (29.86 ops/ms)
+SHA256 (590 ops): 20263 μs (29.12 ops/ms)
+SHA512 (440 ops): 20037 μs (21.96 ops/ms)
+PBKDF2-HMAC-SHA256 (1 ops): 28643 μs (0.03 ops/ms)
+  Iterations per op: 500
+
+========================================
+CRYPTO: Hardware RNG
+========================================
+Using ESP32 hardware RNG
+Checksum: 4174207936
+Hardware RNG (1000 values): 22320 μs (44.80 values/ms)
+Distribution (10000 samples):
+  Bin 0: 2489 (24.9%)
+  Bin 1: 2501 (25.0%)
+  Bin 2: 2515 (25.1%)
+  Bin 3: 2495 (25.0%)
+(Ideal: 25% each bin)
+
+========================================
+TIMING: millis() and micros() Precision
+========================================
+millis() 1s: 1001 ms (+/-1 ms)
+micros() res: 1 us (1 reads)
+Min step: 1 us
+micros() 1ms: 1002 us (+/-2 us)
+
+ESP32 CPU Cycle Counter:
+CPU Frequency: 240 MHz
+Cycles elapsed: 240437
+micros() elapsed: 1002 μs
+Expected cycles: 240480
+Timing jitter: 0.02%
+
+Clock accuracy: 99.90%
+
+========================================
+TIMING: delay() and delayMicroseconds() Accuracy
+========================================
+delay(0) call overhead: 0.010 ms
+delay(1..50) avg deviation: 0.011 ms
+delay(1..50) max deviation: 0.011 ms
+delayMicroseconds(0) call overhead: 2 us
+delayMicroseconds(1..50) avg deviation: 0.2 us
+delayMicroseconds(1..50) max deviation: 1 us
+
+========================================
+MEMORY: Stack Depth Test
+========================================
+Probing stack limit...
+Stack budget: 5672 bytes
+Max safe depth: 63
+Per-frame cost: 81 bytes
+Stack used:     5132 / 5672 bytes
+Timing at depth 56...
+Recursion (56 deep): 20.0 us
+Per level: 0.36 us
+
+========================================
+MULTI-CORE: Parallel Performance
+========================================
+ESP32 Dual-Core Test
+Core 0 iterations: 6294565
+Core 1 iterations: 6305655
+Total iterations: 12600220
+Core balance: 99.82%
+
+========================================
+I/O: CAPACITIVE TOUCH (ESP32)
+========================================
+Testing touch pin: GPIO1
+touchRead() (1000 ops): 684 us (1461.99 ops/ms)
+Average touch value: 0
+Baseline (no touch): 0
+Time per read: 0.68 us
+
+========================================
+POWER: LIGHT SLEEP TIMING (ESP32)
+========================================
+Testing light sleep wake latency...
+(Deep sleep would reset the MCU)
+Target sleep time: 1000 us
+Average actual time: 115.8 us
+Wake overhead: -884.2 us
+Iterations: 20
+
+Sleep duration accuracy:
+  Target 100 us -> Actual 116 us (16.0% error)
+  Target 500 us -> Actual 127 us (-74.6% error)
+  Target 1000 us -> Actual 114 us (-88.6% error)
+  Target 5000 us -> Actual 117 us (-97.7% error)  Target 10000 us -> Actual 1773 us (-82.3% error)
+
+========================================
+CRYPTO: HARDWARE AES (ESP32)
+========================================
+Using ESP32 hardware AES accelerator
+AES-128 Encrypt (1000 blocks): 29699 us (33.67 blocks/ms)
+AES-128 Decrypt (1000 blocks): 29494 us (33.91 blocks/ms)
+Encrypt throughput: 526.1 KB/s
+Decrypt throughput: 529.8 KB/s
+Checksum: 362987
+
+========================================
+I/O: WIRE I2C COMMUNICATION
+========================================
+I2C buses: 2
+Buffer size: 128 bytes
+
+Testing I2C transaction speed
+(No device - measuring bus overhead)
+
+100 kHz: 1858 us for 10 writes (5.38 txn/ms)
+  Status codes: ok=0, addrNACK=0, dataNACK=0, other=10, timeout=0
+  Early stop: repeated bus errors/timeouts
+400 kHz: 957 us for 10 writes (10.45 txn/ms)
+  Status codes: ok=0, addrNACK=0, dataNACK=0, other=10, timeout=0
+  Early stop: repeated bus errors/timeouts
+1 MHz: 866 us for 10 writes (11.55 txn/ms)
+  Status codes: ok=0, addrNACK=0, dataNACK=0, other=10, timeout=0
+  Early stop: repeated bus errors/timeouts
+
+========================================
+SYSTEM: WATCHDOG TIMER
+========================================
+ESP32 Watchdog Information:
+  Task WDT: Monitors FreeRTOS tasks
+  Interrupt WDT: Monitors interrupt handling
+  RTC WDT: Low-power watchdog
+
+Watchdog is managed by ESP-IDF/FreeRTOS
+Default timeout: ~5 seconds
+
+========================================
+POWER: SLEEP MODE TIMING
+========================================
+See ESP32 Light Sleep benchmark above
+
+========================================
+PART 2 BENCHMARK COMPLETE!
+========================================
+Platform benchmarks finished.
+Both parts complete! All benchmarks have been run.
+
+To run again, press the RESET button or
+re-upload the sketch.
+========================================
+

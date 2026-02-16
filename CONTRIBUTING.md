@@ -88,6 +88,41 @@ If you notice incorrect or missing data in the results spreadsheets:
 
 ---
 
+## Bumping the Benchmark Version
+
+Any change to the benchmark code that could affect results (new tests, changed methodology, bug fixes in timing, etc.) **requires a version bump**. This ensures results from different benchmark versions are never mixed.
+
+### When to Bump
+
+- Adding, removing, or reordering benchmarks
+- Changing how a benchmark measures or reports results
+- Fixing a bug that changes output values
+- Changing timing helpers in `BenchmarkHelpers.h`
+
+You do **not** need to bump the version for:
+
+- Adding board detection macros (new `#define BOARD_NAME` entries)
+- Documentation-only changes
+- Changes to spreadsheets or `BOARD_STATUS.md`
+
+### How to Bump
+
+1. **Create a new branch** from `main` for your changes — do **not** work directly on the `dual-benchmark` branch or any existing results branch
+2. **Update `BENCHMARK_VERSION`** in both `Part1_CoreBenchmarks/BenchmarkHelpers.h` and `Part2_PlatformBenchmarks/BenchmarkHelpers.h` (e.g. `"1.0.0"` → `"1.1.0"`)
+3. **Create new empty spreadsheets**: `Part1_CoreBenchmarks_Results_v<NEW_VERSION>.xlsx` and `Part2_PlatformBenchmarks_Results_v<NEW_VERSION>.xlsx` — do **not** modify or delete the previous version's spreadsheets
+4. **Copy `BOARD_STATUS.md`** as-is — keep the board list and all existing results. When boards are re-tested under the new version, their rows will be overwritten with the new results
+5. **Do not overwrite the `dual-benchmark` branch** — previous benchmark versions and their results must be preserved
+
+### Version Numbering
+
+Follow semantic versioning:
+
+- **Major** (e.g. `1.0.0` → `2.0.0`): Large-scale changes — restructured test suite, changed output format, removed benchmarks
+- **Minor** (e.g. `1.0.0` → `1.1.0`): New benchmarks added, methodology improvements
+- **Patch** (e.g. `1.0.0` → `1.0.1`): Bug fixes that affect reported values
+
+---
+
 ## Adding Boards to the Spreadsheet
 
 Benchmark results are tracked in versioned spreadsheet pairs — one per benchmark version (e.g. `Part1_CoreBenchmarks_Results_v1.0.0.xlsx` and `Part2_PlatformBenchmarks_Results_v1.0.0.xlsx`). Each pair corresponds to a specific benchmark version as defined by `BENCHMARK_VERSION` in `BenchmarkHelpers.h`. When the benchmark version changes, a new pair of spreadsheets is created and results for that version are recorded there. To add a new board or update existing results:

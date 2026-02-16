@@ -24,8 +24,8 @@ The **Benchmark Version** column records which version of the benchmark suite wa
 | Arduino Nano ESP32 | Core: 3.3.7/IDE: 2.3.7 | 1.0.0 | passed | reports/nanoesp32-3.3.7 |
 | Arduino Nano RP2040 Connect | - | - | - | - |
 | Arduino Nano Matter | - | - | - | - |
-| Arduino Mega 2560 | Core: /IDE: | 1.0.0 | passed | reports/mega2560-x.x.x.txt |
-| Arduino Mega 2560 Rev3 | - | - | - | - |
+| Arduino Mega 2560 | - | - | - | - |
+| Arduino Mega 2560 Rev3 | Core: /IDE: | 1.0.0 | passed | reports/mega2560r3-x.x.x.txt |
 | Arduino Mega ADK | - | - | - | - |
 | Arduino Mega (original) | - | - | - | - |
 | Arduino Leonardo | - | - | - | - |

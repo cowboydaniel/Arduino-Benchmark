@@ -58,7 +58,7 @@ Advanced and board-specific tests:
 5. Open **Serial Monitor** at **115200 baud**
 6. Wait for all tests to complete
 7. Repeat with `Part2_PlatformBenchmarks/Part2_PlatformBenchmarks.ino`
-8. Save the full Serial Monitor output to `reports/<board>/<version>.txt`
+8. Save the full Serial Monitor output to `reports/<board>-<version>.txt`
 9. Record Part 1 results in `Part1_CoreBenchmarks_Results.xlsx` and Part 2 results in `Part2_PlatformBenchmarks_Results.xlsx`
 
 Results are printed as operations per millisecond (ops/ms), timing in microseconds, and other metrics depending on the test.

@@ -110,7 +110,7 @@ You do **not** need to bump the version for:
 1. **Create a new branch** from `main` for your changes — do **not** work directly on the `dual-benchmark` branch or any existing results branch
 2. **Update `BENCHMARK_VERSION`** in both `Part1_CoreBenchmarks/BenchmarkHelpers.h` and `Part2_PlatformBenchmarks/BenchmarkHelpers.h` (e.g. `"1.0.0"` → `"1.1.0"`)
 3. **Create new empty spreadsheets**: `Part1_CoreBenchmarks_Results_v<NEW_VERSION>.xlsx` and `Part2_PlatformBenchmarks_Results_v<NEW_VERSION>.xlsx` — do **not** modify or delete the previous version's spreadsheets
-4. **Copy `BOARD_STATUS.md`** and reset all rows to untested (the board list stays, but `Core/IDE Version`, `Benchmark Version`, `Status`, and `Report` columns are cleared to `-`). The old `BOARD_STATUS.md` will be overwritten as boards are re-tested on the new version
+4. **Copy `BOARD_STATUS.md`** as-is — keep the board list and all existing results. When boards are re-tested under the new version, their rows will be overwritten with the new results
 5. **Do not overwrite the `dual-benchmark` branch** — previous benchmark versions and their results must be preserved
 
 ### Version Numbering

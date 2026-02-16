@@ -9,7 +9,7 @@ Report path convention: `reports/<board_slug>-<core_version>.txt` (e.g. `reports
 | Arduino Uno (R3) | Core: 1.8.7/IDE: 2.3.7 | passed | reports/unor3-1.8.7.txt |
 | Arduino Uno R4 WiFi | Core: 1.5.2/IDE: 2.3.7 | passed | reports/unor4wifi-1.5.2.txt |
 | Arduino Uno R4 Minima | - | - | - |
-| Arduino Uno Mini LE | - | - | - |
+| Arduino Uno Mini LE | Core: 1.8.7/IDE: 2.3.7 | passed | reports/unominile-1.8.7.txt |
 | Arduino Uno WiFi | - | - | - |
 | Arduino Uno WiFi Rev2 | - | - | - |
 | Arduino Uno Q (MCU) | Core: 0.53.1/IDE: 2.3.7 | passed | reports/unoq-0.53.1.txt |

@@ -18,7 +18,6 @@ First official release on the `dual-benchmark` branch.
 - Arduino Yun support with Bridge, WLAN, and WAN benchmarks
 - Arduino Uno Q (Zephyr RTOS) support: flash info, die temperature, watchdog
 - Comprehensive benchmarks for ESP32, RP2040, and Uno R4
-- Board test results for 11 boards (Uno R3, Uno R4 WiFi, Uno Mini LE, Uno Q, Nano ESP32, Yun, ESP32-C3, Multiduino, INK4u, Nano Clone, Uno Clone)
 - Versioned result spreadsheets (Part1 and Part2 `_Results_v1.0.0.xlsx`)
 - BOARD_STATUS.md tracker for board compatibility
 - CONTRIBUTING.md with guidelines and version bump workflow

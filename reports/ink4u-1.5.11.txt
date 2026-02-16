@@ -1,0 +1,267 @@
+
+
+========================================
+  UNIVERSAL ARDUINO BENCHMARK SUITE
+  Part 1: Core Performance
+========================================
+
+
+========================================
+SYSTEM INFORMATION
+========================================
+Board: INK4u Board (AVR128DA28)
+CPU Frequency: 24 MHz
+Free RAM: 14840 bytes
+Compile Date: Feb 16 2026 16:38:34
+Benchmark Version: 1.0.0
+
+========================================
+CPU: INTEGER OPERATIONS
+========================================
+Checksum: 49995000
+Checksum: 3638403249
+Checksum: 100
+Addition (10000 ops): 14815 μs (674.99 ops/ms)
+Multiplication (1200 ops): 5186 μs (231.39 ops/ms)
+Division (200 ops): 5195 μs (38.50 ops/ms)
+
+========================================
+CPU: FLOATING POINT OPERATIONS
+========================================
+Checksum: 3141.60
+Checksum: 1.11
+Checksum: 904826.93
+Checksum: 1322.93
+Checksum: 129.92
+Float Addition (1000 ops): 6014 μs (166.28 ops/ms)
+Float Multiply (1000 ops): 6890 μs (145.14 ops/ms)
+Float Division (1000 ops): 20924 μs (47.79 ops/ms)
+Square Root (200 ops): 5688 μs (35.16 ops/ms)
+Sin/Cos (100 ops): 17109 μs (5.84 ops/ms)
+
+sizeof(float):  4
+sizeof(double): 4
+4-byte double (same as float) - double tests skipped
+
+========================================
+CPU: STRING OPERATIONS
+========================================
+Concatenation (5300 ops): 20285 us (261.28 ops/ms)
+Comparison (4000 ops): 24572 us (162.79 ops/ms)
+Int to String (1000 ops): 39788 us (25.13 ops/ms)
+itoa fixed buf (1000 ops): 21883 us (45.70 ops/ms)
+
+========================================
+MEMORY: SRAM READ/WRITE
+========================================
+Read checksum: 554880
+Random checksum: 424320
+Sequential Write (13568 ops): 5076 μs (2672.97 ops/ms)
+Sequential Read (4352 ops): 5214 μs (834.68 ops/ms)
+Random Access (3328 ops): 5355 μs (median 621.48 ops/ms, 5 trials)
+
+--- Memory Bandwidth Tests ---
+Detected free heap: 14903 bytes
+Using 11176 byte buffer (~75% free heap)
+memcpy (558800 bytes): 163464 μs (3.42 MB/s)
+memset (1117600 bytes): 233479 μs (4.79 MB/s)
+RAM Write Bandwidth: 7.98 MB/s
+RAM Read Bandwidth: 1.60 MB/s
+
+========================================
+MEMORY: EEPROM
+========================================
+EEPROM Size: 512 bytes
+Hardware Write (64 bytes): 634241 μs (0.10 ops/ms)
+Read (64 bytes): 92 μs (695.65 ops/ms)
+Read checksum: 2016
+
+========================================
+I/O: DIGITAL PIN OPERATIONS
+========================================
+digitalWrite() (2000 ops): 8480 μs (median 235.85 ops/ms, 5 trials)
+Direct Port (16000 ops): 5389 μs (median 2969.01 ops/ms, 5 trials)
+Speedup: 12.59x faster
+
+========================================
+I/O: ANALOG OPERATIONS
+========================================
+analogRead() (619 ops): 20008 μs (30.94 ops/ms)
+ADC average: 0
+Warning: ADC all zero
+analogWrite() (2343 ops): 20000 μs (117.15 ops/ms)
+
+========================================
+STORAGE: Flash Information
+========================================
+Flash info not available on this platform
+
+========================================
+I/O: PWM PERFORMANCE
+========================================
+Testing PWM on pin 9
+analogWrite() (10000 ops): 27961 us (357.64 ops/ms)
+PWM ramp (100 cycles): 68022 us (376.35 ops/ms)
+Time per update: 2.657 us
+
+========================================
+TIMING: INTERRUPT LATENCY
+========================================
+Jumper 3 -> 2
+Using pin 2
+
+Pass 1 – digitalWrite trigger (100/100):
+  Avg latency: 10.01 us (includes digitalWrite overhead)
+Pass 2 – direct port trigger (100/100):
+  Avg latency: 9.73 us (pure ISR entry latency)
+
+digitalWrite overhead: ~0.28 us
+
+========================================
+I/O: SPI PERFORMANCE
+========================================
+Testing SPI transaction speed
+(No loopback - measuring CPU overhead)
+
+1 MHz: 13750 us for 1000 bytes (72.73 KB/s effective)
+2 MHz: 8367 us for 1000 bytes (119.52 KB/s effective)
+4 MHz: 5684 us for 1000 bytes (175.93 KB/s effective)
+8 MHz: 4449 us for 1000 bytes (224.77 KB/s effective)
+
+Bulk transfer (256 bytes):
+Throughput: 248.5 KB/s
+
+========================================
+PART 1 BENCHMARK COMPLETE!
+========================================
+Core benchmarks finished.
+Upload Part 2 for remaining benchmarks.
+
+To run again, press the RESET button or
+re-upload the sketch.
+========================================
+
+
+========================================
+  UNIVERSAL ARDUINO BENCHMARK SUITE
+  Part 2: Connectivity, Platform & Power
+========================================
+
+
+========================================
+SYSTEM INFORMATION
+========================================
+Board: INK4u Board (AVR128DA28)
+CPU Frequency: 24 MHz
+Free RAM: 15318 bytes
+Compile Date: Feb 16 2026 16:39:02
+Benchmark Version: 1.0.0
+
+========================================
+CPU: STRESS TEST with Temperature
+========================================
+No temp sensor, stress only
+Running 10s stress test...
+
+Done: 54200 iters in 10014 ms
+Rate: 5.41 iters/ms
+
+========================================
+ADVANCED MATH: Transcendental Functions
+========================================
+Checksum: 254435.21
+exp() (100 ops): 14191 us (7.05 ops/ms)
+log() (100 ops): 10185 us (9.82 ops/ms)
+log10() (100 ops): 10685 us (9.36 ops/ms)
+pow() (100 ops): 22019 us (4.54 ops/ms)
+atan2() (100 ops): 12566 us (7.96 ops/ms)
+asin() (100 ops): 11580 us (8.64 ops/ms)
+acos() (100 ops): 12664 us (7.90 ops/ms)
+tan() (100 ops): 10627 us (9.41 ops/ms)
+fmod() (1000 ops): 18054 us (55.39 ops/ms)
+
+========================================
+I/O: SERIAL COMMUNICATION
+========================================
+Baud rate: 115200
+TX buffer: 64 bytes
+RX buffer: 64 bytes
+
+01234567891011121314151617181920212223242526272829303132333435363738394041424344454647484950515253545556575859606162636465666768697071727374757677787980818283848586878889909192939495969798990123456789101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899012345678910111213141516171819202122232425262728293031323334353637383940414243444546474849505152535455565758596061626364656667686970717273747576777879808182838485868788899091929394959697989901234567891011121314151617181920212223242526272829303132333435363738394041424344454647484950515253545556575859606162636465666768697071727374757677787980818283848586878889909192939495969798990123456789101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899
+Enqueue (190 B): 10806 us (median 17.58 B/ms)
+flush(): 5618 us
+Wire time: 16493 us
+Throughput: 11.52 B/ms (11520 B/s max)
+Ratio: 65.52% (buffered)
+
+========================================
+TIMING: millis() and micros() Precision
+========================================
+millis() 1s: 1000 ms (+/-0 ms)
+micros() res: 8 us (1 reads)
+Min step: 3 us
+micros() 1ms: 1046 us (+/-46 us)
+
+Clock accuracy: 100.00%
+
+========================================
+TIMING: delay() and delayMicroseconds() Accuracy
+========================================
+delay(0) call overhead: 0.011 ms
+delay(1..50) avg deviation: 0.003 ms
+delay(1..50) max deviation: 0.006 ms
+delayMicroseconds(0) call overhead: 5 us
+delayMicroseconds(1..50) avg deviation: 0.5 us
+delayMicroseconds(1..50) max deviation: 2 us
+
+========================================
+MEMORY: Stack Depth Test
+========================================
+Probing stack limit...
+Stack budget: 15339 bytes
+Max safe depth: 344
+Per-frame cost: 43 bytes
+Stack used:     14824 / 15339 bytes
+Timing at depth 309...
+Recursion (309 deep): 825.0 us
+Per level: 2.67 us
+
+========================================
+I/O: WIRE I2C COMMUNICATION
+========================================
+I2C buses: 1
+Buffer size: 130 bytes
+
+Testing I2C transaction speed
+(No device - measuring bus overhead)
+
+100 kHz: 260729 us for 10 writes (0.04 txn/ms)
+  Status codes: ok=0, addrNACK=0, dataNACK=0, other=0, timeout=10
+  Early stop: repeated bus errors/timeouts
+400 kHz: 260730 us for 10 writes (0.04 txn/ms)
+  Status codes: ok=0, addrNACK=0, dataNACK=0, other=0, timeout=10
+  Early stop: repeated bus errors/timeouts
+
+========================================
+SYSTEM: WATCHDOG TIMER
+========================================
+AVR WDT: 16ms-8s, reset or IRQ
+Reset cause: Not available on this megaAVR variant
+
+========================================
+POWER: SLEEP MODE TIMING
+========================================
+AVR Sleep Modes (timer-based wake):
+  IDLE single wake: 992 us
+  100x IDLE: 99561 us
+
+========================================
+PART 2 BENCHMARK COMPLETE!
+========================================
+Platform benchmarks finished.
+Both parts complete! All benchmarks have been run.
+
+To run again, press the RESET button or
+re-upload the sketch.
+========================================
+

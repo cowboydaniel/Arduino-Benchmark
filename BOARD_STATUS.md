@@ -21,7 +21,7 @@ The **Benchmark Version** column records which version of the benchmark suite wa
 | Arduino Nano 33 BLE | - | - | - | - |
 | Arduino Nano 33 BLE Sense | - | - | - | - |
 | Arduino Nano 33 BLE Sense Rev2 | - | - | - | - |
-| Arduino Nano ESP32 | - | - | - | - |
+| Arduino Nano ESP32 | Core: 3.3.7/IDE: 2.3.7 | 1.0.0 | passed | reports/nanoesp32-3.3.7 |
 | Arduino Nano RP2040 Connect | - | - | - | - |
 | Arduino Nano Matter | - | - | - | - |
 | Arduino Mega 2560 | - | - | - | - |

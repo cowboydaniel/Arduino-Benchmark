@@ -79,6 +79,7 @@ The **Benchmark Version** column records which version of the benchmark suite wa
 | LilyPad Arduino | - | - | - | - |
 | LilyPad Arduino USB | - | - | - | - |
 | LilyPad Arduino SimpleSnap | - | - | - | - |
+| ESP32-Dev Module | Core: 3.3.7/IDE: 2.3.7 | 1.0.0 | passed | reports/esp32devmodule-3.3.7.txt |
 | ESP32-DevKitC V4 (WROOM-32) | - | - | - | - |
 | ESP32-WROVER DevKit | - | - | - | - |
 | ESP32-PICO-D4 | - | - | - | - |
@@ -86,7 +87,7 @@ The **Benchmark Version** column records which version of the benchmark suite wa
 | ESP32-S2-Saola-1 | - | - | - | - |
 | ESP32-S3-DevKitC-1 | - | - | - | - |
 | ESP32-S3-DevKitM-1 | - | - | - | - |
-| ESP32-C3-Dev-Module | Core: 3.3.7/IDE: 2.3.7 | 1.0.0 | passed | reports/esp32c3devmodule-3.3.7 |
+| ESP32-C3-Dev-Module | Core: 3.3.7/IDE: 2.3.7 | 1.0.0 | passed | reports/esp32c3devmodule-3.3.7.txt |
 | ESP32-C3-DevKitM-1 | - | - | - | - |
 | ESP32-C3-DevKitC-02 | - | - | - | - |
 | ESP32-C6-DevKitC-1 | - | - | - | - |

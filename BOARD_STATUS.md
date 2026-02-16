@@ -419,7 +419,7 @@ The **Benchmark Version** column records which version of the benchmark suite wa
 | AVR64DD32 | - | - | - | - |
 | MegaCoreX (ATmega x09) | - | - | - | - |
 | Multiduino | - | - | - | - |
-| INK4u Board (AVR128DA28) | - | - | - | - |
+| INK4u Board (AVR128DA28) | Core: 1.5.11/IDE: 2.3.7 | 1.0.0 | passed | reports/ink4u-1.5.11.txt |
 | SODAQ Explorer | - | - | - | - |
 | SODAQ ONE | - | - | - | - |
 | SODAQ SARA | - | - | - | - |

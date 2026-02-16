@@ -13,7 +13,7 @@
  * - Results are checksummed and printed to ensure actual execution
  * - Integer operations use uint64_t to prevent silent overflow
  * - Checksums are consumed outside timed blocks for accuracy
- * - GPIO benchmarks include direct register writes alongside digitalWrite() to measure overhead
+ * - GPIO benchmarks include digitalWriteFast() and direct register writes alongside digitalWrite() to measure overhead
  * - Serial timing includes flush() to measure actual transmission time
  * - ESP32: CPU cycle counter used to cross-check micros() jitter
  * - EEPROM timing includes flash commit separately (ESP32/ESP8266)
@@ -400,6 +400,33 @@
 // Unknown/Generic
 #else
 #define BOARD_NAME "Unknown Arduino-Compatible"
+#endif
+
+// ==================== digitalWriteFast DETECTION ====================
+// Teensy has digitalWriteFast built into its core
+// Other boards may have it via the digitalWriteFast library
+#if defined(TEENSYDUINO)
+#define HAS_DIGITAL_WRITE_FAST
+#elif defined(__has_include)
+#if __has_include(<digitalWriteFast.h>)
+#include <digitalWriteFast.h>
+#define HAS_DIGITAL_WRITE_FAST
+#endif
+#endif
+
+// Compile-time constant pin for digitalWriteFast (must not be a variable)
+#ifdef HAS_DIGITAL_WRITE_FAST
+#if defined(LED_BUILTIN)
+#define DWF_TEST_PIN LED_BUILTIN
+#elif defined(ESP32)
+#define DWF_TEST_PIN 2
+#elif defined(ESP8266)
+#define DWF_TEST_PIN 2
+#elif defined(ARDUINO_ARCH_RP2040)
+#define DWF_TEST_PIN 25
+#else
+#define DWF_TEST_PIN 13
+#endif
 #endif
 
 // ==================== CONFIGURATION ====================
@@ -1429,6 +1456,31 @@ void benchmarkDigitalIO() {
   unsigned long writeTime = writeElapsedMedian.median();
   float writeOpsPerMs = writeOpsMedian.median();
 
+// digitalWriteFast benchmark (Teensy built-in, or digitalWriteFast library)
+#ifdef HAS_DIGITAL_WRITE_FAST
+  pinMode(DWF_TEST_PIN, OUTPUT);
+  MedianCollector<float, kJitterTrials> dwfOpsMedian = {};
+  MedianCollector<unsigned long, kJitterTrials> dwfElapsedMedian = {};
+  uint32_t dwfOpsPerTrial = 0;
+  for (uint8_t trial = 0; trial < kJitterTrials; trial++) {
+    volatile uint32_t dwfOps = 0;
+    startBenchmark();
+    for (int i = 0; i < 1000; i++) {
+      digitalWriteFast(DWF_TEST_PIN, HIGH);
+      digitalWriteFast(DWF_TEST_PIN, LOW);
+      dwfOps += 2;
+    }
+    unsigned long dwfTime = endBenchmark();
+    if (trial == 0) {
+      dwfOpsPerTrial = dwfOps;
+    }
+    dwfElapsedMedian.add(dwfTime);
+    dwfOpsMedian.add(dwfOps * 1000.0f / dwfTime);
+  }
+  unsigned long dwfWriteTime = dwfElapsedMedian.median();
+  float dwfOpsPerMs = dwfOpsMedian.median();
+#endif
+
 // Direct port manipulation (AVR only)
 #ifdef __AVR__
   volatile uint8_t *out = portOutputRegister(digitalPinToPort(testPin));
@@ -1528,6 +1580,21 @@ void benchmarkDigitalIO() {
   SERIAL_OUT.print(F_STR(" ops/ms, "));
   SERIAL_OUT.print(kJitterTrials);
   SERIAL_OUT.println(F_STR(" trials)"));
+
+#ifdef HAS_DIGITAL_WRITE_FAST
+  SERIAL_OUT.print(F_STR("digitalWriteFast() ("));
+  SERIAL_OUT.print(dwfOpsPerTrial);
+  SERIAL_OUT.print(F_STR(" ops): "));
+  SERIAL_OUT.print(dwfWriteTime);
+  SERIAL_OUT.print(F_STR(" μs (median "));
+  SERIAL_OUT.print(dwfOpsPerMs);
+  SERIAL_OUT.print(F_STR(" ops/ms, "));
+  SERIAL_OUT.print(kJitterTrials);
+  SERIAL_OUT.println(F_STR(" trials)"));
+  SERIAL_OUT.print(F_STR("digitalWriteFast Speedup: "));
+  SERIAL_OUT.print(dwfOpsPerMs / writeOpsPerMs);
+  SERIAL_OUT.println(F_STR("x faster"));
+#endif
 
 #ifdef __AVR__
   SERIAL_OUT.print(F_STR("Direct Port ("));

@@ -6,7 +6,9 @@ A comprehensive benchmarking framework for Arduino-compatible boards. The goal i
 
 This is a standardized benchmark suite that measures the real-world performance of Arduino-compatible boards. It runs a set of CPU, memory, I/O, and platform-specific tests, then prints the results over Serial so you can compare boards side by side.
 
-The suite is split into two sketches. Part 1 covers core benchmarks that apply to any board (integer math, floating-point, memory, digital/analog I/O). Part 2 covers platform-specific features like WiFi, BLE, cryptography, multi-core, and other capabilities that vary from board to board. Results are collected in a shared spreadsheet for easy comparison.
+The suite is split into two sketches. Part 1 covers core benchmarks that apply to any board (integer math, floating-point, memory, digital/analog I/O). Part 2 covers platform-specific features like WiFi, BLE, cryptography, multi-core, and other capabilities that vary from board to board. Results are collected in versioned spreadsheets for easy comparison.
+
+Each benchmark release has a version number (e.g. `1.0.0`) defined in `BenchmarkHelpers.h` and printed in the Serial Monitor output. When the benchmark code changes in ways that affect results, the version is bumped and a new pair of spreadsheets is created. This means you can see exactly which version of the benchmark produced each result, and older results remain valid as long as the benchmark version hasn't changed.
 
 Boards are detected automatically at compile time using preprocessor macros — no manual configuration needed. If your board isn't detected yet, it's straightforward to add (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 
@@ -15,15 +17,14 @@ Boards are detected automatically at compile time using preprocessor macros — 
 ```
 ├── Part1_CoreBenchmarks/
 │   ├── Part1_CoreBenchmarks.ino    # Core performance tests
-│   └── BenchmarkHelpers.h
+│   └── BenchmarkHelpers.h          # Shared timing utilities + benchmark version
 ├── Part2_PlatformBenchmarks/
 │   ├── Part2_PlatformBenchmarks.ino # Platform-specific tests
-│   └── BenchmarkHelpers.h
-├── BenchmarkHelpers.h               # Shared timing utilities
-├── Part1_CoreBenchmarks_Results.xlsx # Core benchmark results spreadsheet
-├── Part2_PlatformBenchmarks_Results.xlsx # Platform benchmark results spreadsheet
+│   └── BenchmarkHelpers.h          # Shared timing utilities + benchmark version
+├── Part1_CoreBenchmarks_Results_v1.0.0.xlsx  # Core results (benchmark v1.0.0)
+├── Part2_PlatformBenchmarks_Results_v1.0.0.xlsx # Platform results (benchmark v1.0.0)
 ├── reports/                          # Raw Serial Monitor output per board
-├── BOARD_STATUS.md                   # Board testing tracker (priority + status)
+├── BOARD_STATUS.md                   # Board testing tracker (status + benchmark version)
 └── CONTRIBUTING.md                   # Guide for contributors
 ```
 
@@ -59,7 +60,7 @@ Advanced and board-specific tests:
 6. Wait for all tests to complete
 7. Repeat with `Part2_PlatformBenchmarks/Part2_PlatformBenchmarks.ino`
 8. Save the full Serial Monitor output to `reports/<board>-<version>.txt`
-9. Record Part 1 results in `Part1_CoreBenchmarks_Results.xlsx` and Part 2 results in `Part2_PlatformBenchmarks_Results.xlsx`
+9. Record Part 1 results in `Part1_CoreBenchmarks_Results_v<BENCHMARK_VERSION>.xlsx` and Part 2 results in `Part2_PlatformBenchmarks_Results_v<BENCHMARK_VERSION>.xlsx` (the benchmark version is printed in the Serial Monitor output)
 
 Results are printed as operations per millisecond (ops/ms), timing in microseconds, and other metrics depending on the test.
 

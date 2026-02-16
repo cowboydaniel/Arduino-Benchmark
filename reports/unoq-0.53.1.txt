@@ -1,0 +1,276 @@
+
+
+========================================
+  UNIVERSAL ARDUINO BENCHMARK SUITE
+  Part 1: Core Performance
+========================================
+
+
+========================================
+SYSTEM INFORMATION
+========================================
+Board: Arduino Uno Q (MCU)
+MCU: STM32U585 (ARM Cortex-M33)
+MCU Frequency: 160 MHz
+MCU Features: FPU, DSP, TrustZone
+MCU RAM: 786 KB SRAM
+MCU Flash: 2 MB
+MCU RTOS: Zephyr
+
+Linux MPU: Qualcomm QRB2210
+MPU: Quad Cortex-A53 @ up to 2.0 GHz
+MPU RAM: 2-4 GB
+MPU Storage: 16 GB eMMC
+MPU OS: Debian-based Linux
+
+Communication: Arduino Bridge RPC (MCU<->Linux)
+RPC Library: Arduino_RouterBridge (MessagePack)
+Free RAM: Total RAM: 786 KB
+Compile Date: Feb 16 2026 12:11:44
+
+========================================
+CPU: INTEGER OPERATIONS
+========================================
+Checksum: 49995000
+Checksum: 2371668041
+Checksum: 100
+Addition (10000 ops): 502 μs (19920.32 ops/ms)
+Multiplication (65000 ops): 5005 μs (12987.01 ops/ms)
+Division (49700 ops): 5002 μs (9936.03 ops/ms)
+
+--- DSP-Enhanced Integer Tests (Cortex-M33) ---
+64-bit Multiply (28950 ops): 5783.06 ops/ms
+64-bit Divide (6350 ops): 1261.42 ops/ms
+MAC Operations (1000 ops): 108 μs (9259.26 ops/ms)
+MAC Checksum: 1040516
+Saturating Add (1000 ops): 96 μs (10416.67 ops/ms)
+
+========================================
+CPU: FLOATING POINT OPERATIONS
+========================================
+Checksum: 3141.60
+Checksum: 1.11
+Checksum: 904826.94
+Float Addition (1000 ops): 46 μs (21739.13 ops/ms)
+Float Multiply (1000 ops): 46 μs (21739.13 ops/ms)
+Float Division (1000 ops): 127 μs (7874.02 ops/ms)
+Sqrt/Sin/Cos: Skipped (Uno Q - no libm)
+
+sizeof(float):  4
+sizeof(double): 8
+
+========================================
+CPU: STRING OPERATIONS
+========================================
+Concatenation (62000 ops): 50054 us (1238.66 ops/ms)
+Comparison (52000 ops): 50558 us (1028.52 ops/ms)
+Int to String (6000 ops): 51183 us (117.23 ops/ms)
+itoa fixed buf (61000 ops): 50013 us (1219.68 ops/ms)
+
+========================================
+MEMORY: SRAM READ/WRITE
+========================================
+Read checksum: 8584320
+Random checksum: 8584320
+Sequential Write (101120 ops): 5004 μs (20207.83 ops/ms)
+Sequential Read (67328 ops): 5015 μs (13425.32 ops/ms)
+Random Access (67328 ops): 5018 μs (median 13417.30 ops/ms, 5 trials)
+
+--- Memory Bandwidth Tests ---
+Detected free heap: 425464 bytes
+Using 319096 byte buffer (~75% free heap)
+memcpy (15954800 bytes): 599559 μs (26.61 MB/s)
+memset (31909600 bytes): 1398880 μs (22.81 MB/s)
+RAM Write Bandwidth: 127.74 MB/s
+RAM Read Bandwidth: 79.83 MB/s
+
+========================================
+I/O: DIGITAL PIN OPERATIONS
+========================================
+digitalWrite() (2000 ops): 564 μs (median 3546.10 ops/ms, 5 trials)
+
+========================================
+I/O: ANALOG OPERATIONS
+========================================
+analogRead() (1455 ops): 50012 μs (29.09 ops/ms)
+ADC average: 293
+
+========================================
+STORAGE: Flash Information
+========================================
+Flash Size (register): 2048 KB
+Write block size: 16 bytes
+Erase value: 0xFF
+Flash write-block: 16 bytes
+
+========================================
+I/O: PWM PERFORMANCE
+========================================
+Testing PWM on pin 3
+analogWrite() (10000 ops): 36476 us (274.15 ops/ms)
+PWM ramp (100 cycles): 93159 us (274.80 ops/ms)
+Time per update: 3.639 us
+
+========================================
+TIMING: INTERRUPT LATENCY
+========================================
+Jumper 3 -> 2
+Using pin 2
+
+Pass 1 – digitalWrite trigger (100/100):
+  Avg latency: 3.00 us (includes digitalWrite overhead)
+Pass 2 – direct port trigger (100/100):
+  Avg latency: 3.00 us (pure ISR entry latency)
+
+digitalWrite overhead: ~0.00 us
+
+========================================
+I/O: SPI PERFORMANCE
+========================================
+Testing SPI transaction speed
+(No loopback - measuring CPU overhead)
+
+1 MHz: 27996 us for 1000 bytes (35.72 KB/s effective)
+4 MHz: 27999 us for 1000 bytes (35.72 KB/s effective)
+8 MHz: 27993 us for 1000 bytes (35.72 KB/s effective)
+16 MHz: 28005 us for 1000 bytes (35.71 KB/s effective)
+
+Bulk transfer (256 bytes):
+Throughput: 51.4 KB/s
+
+========================================
+PART 1 BENCHMARK COMPLETE!
+========================================
+Core benchmarks finished.
+Upload Part 2 for remaining benchmarks.
+
+To run again, press the RESET button or
+re-upload the sketch.
+========================================
+
+
+========================================
+  UNIVERSAL ARDUINO BENCHMARK SUITE
+  Part 2: Connectivity, Platform & Power
+========================================
+
+
+========================================
+SYSTEM INFORMATION
+========================================
+Board: Arduino Uno Q (MCU)
+MCU: STM32U585 (ARM Cortex-M33)
+MCU Frequency: 160 MHz
+MCU Features: FPU, DSP, TrustZone
+MCU RAM: 786 KB SRAM
+MCU Flash: 2 MB
+MCU RTOS: Zephyr
+
+Linux MPU: Qualcomm QRB2210
+MPU: Quad Cortex-A53 @ up to 2.0 GHz
+MPU RAM: 2-4 GB
+MPU Storage: 16 GB eMMC
+MPU OS: Debian-based Linux
+
+Communication: Arduino Bridge RPC (MCU<->Linux)
+RPC Library: Arduino_RouterBridge (MessagePack)
+Free RAM: Total RAM: 786 KB
+Compile Date: Feb 16 2026 12:12:13
+
+========================================
+CPU: STRESS TEST with Temperature
+========================================
+No temp sensor, stress only
+Running 10s stress test...
+
+Done: 47685300 iters in 10000 ms
+Rate: 4768.53 iters/ms
+
+========================================
+ADVANCED MATH: Transcendental Functions
+========================================
+Skipped (no libm on this platform)
+
+========================================
+I/O: SERIAL COMMUNICATION
+========================================
+Baud rate: 115200
+TX buffer: 64 bytes
+RX buffer: 64 bytes
+
+01234567891011121314151617181920212223242526272829303132333435363738394041424344454647484950515253545556575859606162636465666768697071727374757677787980818283848586878889909192939495969798990123456789101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899012345678910111213141516171819202122232425262728293031323334353637383940414243444546474849505152535455565758596061626364656667686970717273747576777879808182838485868788899091929394959697989901234567891011121314151617181920212223242526272829303132333435363738394041424344454647484950515253545556575859606162636465666768697071727374757677787980818283848586878889909192939495969798990123456789101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899
+Enqueue (190 B): 578098 us (median 0.33 B/ms)
+flush(): 1 us
+Wire time: 16493 us
+Throughput: 11.52 B/ms (11520 B/s max)
+Ratio: 3505.11% (CPU-bound)
+
+========================================
+CRYPTO: Hardware RNG
+========================================
+Using STM32U585 hardware RNG (Zephyr)
+Checksum: 1508260970
+Hardware RNG (1000 values): 121858 μs (8.21 values/ms)
+Distribution (10000 samples):
+  Bin 0: 2473 (24.7%)
+  Bin 1: 2479 (24.8%)
+  Bin 2: 2521 (25.2%)
+  Bin 3: 2527 (25.3%)
+(Ideal: 25% each bin)
+
+========================================
+TIMING: millis() and micros() Precision
+========================================
+millis() 1s: 1000 ms (+/-0 ms)
+micros() res: 2 us (1 reads)
+Min step: 1 us
+micros() 1ms: 1075 us (+/-75 us)
+
+Clock accuracy: 100.00%
+
+========================================
+TIMING: delay() and delayMicroseconds() Accuracy
+========================================
+delay(0) call overhead: 0.004 ms
+delay(1..50) avg deviation: 0.094 ms
+delay(1..50) max deviation: 0.094 ms
+delayMicroseconds(0) call overhead: 4 us
+delayMicroseconds(1..50) avg deviation: 168.3 us
+delayMicroseconds(1..50) max deviation: 193 us
+
+========================================
+MEMORY: Stack Depth Test
+========================================
+Probing stack limit...
+Stack budget: 4096 bytes
+Max safe depth: 62
+Per-frame cost: 57 bytes
+Stack used:     3536 / 4096 bytes
+Timing at depth 55...
+Recursion (55 deep): 11.0 us
+Per level: 0.20 us
+
+========================================
+SYSTEM: WATCHDOG TIMER
+========================================
+STM32U585 Watchdog (Zephyr):
+  IWDG: Independent watchdog (LSI-clocked)
+  WWDG: Window watchdog (APB-clocked)
+
+IWDG driver not enabled in Kconfig
+
+========================================
+POWER: SLEEP MODE TIMING
+========================================
+Sleep mode test not available for this board
+
+========================================
+PART 2 BENCHMARK COMPLETE!
+========================================
+Platform benchmarks finished.
+Both parts complete! All benchmarks have been run.
+
+To run again, press the RESET button or
+re-upload the sketch.
+========================================
+

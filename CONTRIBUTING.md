@@ -90,7 +90,7 @@ If you notice incorrect or missing data in the results spreadsheets:
 
 ## Adding Boards to the Spreadsheet
 
-Two spreadsheets track benchmark results across boards: `Part1_CoreBenchmarks_Results.xlsx` for core benchmarks and `Part2_PlatformBenchmarks_Results.xlsx` for platform-specific benchmarks. To add a new board or update existing results:
+Benchmark results are tracked in versioned spreadsheet pairs — one per benchmark version (e.g. `Part1_CoreBenchmarks_Results_v1.0.0.xlsx` and `Part2_PlatformBenchmarks_Results_v1.0.0.xlsx`). Each pair corresponds to a specific benchmark version as defined by `BENCHMARK_VERSION` in `BenchmarkHelpers.h`. When the benchmark version changes, a new pair of spreadsheets is created and results for that version are recorded there. To add a new board or update existing results:
 
 ### Running the Benchmarks
 
@@ -106,7 +106,8 @@ Two spreadsheets track benchmark results across boards: `Part1_CoreBenchmarks_Re
 
 ### Formatting Results
 
-- Open `Part1_CoreBenchmarks_Results.xlsx` for Part 1 results and `Part2_PlatformBenchmarks_Results.xlsx` for Part 2 results
+- Check the benchmark version printed in your Serial Monitor output (look for "Benchmark Version: X.Y.Z")
+- Open the matching versioned spreadsheets (e.g. `Part1_CoreBenchmarks_Results_v1.0.0.xlsx` and `Part2_PlatformBenchmarks_Results_v1.0.0.xlsx`)
 - Add a new column for your board, or update an existing column
 - Fill in each row with the corresponding value from your Serial Monitor output
 - Use the same units as existing entries (ops/ms, microseconds, etc.)

@@ -12,7 +12,7 @@ Report path convention: `reports/<board_slug>-<core_version>.txt` (e.g. `reports
 | Arduino Uno Mini LE | - | - | - |
 | Arduino Uno WiFi | - | - | - |
 | Arduino Uno WiFi Rev2 | - | - | - |
-| Arduino Uno Q (MCU) | - | - | - |
+| Arduino Uno Q (MCU) | Core: 0.53.1/IDE: 2.3.7 | passed | reports/unoq-0.53.1.txt |
 | Arduino Nano | - | - | - |
 | Arduino Nano Every | - | - | - |
 | Arduino Nano 33 IoT | - | - | - |

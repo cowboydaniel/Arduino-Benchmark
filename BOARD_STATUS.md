@@ -40,7 +40,7 @@ Report path convention: `reports/<board_slug>-<core_version>.txt` (e.g. `reports
 | Arduino Esplora | - | - | - |
 | Arduino Robot Control | - | - | - |
 | Arduino Robot Motor | - | - | - |
-| Arduino Yun | - | - | - |
+| Arduino Yun | Core: 1.8.7/IDE: 2.3.7 | passed | reports/yun-1.8.7.txt |
 | Arduino Yun Rev 2 | - | - | - |
 | Arduino Tian | - | - | - |
 | Arduino Industrial 101 | - | - | - |

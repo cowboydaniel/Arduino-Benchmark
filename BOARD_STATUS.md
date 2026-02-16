@@ -427,7 +427,7 @@ The **Benchmark Version** column records which version of the benchmark suite wa
 | SODAQ Autonomo | - | - | - | - |
 | WIZnet W5100S-EVB-Pico | - | - | - | - |
 | WIZnet W5500-EVB-Pico | - | - | - | - |
-| Arduino Nano Clone (CH340) | - | - | - | - |
+| Arduino Nano Clone (CH340) | Core: 1.8.7/IDE: 2.3.7 | 1.0.0 | passed | reports/nanoclone-1.8.7.txt |
 | Arduino Uno Clone (CH340) | Core: 1.8.7/IDE: 2.3.7 | 1.0.0 | passed | reports/unor3clone-1.8.7.txt |
 | Arduino Pro Mini Clone 3.3V | - | - | - | - |
 | Arduino Pro Mini Clone 5V | - | - | - | - |

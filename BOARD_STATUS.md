@@ -10,7 +10,7 @@ The **Benchmark Version** column records which version of the benchmark suite wa
 |-------|-----------------|-------------------|--------|--------|
 | Arduino Uno (R3) | Core: 1.8.7/IDE: 2.3.7 | 1.0.0 | passed | reports/unor3-1.8.7.txt |
 | Arduino Uno R4 WiFi | Core: 1.5.2/IDE: 2.3.7 | 1.0.0 | passed | reports/unor4wifi-1.5.2.txt |
-| Arduino Uno R4 Minima | - | - | - | - |
+| Arduino Uno R4 Minima | Core: /IDE: | 1.0.0 | passed | reports/unor4minima-x.x.x.txt |
 | Arduino Uno Mini LE | Core: 1.8.7/IDE: 2.3.7 | 1.0.0 | passed | reports/unominile-1.8.7.txt |
 | Arduino Uno WiFi | - | - | - | - |
 | Arduino Uno WiFi Rev2 | - | - | - | - |
@@ -24,7 +24,7 @@ The **Benchmark Version** column records which version of the benchmark suite wa
 | Arduino Nano ESP32 | Core: 3.3.7/IDE: 2.3.7 | 1.0.0 | passed | reports/nanoesp32-3.3.7 |
 | Arduino Nano RP2040 Connect | - | - | - | - |
 | Arduino Nano Matter | - | - | - | - |
-| Arduino Mega 2560 | - | - | - | - |
+| Arduino Mega 2560 | Core: /IDE: | 1.0.0 | passed | reports/mega2560-x.x.x.txt |
 | Arduino Mega 2560 Rev3 | - | - | - | - |
 | Arduino Mega ADK | - | - | - | - |
 | Arduino Mega (original) | - | - | - | - |

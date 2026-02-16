@@ -90,7 +90,7 @@ If you notice incorrect or missing data in the results spreadsheets:
 
 ## Bumping the Benchmark Version
 
-Any change to the benchmark code that could affect results (new tests, changed methodology, bug fixes in timing, etc.) **requires a version bump**. This ensures results from different benchmark versions are never mixed.
+Any change to the benchmark code that could affect results (new tests, changed methodology, bug fixes in timing, etc.) **requires a version bump**. Adding new boards and **board specific** tests should NOT trigger a version bump. This ensures results from different benchmark versions are never mixed.
 
 ### When to Bump
 

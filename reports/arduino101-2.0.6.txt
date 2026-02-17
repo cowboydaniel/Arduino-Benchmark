@@ -1,0 +1,279 @@
+
+
+========================================
+  UNIVERSAL ARDUINO BENCHMARK SUITE
+  Part 1: Core Performance
+========================================
+
+
+========================================
+SYSTEM INFORMATION
+========================================
+Board: Intel Curie (ARC32)
+MCU: Intel Curie (ARC32 + x86 Quark SE)
+CPU Frequency: 32 MHz
+Features: BLE (CurieBLE), IMU (BMI160), DSP
+Free RAM: 24 KB (ARC sketch SRAM)
+Total RAM: 80 KB (24 KB ARC + 8 KB ARC DRAM + 48 KB shared)
+Compile Date: Feb 17 2026 21:24:39
+Benchmark Version: 1.0.0
+
+========================================
+CPU: INTEGER OPERATIONS
+========================================
+Checksum: 49995000
+Checksum: 3409578977
+Checksum: 100
+Addition (10000 ops): 2510 μs (3984.06 ops/ms)
+Multiplication (12000 ops): 5002 μs (2399.04 ops/ms)
+Division (1900 ops): 5009 μs (379.32 ops/ms)
+
+========================================
+CPU: FLOATING POINT OPERATIONS
+========================================
+Checksum: 3141.60
+Checksum: 1.11
+Checksum: 904826.94
+Checksum: 661.46
+Checksum: 259.85
+Float Addition (1000 ops): 346 μs (2890.17 ops/ms)
+Float Multiply (1000 ops): 289 μs (3460.21 ops/ms)
+Float Division (1000 ops): 283 μs (3533.57 ops/ms)
+Square Root (100 ops): 17142 μs (5.83 ops/ms)
+Sin/Cos (200 ops): 8086 μs (24.73 ops/ms)
+
+sizeof(float):  4
+sizeof(double): 8
+
+8-byte double detected - double precision tests:
+Checksum: 1.11
+Checksum: 904841.94
+Checksum: 661.46
+Checksum: 259.85
+Double Multiply (1000 ops): 728 μs (1373.63 ops/ms)
+Double Division (1000 ops): 2576 μs (388.20 ops/ms)
+Double Sqrt (100 ops): 17045 μs (5.87 ops/ms)
+Double Sin/Cos (200 ops): 8302 μs (24.09 ops/ms)
+
+========================================
+CPU: STRING OPERATIONS
+========================================
+Concatenation (800 ops): 5290 us (151.23 ops/ms)
+Comparison (1000 ops): 7447 us (134.28 ops/ms)
+Int to String (1000 ops): 39851 us (25.09 ops/ms)
+itoa fixed buf (1000 ops): 9715 us (102.93 ops/ms)
+
+========================================
+MEMORY: SRAM READ/WRITE
+========================================
+Read checksum: 1370880
+Random checksum: 979200
+Sequential Write (17664 ops): 5038 μs (3506.15 ops/ms)
+Sequential Read (10752 ops): 5092 μs (2111.55 ops/ms)
+Random Access (7680 ops): 5073 μs (median 1513.90 ops/ms, 5 trials)
+
+--- Memory Bandwidth Tests ---
+Detected free heap: 4092 bytes
+Using 3068 byte buffer (~75% free heap)
+memcpy (153200 bytes): 5573 μs (27.49 MB/s)
+memset (306800 bytes): 2662 μs (115.25 MB/s)
+RAM Write Bandwidth: 31.90 MB/s
+RAM Read Bandwidth: 9.12 MB/s
+
+========================================
+I/O: DIGITAL PIN OPERATIONS
+========================================
+digitalWrite() (2000 ops): 4408 μs (median 453.72 ops/ms, 5 trials)
+
+========================================
+I/O: ANALOG OPERATIONS
+========================================
+analogRead() (179 ops): 5013 μs (35.71 ops/ms)
+ADC average: 86
+analogWrite() (1152 ops): 5002 μs (230.31 ops/ms)
+
+========================================
+STORAGE: Flash Information
+========================================
+Flash: 196 KB (Intel Curie — sketch region)
+Total: 384 KB Flash (196 KB sketch + OTA region)
+
+========================================
+I/O: PWM PERFORMANCE
+========================================
+Testing PWM on pin 3
+analogWrite() (10000 ops): 38050 us (262.81 ops/ms)
+PWM ramp (100 cycles): 91777 us (278.94 ops/ms)
+Time per update: 3.585 us
+
+========================================
+TIMING: INTERRUPT LATENCY
+========================================
+Jumper 3 -> 2
+Using pin 2
+
+Pass 1 – digitalWrite trigger (100/100):
+  Avg latency: 11.78 us (includes digitalWrite overhead)
+Pass 2 – direct port trigger (100/100):
+  Avg latency: 11.76 us (pure ISR entry latency)
+
+digitalWrite overhead: ~0.02 us
+
+========================================
+I/O: SPI PERFORMANCE
+========================================
+Testing SPI transaction speed
+(No loopback - measuring CPU overhead)
+
+1 MHz: 14602 us for 1000 bytes (68.48 KB/s effective)
+4 MHz: 7684 us for 1000 bytes (130.14 KB/s effective)
+8 MHz: 6089 us for 1000 bytes (164.23 KB/s effective)
+16 MHz: 5739 us for 1000 bytes (174.25 KB/s effective)
+
+Bulk transfer (256 bytes):
+Throughput: 354.0 KB/s
+
+========================================
+PART 1 BENCHMARK COMPLETE!
+========================================
+Core benchmarks finished.
+Upload Part 2 for remaining benchmarks.
+
+To run again, press the RESET button or
+re-upload the sketch.
+========================================
+
+
+========================================
+  UNIVERSAL ARDUINO BENCHMARK SUITE
+  Part 2: Connectivity, Platform & Power
+========================================
+
+
+========================================
+SYSTEM INFORMATION
+========================================
+Board: Intel Curie (ARC32)
+MCU: Intel Curie (ARC EM4 32-bit)
+CPU Frequency: 32 MHz
+FPU: None (software float emulation)
+BLE: Nordic nRF51822 co-processor (CurieBLE)
+Features: BLE 4.0, IMU (BMI160), EEPROM emulation
+Free RAM: 24 KB (ARC sketch SRAM)
+Total RAM: 80 KB (24 KB ARC + 8 KB ARC DRAM + 48 KB shared)
+Compile Date: Feb 17 2026 21:25:41
+Benchmark Version: 1.0.0
+
+========================================
+CPU: STRESS TEST with Temperature
+========================================
+No temp sensor, stress only
+Running 10s stress test...
+
+Done: 123900 iters in 10007 ms
+Rate: 12.38 iters/ms
+
+========================================
+ADVANCED MATH: Transcendental Functions
+========================================
+Checksum: 254340.47
+exp() (100 ops): 1354 us (73.86 ops/ms)
+log() (100 ops): 1434 us (69.74 ops/ms)
+log10() (100 ops): 1866 us (53.59 ops/ms)
+pow() (100 ops): 4989 us (20.04 ops/ms)
+atan2() (100 ops): 1816 us (55.07 ops/ms)
+asin() (100 ops): 3989 us (25.07 ops/ms)
+acos() (100 ops): 3846 us (26.00 ops/ms)
+tan() (100 ops): 1462 us (68.40 ops/ms)
+fmod() (1000 ops): 753 us (1328.02 ops/ms)
+
+========================================
+I/O: SERIAL COMMUNICATION
+========================================
+Baud rate: 115200
+TX buffer: unknown
+RX buffer: unknown
+
+01234567891011121314151617181920212223242526272829303132333435363738394041424344454647484950515253545556575859606162636465666768697071727374757677787980818283848586878889909192939495969798990123456789101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899012345678910111213141516171819202122232425262728293031323334353637383940414243444546474849505152535455565758596061626364656667686970717273747576777879808182838485868788899091929394959697989901234567891011121314151617181920212223242526272829303132333435363738394041424344454647484950515253545556575859606162636465666768697071727374757677787980818283848586878889909192939495969798990123456789101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899
+Enqueue (190 B): 13643 us (median 13.93 B/ms)
+flush(): 336 us
+Wire time: 16493 us
+Throughput: 11.52 B/ms (11520 B/s max)
+Ratio: 82.72% (buffered)
+
+========================================
+WIRELESS: Bluetooth LE
+========================================
+BLE Available: YES
+BLE: Intel Curie (CurieBLE / nRF51822 co-processor)
+BLE initialized
+Devices found in 2s: 8
+
+========================================
+TIMING: millis() and micros() Precision
+========================================
+millis() 1s: 1000 ms (+/-0 ms)
+micros() res: 2 us (1 reads)
+Min step: 1 us
+micros() 1ms: 1001 us (+/-1 us)
+
+Clock accuracy: 100.00%
+
+========================================
+TIMING: delay() and delayMicroseconds() Accuracy
+========================================
+delay(0) call overhead: 0.004 ms
+delay(1..50) avg deviation: 0.000 ms
+delay(1..50) max deviation: 0.001 ms
+delayMicroseconds(0) call overhead: 1 us
+delayMicroseconds(1..50) avg deviation: 0.1 us
+delayMicroseconds(1..50) max deviation: 1 us
+
+========================================
+MEMORY: Stack Depth Test
+========================================
+Probing stack limit...
+Stack budget: 7647 bytes
+Max safe depth: 161
+Per-frame cost: 44 bytes
+Stack used:     7128 / 7647 bytes
+Timing at depth 144...
+Recursion (144 deep): 169.0 us
+Per level: 1.17 us
+
+========================================
+I/O: WIRE I2C COMMUNICATION
+========================================
+I2C buses: 1
+Buffer size: 32 bytes
+
+Testing I2C transaction speed
+(No device - measuring bus overhead)
+
+100 kHz: 2608 us for 29 writes (11.12 txn/ms)
+  Status codes: ok=0, addrNACK=19, dataNACK=0, other=10, timeout=0
+  Early stop: repeated bus errors/timeouts
+400 kHz: 1155 us for 29 writes (25.11 txn/ms)
+  Status codes: ok=0, addrNACK=19, dataNACK=0, other=10, timeout=0
+  Early stop: repeated bus errors/timeouts
+
+========================================
+SYSTEM: WATCHDOG TIMER
+========================================
+Watchdog information not available for this board
+
+========================================
+POWER: SLEEP MODE TIMING
+========================================
+Intel Curie: sleep managed by firmware (no sketch sleep API)
+
+========================================
+PART 2 BENCHMARK COMPLETE!
+========================================
+Platform benchmarks finished.
+Both parts complete! All benchmarks have been run.
+
+To run again, press the RESET button or
+re-upload the sketch.
+========================================
+

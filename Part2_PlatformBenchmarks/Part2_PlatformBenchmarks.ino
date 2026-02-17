@@ -4585,12 +4585,19 @@ void benchmarkSleepModes() {
   SERIAL_OUT.print(teensyWfiTime);
   SERIAL_OUT.println(F_STR(" us"));
 
+  // WFE on Cortex-M7 only wakes on SEV or a pending interrupt when SEVONPEND
+  // (SCB->SCR bit 4) is set.  Without it the second wfe blocks forever because
+  // there is no second core to issue SEV and the iMXRT1062 defaults SEVONPEND=0.
+  // Save SCR, enable SEVONPEND, run the WFE tests, then restore SCR.
+  uint32_t savedScr = SCB->SCR;
+  SCB->SCR |= SCB_SCR_SEVONPEND_Msk;
+
   unsigned long teensyWfeSingle;
   {
-    asm volatile("sev");
-    asm volatile("wfe");
+    asm volatile("sev");   // prime the event latch
+    asm volatile("wfe");   // consume the latch (returns immediately)
     unsigned long t = micros();
-    asm volatile("wfe");
+    asm volatile("wfe");   // sleep until the next pending interrupt sets the event
     teensyWfeSingle = micros() - t;
   }
   SERIAL_OUT.print(F_STR("  WFE single wake: "));
@@ -4607,6 +4614,8 @@ void benchmarkSleepModes() {
   SERIAL_OUT.print(F_STR("  100x WFE: "));
   SERIAL_OUT.print(teensyWfeTime);
   SERIAL_OUT.println(F_STR(" us"));
+
+  SCB->SCR = savedScr;  // restore original SCR (clears SEVONPEND if it was 0)
 
 #elif defined(TEENSYDUINO)
   // Teensy 3.x (Cortex-M4) – same WFI approach

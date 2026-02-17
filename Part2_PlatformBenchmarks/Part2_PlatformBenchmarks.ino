@@ -400,6 +400,21 @@
 #define HAS_LCD
 #define BOARD_SAMD
 
+// Arduino / Genuino 101 (Intel Curie – ARC32 / ARC EM processor)
+#elif defined(ARDUINO_ARCH_ARC32)
+#if defined(ARDUINO_GENUINO101) || defined(ARDUINO_ARDUINO101)
+#define BOARD_NAME "Arduino/Genuino 101"
+#else
+#define BOARD_NAME "Intel Curie (ARC32)"
+#endif
+#define BOARD_ARC32
+#define HAS_BLE          // Nordic nRF51822 BLE co-processor, CurieBLE library
+#define HAS_IMU          // BMI160 6-axis IMU
+#define BOARD_SRAM_KB 32
+#define BOARD_FLASH_KB 196
+#include <EEPROM.h>
+#include <CurieBLE.h>
+
 // Unknown/Generic
 #else
 #define BOARD_NAME "Unknown Arduino-Compatible"
@@ -722,8 +737,8 @@ void benchmarkCPUStress() {
       result = result * 0.99991f + f2;
 #else
       result = result * 1.0001f + sqrtf((float)i);
-#if defined(__ZEPHYR__) || defined(BOARD_STM32U5)
-      // Manual fmod implementation for Zephyr (avoids libm linking issues)
+#if defined(__ZEPHYR__) || defined(BOARD_STM32U5) || defined(BOARD_ARC32)
+      // Manual fmod implementation for Zephyr and ARC32 (avoids libm linking issues)
       float divisor = twoPi;
       result = result - ((int)(result / divisor)) * divisor;
 #else
@@ -1126,6 +1141,22 @@ void benchmarkBLE() {
   SERIAL_OUT.println(F_STR("Install via Library Manager: 'ArduinoBLE'"));
   SERIAL_OUT.println(F_STR("Scan example:"));
   SERIAL_OUT.println(F_STR("  BLE.begin() → BLE.scan() → check BLE.available()"));
+#elif defined(BOARD_ARC32)
+  // Intel Curie / Arduino 101 — CurieBLE library (Nordic nRF51822 co-processor)
+  SERIAL_OUT.println(F_STR("BLE: Intel Curie (CurieBLE / nRF51822 co-processor)"));
+  BLE.begin();
+  SERIAL_OUT.println(F_STR("BLE initialized"));
+  int bleCount = 0;
+  BLE.scan();
+  unsigned long scanStart = millis();
+  while (millis() - scanStart < 2000) {
+    BLEDevice peripheral = BLE.available();
+    if (peripheral) bleCount++;
+  }
+  BLE.stopScan();
+  SERIAL_OUT.print(F_STR("Devices found in 2s: "));
+  SERIAL_OUT.println(bleCount);
+  BLE.end();
 #else
   SERIAL_OUT.println(F_STR("BLE hardware detected but scan not implemented"));
 #endif
@@ -1199,7 +1230,8 @@ void benchmarkAdvancedMath() {
   // --- Misc ---
   startBenchmark();
   for (int i = 0; i < 1000; i++) {
-#if defined(__ZEPHYR__) || defined(BOARD_STM32U5)
+#if defined(__ZEPHYR__) || defined(BOARD_STM32U5) || defined(BOARD_ARC32)
+    // Manual fmod for Zephyr and ARC32 (avoids libm linking issues)
     float val = (float)i;
     float divisor = 7.3f;
     checksum += val - ((int)(val / divisor)) * divisor;
@@ -2035,7 +2067,8 @@ static size_t getStackBudget(uintptr_t callerFrame) {
 #elif defined(ARDUINO_SAM_DUE) || defined(ARDUINO_ARCH_RP2040)     \
    || defined(BOARD_STM32U5) || defined(BOARD_SAMD)                 \
    || defined(BOARD_NRF52)                                          \
-   || defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
+   || defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)  \
+   || defined(BOARD_ARC32)
   // ARM Cortex boards with newlib -- sbrk(0) gives the heap break
   uintptr_t heapTop = (uintptr_t)sbrk(0);
   return (callerFrame > heapTop) ? (size_t)(callerFrame - heapTop) : 256;
@@ -4633,6 +4666,9 @@ void benchmarkSleepModes() {
   SERIAL_OUT.print(avrIdleTime);
   SERIAL_OUT.println(F_STR(" us"));
 
+#elif defined(BOARD_ARC32)
+  // Intel Curie (ARC EM) – sleep modes managed by the Curie firmware; no sketch-level API.
+  SERIAL_OUT.println(F_STR("Intel Curie: sleep managed by firmware (no sketch sleep API)"));
 #else
   SERIAL_OUT.println(F_STR("Sleep mode test not available for this board"));
 #endif
@@ -4753,6 +4789,14 @@ void printSystemInfo() {
 #else
   SERIAL_OUT.println(F_STR("RPC Library: Not detected"));
 #endif
+#elif defined(BOARD_ARC32)
+  SERIAL_OUT.println(F_STR("MCU: Intel Curie (ARC EM4 32-bit)"));
+  SERIAL_OUT.print(F_STR("CPU Frequency: "));
+  SERIAL_OUT.print(F_CPU / 1000000);
+  SERIAL_OUT.println(F_STR(" MHz"));
+  SERIAL_OUT.println(F_STR("FPU: None (software float emulation)"));
+  SERIAL_OUT.println(F_STR("BLE: Nordic nRF51822 co-processor (CurieBLE)"));
+  SERIAL_OUT.println(F_STR("Features: BLE 4.0, IMU (BMI160), EEPROM emulation"));
 #else
   SERIAL_OUT.print(F_STR("CPU Frequency: "));
 #if defined(F_CPU)
@@ -4817,6 +4861,9 @@ void printSystemInfo() {
   SERIAL_OUT.println(F_STR("~256 KB (nRF52840)"));
 #elif defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
   SERIAL_OUT.println(F_STR("32 KB (RA4M1)"));
+#elif defined(BOARD_ARC32)
+  SERIAL_OUT.println(F_STR("24 KB (ARC sketch SRAM)"));
+  SERIAL_OUT.println(F_STR("Total RAM: 80 KB (24 KB ARC + 8 KB ARC DRAM + 48 KB shared)"));
 #elif defined(BOARD_SRAM_KB)
   SERIAL_OUT.print(F_STR("Total RAM: "));
   SERIAL_OUT.print(BOARD_SRAM_KB);

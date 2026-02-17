@@ -1416,8 +1416,6 @@ void benchmarkPSRAM() {
 void benchmarkDigitalIO() {
   printHeader("I/O: DIGITAL PIN OPERATIONS");
 
-  const uint32_t minDurationMs = 5;
-
   // Find a safe digital pin to test
   int testPin;
 #if defined(LED_BUILTIN)
@@ -1483,6 +1481,7 @@ void benchmarkDigitalIO() {
 
 // Direct port manipulation (AVR only)
 #ifdef __AVR__
+  const uint32_t minDurationMs = 5;
   volatile uint8_t *out = portOutputRegister(digitalPinToPort(testPin));
   uint8_t mask = digitalPinToBitMask(testPin);
   MedianCollector<float, kJitterTrials> portOpsMedian = {};
@@ -2000,8 +1999,8 @@ void benchmarkInterruptLatency() {
   pinMode(triggerPin, OUTPUT);
   digitalWrite(triggerPin, LOW);
 
-  // INPUT_PULLDOWN not available on AVR - use INPUT_PULLUP with FALLING edge instead
-#if defined(__AVR__)
+  // INPUT_PULLDOWN not available on AVR or Genuino 101 (ARC32) - use INPUT_PULLUP with FALLING edge instead
+#if defined(__AVR__) || defined(ARDUINO_ARCH_ARC32)
   pinMode(interruptPin, INPUT_PULLUP);
   digitalWrite(triggerPin, HIGH);  // Start high for FALLING edge test
   attachInterrupt(interruptNumber, latencyISR, FALLING);

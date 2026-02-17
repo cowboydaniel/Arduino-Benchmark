@@ -307,6 +307,17 @@
 #define BOARD_NAME "Arduino Due"
 #define BOARD_SAM
 
+// Arduino 101 / Genuino 101 (Intel Curie - ARC32)
+#elif defined(ARDUINO_ARCH_ARC32)
+#if defined(ARDUINO_AVR_101) || defined(ARDUINO_101)
+#define BOARD_NAME "Arduino/Genuino 101"
+#else
+#define BOARD_NAME "Intel Curie (ARC32)"
+#endif
+#define BOARD_ARC32
+#define HAS_BLE  // CurieBLE
+#define HAS_IMU  // BMI160 on-board IMU
+
 // Generic AVR catch-all
 #elif defined(__AVR__)
 #define BOARD_NAME "AVR-based Arduino"
@@ -2355,6 +2366,12 @@ void printSystemInfo() {
 #else
   SERIAL_OUT.println(F_STR("RPC Library: Not detected"));
 #endif
+#elif defined(BOARD_ARC32)
+  SERIAL_OUT.println(F_STR("MCU: Intel Curie (ARC32 + x86 Quark SE)"));
+  SERIAL_OUT.print(F_STR("CPU Frequency: "));
+  SERIAL_OUT.print(F_CPU / 1000000);
+  SERIAL_OUT.println(F_STR(" MHz"));
+  SERIAL_OUT.println(F_STR("Features: BLE (CurieBLE), IMU (BMI160), DSP"));
 #else
   SERIAL_OUT.print(F_STR("CPU Frequency: "));
 #if defined(F_CPU)
@@ -2418,6 +2435,9 @@ void printSystemInfo() {
   SERIAL_OUT.println(F_STR("~256 KB (nRF52840)"));
 #elif defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
   SERIAL_OUT.println(F_STR("32 KB (RA4M1)"));
+#elif defined(BOARD_ARC32)
+  SERIAL_OUT.println(F_STR("24 KB (ARC sketch SRAM)"));
+  SERIAL_OUT.println(F_STR("Total RAM: 80 KB (24 KB ARC + 8 KB ARC DRAM + 48 KB shared)"));
 #elif defined(BOARD_SRAM_KB)
   SERIAL_OUT.print(F_STR("Total RAM: "));
   SERIAL_OUT.print(BOARD_SRAM_KB);

@@ -1850,6 +1850,9 @@ void benchmarkFlash() {
   }
 #endif
 
+#elif defined(BOARD_ARC32)
+  SERIAL_OUT.println(F_STR("Flash: 196 KB (Intel Curie — sketch region)"));
+  SERIAL_OUT.println(F_STR("Total: 384 KB Flash (196 KB sketch + OTA region)"));
 #else
   SERIAL_OUT.println(F_STR("Flash info not available on this platform"));
 #endif
@@ -2029,7 +2032,7 @@ void benchmarkInterruptLatency() {
     isrFired = false;
 
     isrStartTime = micros();
-#if defined(__AVR__)
+#if defined(__AVR__) || defined(ARDUINO_ARCH_ARC32)
     digitalWrite(triggerPin, LOW);   // FALLING edge
 #else
     digitalWrite(triggerPin, HIGH);  // RISING edge
@@ -2038,8 +2041,8 @@ void benchmarkInterruptLatency() {
     unsigned long timeout = micros() + 1000;
     while (!isrFired && micros() < timeout) {}
 
-#if defined(__AVR__)
-    digitalWrite(triggerPin, HIGH);  // Reset
+#if defined(__AVR__) || defined(ARDUINO_ARCH_ARC32)
+    digitalWrite(triggerPin, HIGH);  // Reset for FALLING edge setup
 #else
     digitalWrite(triggerPin, LOW);
 #endif
@@ -2055,7 +2058,7 @@ void benchmarkInterruptLatency() {
 
   // ====== Pass 2: direct port/register trigger (pure ISR entry) ======
   // Re-attach for pass 2
-#if defined(__AVR__)
+#if defined(__AVR__) || defined(ARDUINO_ARCH_ARC32)
   attachInterrupt(interruptNumber, latencyISR, FALLING);
 #else
   attachInterrupt(interruptNumber, latencyISR, RISING);
@@ -2090,14 +2093,14 @@ void benchmarkInterruptLatency() {
   // RP2040 RISING: SIO direct set/clear
   #define DIRECT_TRIGGER() do { sio_hw->gpio_set = 1ul << triggerPin; } while(0)
   #define DIRECT_RESET()   do { sio_hw->gpio_clr = 1ul << triggerPin; } while(0)
+#elif defined(ARDUINO_ARCH_ARC32)
+  // ARC32 (Genuino 101): uses FALLING edge — trigger LOW, reset HIGH
+  #define DIRECT_TRIGGER() digitalWrite(triggerPin, LOW)
+  #define DIRECT_RESET()   digitalWrite(triggerPin, HIGH)
 #else
-  // Fallback for boards without known direct-register access
-  #if defined(__AVR__)
-    // already handled above
-  #else
-    #define DIRECT_TRIGGER() digitalWrite(triggerPin, HIGH)
-    #define DIRECT_RESET()   digitalWrite(triggerPin, LOW)
-  #endif
+  // Generic fallback: RISING edge
+  #define DIRECT_TRIGGER() digitalWrite(triggerPin, HIGH)
+  #define DIRECT_RESET()   digitalWrite(triggerPin, LOW)
 #endif
 
   for (int i = 0; i < iterations; i++) {

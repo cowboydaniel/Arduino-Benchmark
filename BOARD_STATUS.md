@@ -46,7 +46,7 @@ The **Benchmark Version** column records which version of the benchmark suite wa
 | Arduino Yun Rev 2 | - | - | - | - |
 | Arduino Tian | - | - | - | - |
 | Arduino Industrial 101 | - | - | - | - |
-| Arduino 101 (Intel Curie) | - | - | - | - |
+| Arduino 101 (Intel Curie) | Core: 2.0.6/IDE: 2.3.7 | 1.0.0 | passed | reports/arduino101-2.0.6.txt |
 | Arduino Diecimila | - | - | - | - |
 | Arduino Duemilanove | - | - | - | - |
 | Arduino NG | - | - | - | - |

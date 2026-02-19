@@ -81,4 +81,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on creating issues, submit
 
 ## License
 
-See repository for license details.
+MIT License — see [LICENSE](LICENSE) for details.

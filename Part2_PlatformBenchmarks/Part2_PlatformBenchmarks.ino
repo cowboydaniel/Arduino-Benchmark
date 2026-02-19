@@ -359,6 +359,7 @@
 #else
 #define BOARD_NAME "Teensy 4.0"
 #endif
+#define HAS_DSP  // Cortex-M7 DSP extensions (SIMD, MAC, saturating arithmetic)
 #elif defined(__MK66FX1M0__)
 #define BOARD_NAME "Teensy 3.6"
 #elif defined(__MK64FX512__)
@@ -4566,9 +4567,11 @@ void benchmarkSleepModes() {
   SERIAL_OUT.println(F_STR("Teensy 4.x Sleep (WFI/WFE):"));
   SERIAL_OUT.println();
 
+  SERIAL_OUT.flush();  // drain USB CDC output before entering WFI
   unsigned long teensyWfiSingle;
   {
     unsigned long t = micros();
+    asm volatile("dsb" ::: "memory");  // ARM WFI preamble: complete pending stores
     asm volatile("wfi");
     teensyWfiSingle = micros() - t;
   }
@@ -4576,8 +4579,10 @@ void benchmarkSleepModes() {
   SERIAL_OUT.print(teensyWfiSingle);
   SERIAL_OUT.println(F_STR(" us"));
 
+  SERIAL_OUT.flush();  // drain USB CDC before tight WFI loop
   startBenchmark();
   for (int i = 0; i < 100; i++) {
+    asm volatile("dsb" ::: "memory");  // ARM WFI preamble; allows pending IRQs to run
     asm volatile("wfi");
   }
   unsigned long teensyWfiTime = endBenchmark();
@@ -4874,6 +4879,16 @@ void printSystemInfo() {
 #elif defined(BOARD_ARC32)
   SERIAL_OUT.println(F_STR("24 KB (ARC sketch SRAM)"));
   SERIAL_OUT.println(F_STR("Total RAM: 80 KB (24 KB ARC + 8 KB ARC DRAM + 48 KB shared)"));
+#elif defined(TEENSYDUINO) && defined(__IMXRT1062__)
+  // Teensy 4.0/4.1: measure free RAM as stack-to-heap gap
+  {
+    extern char *__brkval;
+    char stackTop;
+    uint32_t freeBytes = (uint32_t)&stackTop - (uint32_t)__brkval;
+    SERIAL_OUT.print(freeBytes / 1024);
+    SERIAL_OUT.println(F_STR(" KB"));
+  }
+  SERIAL_OUT.println(F_STR("Total RAM: 1024 KB (512 KB DTCM + 512 KB ITCM)"));
 #elif defined(BOARD_SRAM_KB)
   SERIAL_OUT.print(F_STR("Total RAM: "));
   SERIAL_OUT.print(BOARD_SRAM_KB);

@@ -109,7 +109,7 @@ You do **not** need to bump the version for:
 
 1. **Create a new branch** from `main` for your changes — do **not** work directly on the `dual-benchmark` branch or any existing results branch
 2. **Update `BENCHMARK_VERSION`** in both `Part1_CoreBenchmarks/BenchmarkHelpers.h` and `Part2_PlatformBenchmarks/BenchmarkHelpers.h` (e.g. `"1.0.0"` → `"1.1.0"`)
-3. **Create new empty spreadsheets**: `Part1_CoreBenchmarks_Results_v<NEW_VERSION>.xlsx` and `Part2_PlatformBenchmarks_Results_v<NEW_VERSION>.xlsx` — do **not** modify or delete the previous version's spreadsheets
+3. **Copy the previous spreadsheets as-is**: Copy `Part1_CoreBenchmarks_Results_v<OLD_VERSION>.xlsx` to `Part1_CoreBenchmarks_Results_v<NEW_VERSION>.xlsx` and similarly for Part 2 — keep all existing board columns and result data intact. Do **not** modify or delete the previous version's spreadsheets. In each new spreadsheet, add a **"Version"** row immediately below the board name row; enter the benchmark version that produced each board's data (previous boards keep their old version number until they are re-tested under the new version)
 4. **Copy `BOARD_STATUS.md`** as-is — keep the board list and all existing results. When boards are re-tested under the new version, their rows will be overwritten with the new results
 5. **Do not overwrite the `dual-benchmark` branch** — previous benchmark versions and their results must be preserved
 
@@ -144,6 +144,7 @@ Benchmark results are tracked in versioned spreadsheet pairs — one per benchma
 - Check the benchmark version printed in your Serial Monitor output (look for "Benchmark Version: X.Y.Z")
 - Open the matching versioned spreadsheets (e.g. `Part1_CoreBenchmarks_Results_v1.0.0.xlsx` and `Part2_PlatformBenchmarks_Results_v1.0.0.xlsx`)
 - Add a new column for your board, or update an existing column
+- In the **"Version"** row (just below the board name row), enter the benchmark version printed in your Serial Monitor output (e.g. `1.0.0`)
 - Fill in each row with the corresponding value from your Serial Monitor output
 - Use the same units as existing entries (ops/ms, microseconds, etc.)
 - Leave cells blank for tests that don't apply to your board (e.g., WiFi on a Nano)

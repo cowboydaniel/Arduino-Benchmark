@@ -78,7 +78,7 @@ See [BOARD_STATUS.md](BOARD_STATUS.md) for which boards have been tested and whi
 
 - **Volatile accumulators** prevent the compiler from optimizing away operations
 - **Checksummed results** verify actual execution
-- **Minimum-duration loops** ensure stable timing (`runForAtLeastUs`, `runTimedLoop`)
+- **Minimum-duration loops** ensure stable timing (`runTimedLoop`)
 - **Register-level access** measured alongside API calls to quantify abstraction overhead
 - **Jitter analysis** (5-trial runs) for timing precision benchmarks
 - **yield() calls** on RTOS-based boards (ESP32, ESP8266, RP2040) to prevent watchdog resets

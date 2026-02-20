@@ -43,7 +43,7 @@ If you notice incorrect or missing data in the results spreadsheets:
 
 - All benchmark code must compile in the Arduino IDE with no external dependencies beyond board-specific platform libraries (exception: the Multiduino board detection block requires the Adafruit RTClib library)
 - Use `volatile` accumulators to prevent compiler optimization of benchmark loops
-- Use the timing helpers in `BenchmarkHelpers.h` (`runForAtLeastUs`, `runTimedLoop`) for consistent measurements
+- Use the timing helper in `BenchmarkHelpers.h` (`runTimedLoop`) for consistent measurements
 - Call `yield()` on RTOS-based platforms (ESP32, ESP8266, RP2040) inside long-running loops to avoid watchdog resets
 - Print results to Serial at 115200 baud in a format consistent with existing output
 - Wrap board-specific code in `#if defined(...)` / `#endif` preprocessor guards

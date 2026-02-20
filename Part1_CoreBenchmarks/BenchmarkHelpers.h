@@ -6,6 +6,14 @@
 
 #define BENCHMARK_VERSION "1.0.0"
 
+// CSV output mode: 0 = human-readable (default), 1 = CSV column output
+// In CSV mode, only label,value pairs are printed — no decorative output.
+// Set to 1 before uploading, then copy the CSV block from Serial Monitor
+// and run: python tools/import_results.py results.csv <spreadsheet>.xlsx
+#ifndef CSV_OUTPUT
+#define CSV_OUTPUT 0
+#endif
+
 #include <Arduino.h>
 
 namespace benchmark_detail {

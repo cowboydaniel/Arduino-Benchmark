@@ -493,6 +493,17 @@
 // Serial baud rate
 #define SERIAL_BAUD 115200
 
+// ==================== CSV OUTPUT MACROS ====================
+// CSV_ROW(label, value) — emits "label,value\n" in CSV mode; compiles away otherwise
+// CSV_BLANK(label)      — emits "label,\n" in CSV mode (metric N/A on this board)
+#if CSV_OUTPUT
+#define CSV_ROW(label, value) do { SERIAL_OUT.print(F_STR(label)); SERIAL_OUT.print(F_STR(",")); SERIAL_OUT.println(value); } while(0)
+#define CSV_BLANK(label)      SERIAL_OUT.println(F_STR(label ","))
+#else
+#define CSV_ROW(label, value) do {} while(0)
+#define CSV_BLANK(label)      do {} while(0)
+#endif
+
 // ==================== GLOBAL VARIABLES ====================
 uint8_t testBuffer[256];
 unsigned long gMinBenchUs = 20000;
@@ -506,14 +517,20 @@ RTC_DS1307 rtc;
 // ==================== HELPER FUNCTIONS ====================
 
 void printDivider() {
+#if !CSV_OUTPUT
   SERIAL_OUT.println(F_STR("========================================"));
+#endif
 }
 
 void printHeader(const char *title) {
+#if !CSV_OUTPUT
   SERIAL_OUT.println();
   printDivider();
   SERIAL_OUT.println(title);
   printDivider();
+#else
+  (void)title;
+#endif
 }
 
 unsigned long benchmarkStart;
@@ -601,8 +618,10 @@ void benchmarkIntegerOps() {
     acc += i;
   }
   unsigned long addTime = endBenchmark();
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println(acc);
+#endif
 
   // Multiplication - LCG-style updates prevent optimization
   acc = 1;
@@ -611,8 +630,10 @@ void benchmarkIntegerOps() {
       acc *= (i | 1);  // Ensure odd multiplier, natural uint32_t wrapping
     }
   });
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println(acc);
+#endif
 
   // Division - vary both dividend and divisor
   acc = 0xFFFFFFFF;
@@ -622,9 +643,12 @@ void benchmarkIntegerOps() {
       acc = (acc / divisor) + i;         // Accumulate to prevent optimization
     }
   });
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println(acc);
+#endif
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Addition ("));
   SERIAL_OUT.print(BENCHMARK_ITERATIONS);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -632,7 +656,10 @@ void benchmarkIntegerOps() {
   SERIAL_OUT.print(F_STR(" μs ("));
   SERIAL_OUT.print((float)BENCHMARK_ITERATIONS / addTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("Addition (ops/ms)", (float)BENCHMARK_ITERATIONS / addTime * 1000);
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Multiplication ("));
   SERIAL_OUT.print(mulResult.totalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -640,7 +667,10 @@ void benchmarkIntegerOps() {
   SERIAL_OUT.print(F_STR(" μs ("));
   SERIAL_OUT.print(mulResult.opsPerMs);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("Multiplication (ops/ms)", mulResult.opsPerMs);
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Division ("));
   SERIAL_OUT.print(divResult.totalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -648,13 +678,17 @@ void benchmarkIntegerOps() {
   SERIAL_OUT.print(F_STR(" μs ("));
   SERIAL_OUT.print(divResult.opsPerMs);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("Division (ops/ms)", divResult.opsPerMs);
 
 #if defined(BOARD_STM32U5) || defined(HAS_DSP)
   // Enhanced tests for boards with DSP extensions
+#if !CSV_OUTPUT
   SERIAL_OUT.println();
   SERIAL_OUT.print(F_STR("--- DSP-Enhanced Integer Tests ("));
   SERIAL_OUT.print(BOARD_NAME);
   SERIAL_OUT.println(F_STR(") ---"));
+#endif
 
   // 64-bit integer operations (emulated on 32-bit MCU)
   volatile uint64_t acc64 = 0x123456789ABCDEFULL;
@@ -663,11 +697,14 @@ void benchmarkIntegerOps() {
       acc64 = (acc64 * (i | 1));  // 64-bit multiply
     }
   });
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("64-bit Multiply ("));
   SERIAL_OUT.print(mul64Result.totalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
   SERIAL_OUT.print(mul64Result.opsPerMs);
   SERIAL_OUT.println(F_STR(" ops/ms"));
+#endif
+  CSV_ROW("64-bit Multiply (ops/ms)", mul64Result.opsPerMs);
 
   // 64-bit division (expensive on 32-bit MCU)
   acc64 = 0xFFFFFFFFFFFFFFFFULL;
@@ -677,11 +714,14 @@ void benchmarkIntegerOps() {
       acc64 = (acc64 / divisor) + i;
     }
   });
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("64-bit Divide ("));
   SERIAL_OUT.print(div64Result.totalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
   SERIAL_OUT.print(div64Result.opsPerMs);
   SERIAL_OUT.println(F_STR(" ops/ms"));
+#endif
+  CSV_ROW("64-bit Divide (ops/ms)", div64Result.opsPerMs);
 
   // MAC (Multiply-Accumulate) style operations - DSP strength
   volatile int32_t macAcc = 0;
@@ -695,6 +735,7 @@ void benchmarkIntegerOps() {
     macResult[i % 4] += macAcc;
   }
   unsigned long macTime = endBenchmark();
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("MAC Operations (1000 ops): "));
   SERIAL_OUT.print(macTime);
   SERIAL_OUT.print(F_STR(" μs ("));
@@ -702,6 +743,8 @@ void benchmarkIntegerOps() {
   SERIAL_OUT.println(F_STR(" ops/ms)"));
   SERIAL_OUT.print(F_STR("MAC Checksum: "));
   SERIAL_OUT.println(macAcc);
+#endif
+  CSV_ROW("MAC Operations (ops/ms)", 1000000.0 / macTime);
 
   // Saturating arithmetic (DSP-style)
   volatile int32_t satAcc = 0;
@@ -716,11 +759,19 @@ void benchmarkIntegerOps() {
     }
   }
   unsigned long satTime = endBenchmark();
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Saturating Add (1000 ops): "));
   SERIAL_OUT.print(satTime);
   SERIAL_OUT.print(F_STR(" μs ("));
   SERIAL_OUT.print(1000000.0 / satTime);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("Saturating Add (ops/ms)", 1000000.0 / satTime);
+#else
+  CSV_BLANK("64-bit Multiply (ops/ms)");
+  CSV_BLANK("64-bit Divide (ops/ms)");
+  CSV_BLANK("MAC Operations (ops/ms)");
+  CSV_BLANK("Saturating Add (ops/ms)");
 #endif
 }
 
@@ -736,8 +787,10 @@ void benchmarkFloatOps() {
     fresult += 3.14159f;
   }
   unsigned long faddTime = endBenchmark();
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println(fresult);
+#endif
 
   // Float multiplication
   fresult = 1.0f;
@@ -746,8 +799,10 @@ void benchmarkFloatOps() {
     fresult *= 1.0001f;
   }
   unsigned long fmulTime = endBenchmark();
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println(fresult);
+#endif
 
   // Float division
   fresult = 1000000.0f;
@@ -756,8 +811,10 @@ void benchmarkFloatOps() {
     fresult /= 1.0001f;
   }
   unsigned long fdivTime = endBenchmark();
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println(fresult);
+#endif
 
 #if !defined(ARDUINO_UNO_Q) && !defined(ARDUINO_UNO_Q_MCU)
   // Sqrt - accumulate to prevent optimization (skipped on Uno Q - no libm)
@@ -767,8 +824,10 @@ void benchmarkFloatOps() {
       fresult += sqrt((float)i);
     }
   });
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println(fresult);
+#endif
 
   // Sin/Cos - accumulate to prevent optimization (skipped on Uno Q - no libm)
   fresult = 0.0f;
@@ -777,10 +836,13 @@ void benchmarkFloatOps() {
       fresult += sin((float)i / 100.0f) + cos((float)i / 100.0f);
     }
   });
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println(fresult);
 #endif
+#endif
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Float Addition ("));
   SERIAL_OUT.print(BENCHMARK_ITERATIONS / 10);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -788,7 +850,10 @@ void benchmarkFloatOps() {
   SERIAL_OUT.print(F_STR(" μs ("));
   SERIAL_OUT.print((float)(BENCHMARK_ITERATIONS / 10) / faddTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("Float Addition (ops/ms)", (float)(BENCHMARK_ITERATIONS / 10) / faddTime * 1000);
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Float Multiply ("));
   SERIAL_OUT.print(BENCHMARK_ITERATIONS / 10);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -796,7 +861,10 @@ void benchmarkFloatOps() {
   SERIAL_OUT.print(F_STR(" μs ("));
   SERIAL_OUT.print((float)(BENCHMARK_ITERATIONS / 10) / fmulTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("Float Multiply (ops/ms)", (float)(BENCHMARK_ITERATIONS / 10) / fmulTime * 1000);
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Float Division ("));
   SERIAL_OUT.print(BENCHMARK_ITERATIONS / 10);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -804,8 +872,11 @@ void benchmarkFloatOps() {
   SERIAL_OUT.print(F_STR(" μs ("));
   SERIAL_OUT.print((float)(BENCHMARK_ITERATIONS / 10) / fdivTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("Float Division (ops/ms)", (float)(BENCHMARK_ITERATIONS / 10) / fdivTime * 1000);
 
 #if !defined(ARDUINO_UNO_Q) && !defined(ARDUINO_UNO_Q_MCU)
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Square Root ("));
   SERIAL_OUT.print(sqrtResult.totalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -813,7 +884,10 @@ void benchmarkFloatOps() {
   SERIAL_OUT.print(F_STR(" μs ("));
   SERIAL_OUT.print(sqrtResult.opsPerMs);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("Square Root (ops/ms)", sqrtResult.opsPerMs);
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Sin/Cos ("));
   SERIAL_OUT.print(trigResult.totalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -821,19 +895,31 @@ void benchmarkFloatOps() {
   SERIAL_OUT.print(F_STR(" μs ("));
   SERIAL_OUT.print(trigResult.opsPerMs);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("Sin/Cos (ops/ms)", trigResult.opsPerMs);
 #else
+#if !CSV_OUTPUT
   SERIAL_OUT.println(F_STR("Sqrt/Sin/Cos: Skipped (Uno Q - no libm)"));
 #endif
+  CSV_BLANK("Square Root (ops/ms)");
+  CSV_BLANK("Sin/Cos (ops/ms)");
+#endif
 
+#if !CSV_OUTPUT
   SERIAL_OUT.println();
   SERIAL_OUT.print(F_STR("sizeof(float):  "));
   SERIAL_OUT.println(sizeof(float));
   SERIAL_OUT.print(F_STR("sizeof(double): "));
   SERIAL_OUT.println(sizeof(double));
+#endif
+  CSV_ROW("sizeof(float)", sizeof(float));
+  CSV_ROW("sizeof(double)", sizeof(double));
 
 #if !defined(ARDUINO_UNO_Q) && !defined(ARDUINO_UNO_Q_MCU) && defined(__SIZEOF_DOUBLE__) && __SIZEOF_DOUBLE__ >= 8
+#if !CSV_OUTPUT
   SERIAL_OUT.println();
   SERIAL_OUT.println(F_STR("8-byte double detected - double precision tests:"));
+#endif
 
   // Double multiplication
   volatile double dresult = 1.0;
@@ -842,8 +928,10 @@ void benchmarkFloatOps() {
     dresult *= 1.0001;
   }
   unsigned long dmulTime = endBenchmark();
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println((float)dresult);
+#endif
 
   // Double division
   dresult = 1000000.0;
@@ -852,8 +940,10 @@ void benchmarkFloatOps() {
     dresult /= 1.0001;
   }
   unsigned long ddivTime = endBenchmark();
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println((float)dresult);
+#endif
 
   // Double sqrt
   dresult = 0.0;
@@ -862,8 +952,10 @@ void benchmarkFloatOps() {
       dresult += sqrt((double)i);
     }
   });
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println((float)dresult);
+#endif
 
   // Double sin/cos
   dresult = 0.0;
@@ -872,9 +964,12 @@ void benchmarkFloatOps() {
       dresult += sin((double)i / 100.0) + cos((double)i / 100.0);
     }
   });
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println((float)dresult);
+#endif
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Double Multiply ("));
   SERIAL_OUT.print(BENCHMARK_ITERATIONS / 10);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -882,7 +977,10 @@ void benchmarkFloatOps() {
   SERIAL_OUT.print(F_STR(" μs ("));
   SERIAL_OUT.print((float)(BENCHMARK_ITERATIONS / 10) / dmulTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("Double Multiply (ops/ms)", (float)(BENCHMARK_ITERATIONS / 10) / dmulTime * 1000);
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Double Division ("));
   SERIAL_OUT.print(BENCHMARK_ITERATIONS / 10);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -890,7 +988,10 @@ void benchmarkFloatOps() {
   SERIAL_OUT.print(F_STR(" μs ("));
   SERIAL_OUT.print((float)(BENCHMARK_ITERATIONS / 10) / ddivTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("Double Division (ops/ms)", (float)(BENCHMARK_ITERATIONS / 10) / ddivTime * 1000);
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Double Sqrt ("));
   SERIAL_OUT.print(dsqrtResult.totalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -898,7 +999,10 @@ void benchmarkFloatOps() {
   SERIAL_OUT.print(F_STR(" μs ("));
   SERIAL_OUT.print(dsqrtResult.opsPerMs);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("Double Sqrt (ops/ms)", dsqrtResult.opsPerMs);
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Double Sin/Cos ("));
   SERIAL_OUT.print(dtrigResult.totalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -906,8 +1010,22 @@ void benchmarkFloatOps() {
   SERIAL_OUT.print(F_STR(" μs ("));
   SERIAL_OUT.print(dtrigResult.opsPerMs);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("Double Sin/Cos (ops/ms)", dtrigResult.opsPerMs);
 #elif !defined(ARDUINO_UNO_Q) && !defined(ARDUINO_UNO_Q_MCU)
+#if !CSV_OUTPUT
   SERIAL_OUT.println(F_STR("4-byte double (same as float) - double tests skipped"));
+#endif
+  CSV_BLANK("Double Multiply (ops/ms)");
+  CSV_BLANK("Double Division (ops/ms)");
+  CSV_BLANK("Double Sqrt (ops/ms)");
+  CSV_BLANK("Double Sin/Cos (ops/ms)");
+#else
+  // Uno Q: all double metrics skipped
+  CSV_BLANK("Double Multiply (ops/ms)");
+  CSV_BLANK("Double Division (ops/ms)");
+  CSV_BLANK("Double Sqrt (ops/ms)");
+  CSV_BLANK("Double Sin/Cos (ops/ms)");
 #endif
 }
 
@@ -951,6 +1069,7 @@ void benchmarkStringOps() {
     }
   });
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Concatenation ("));
   SERIAL_OUT.print(concatResult.totalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -958,7 +1077,10 @@ void benchmarkStringOps() {
   SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(concatResult.opsPerMs);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("Concatenation (ops/ms)", concatResult.opsPerMs);
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Comparison ("));
   SERIAL_OUT.print(cmpResultData.totalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -966,7 +1088,10 @@ void benchmarkStringOps() {
   SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(cmpResultData.opsPerMs);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("Comparison (ops/ms)", cmpResultData.opsPerMs);
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Int to String ("));
   SERIAL_OUT.print(toStrResult.totalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -974,7 +1099,10 @@ void benchmarkStringOps() {
   SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(toStrResult.opsPerMs);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("Int to String (ops/ms)", toStrResult.opsPerMs);
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("itoa fixed buf ("));
   SERIAL_OUT.print(itoaResult.totalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -982,6 +1110,8 @@ void benchmarkStringOps() {
   SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(itoaResult.opsPerMs);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("itoa fixed buf (ops/ms)", itoaResult.opsPerMs);
 }
 // ==================== MEMORY BENCHMARKS ====================
 
@@ -1004,8 +1134,10 @@ void benchmarkSRAM() {
       checksum += testBuffer[i];
     }
   });
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Read checksum: "));
   SERIAL_OUT.println((uint32_t)checksum);
+#endif
 
   // Random access - accumulate to prevent optimization
   MedianCollector<float, kJitterTrials> randomOpsMedian = {};
@@ -1026,9 +1158,12 @@ void benchmarkSRAM() {
   float randomOpsPerMs = randomOpsMedian.median();
   unsigned long randomElapsedMicros = randomElapsedMedian.median();
   uint32_t randomTotalOps = randomTotalOpsMedian.median();
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Random checksum: "));
   SERIAL_OUT.println((uint32_t)checksum);
+#endif
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Sequential Write ("));
   SERIAL_OUT.print(writeResult.totalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -1036,7 +1171,10 @@ void benchmarkSRAM() {
   SERIAL_OUT.print(F_STR(" μs ("));
   SERIAL_OUT.print(writeResult.opsPerMs);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("Sequential Write (ops/ms)", writeResult.opsPerMs);
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Sequential Read ("));
   SERIAL_OUT.print(readResult.totalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -1044,7 +1182,10 @@ void benchmarkSRAM() {
   SERIAL_OUT.print(F_STR(" μs ("));
   SERIAL_OUT.print(readResult.opsPerMs);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("Sequential Read (ops/ms)", readResult.opsPerMs);
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Random Access ("));
   SERIAL_OUT.print(randomTotalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -1054,10 +1195,14 @@ void benchmarkSRAM() {
   SERIAL_OUT.print(F_STR(" ops/ms, "));
   SERIAL_OUT.print(kJitterTrials);
   SERIAL_OUT.println(F_STR(" trials)"));
+#endif
+  CSV_ROW("Random Access (ops/ms)", randomOpsPerMs);
 
   // Enhanced memory tests - scaled by available RAM
+#if !CSV_OUTPUT
   SERIAL_OUT.println();
   SERIAL_OUT.println(F_STR("--- Memory Bandwidth Tests ---"));
+#endif
 
   // Scale buffer size based on available RAM
   size_t freeHeapBytes = 0;
@@ -1104,11 +1249,13 @@ void benchmarkSRAM() {
   freeHeapBytes = left;
 #endif
 
+#if !CSV_OUTPUT
   if (freeHeapBytes > 0) {
     SERIAL_OUT.print(F_STR("Detected free heap: "));
     SERIAL_OUT.print(freeHeapBytes);
     SERIAL_OUT.println(F_STR(" bytes"));
   }
+#endif
 
   // Allocate a single large buffer to maximize usable size, especially on
   // RAM-constrained boards like AVR Uno (2KB SRAM). For memcpy we split it
@@ -1125,14 +1272,18 @@ void benchmarkSRAM() {
     if (bufSize < 128) {
       bufSize = 128;
     }
+#if !CSV_OUTPUT
     SERIAL_OUT.print(F_STR("Using "));
     SERIAL_OUT.print(bufSize);
     SERIAL_OUT.println(F_STR(" byte buffer (~75% free heap)"));
+#endif
   }
 
   if (bufSize == 0) {
     bufSize = 512;
+#if !CSV_OUTPUT
     SERIAL_OUT.println(F_STR("Using 512 byte buffer (fallback)"));
+#endif
   }
 
   uint8_t *buf = NULL;
@@ -1147,7 +1298,9 @@ void benchmarkSRAM() {
   }
 
   if (buf == NULL) {
+#if !CSV_OUTPUT
     SERIAL_OUT.println(F_STR("ERROR: Could not allocate test buffer"));
+#endif
   } else {
     // Initialize buffer
     for (size_t i = 0; i < bufSize; i++) {
@@ -1177,6 +1330,7 @@ void benchmarkSRAM() {
     unsigned long memcpyTime = endBenchmark();
 
     unsigned long cpyTotalBytes = (unsigned long)copySize * cpyIterations;
+#if !CSV_OUTPUT
     SERIAL_OUT.print(F_STR("memcpy ("));
     SERIAL_OUT.print(cpyTotalBytes);
     SERIAL_OUT.print(F_STR(" bytes): "));
@@ -1184,6 +1338,8 @@ void benchmarkSRAM() {
     SERIAL_OUT.print(F_STR(" μs ("));
     SERIAL_OUT.print((cpyTotalBytes * 1.0) / memcpyTime);
     SERIAL_OUT.println(F_STR(" MB/s)"));
+#endif
+    CSV_ROW("memcpy (MB/s)", (cpyTotalBytes * 1.0) / memcpyTime);
 
     // --- memset throughput test (full buffer) ---
     unsigned long totalBytes = (unsigned long)bufSize * iterations;
@@ -1193,6 +1349,7 @@ void benchmarkSRAM() {
     }
     unsigned long memsetTime = endBenchmark();
 
+#if !CSV_OUTPUT
     SERIAL_OUT.print(F_STR("memset ("));
     SERIAL_OUT.print(totalBytes);
     SERIAL_OUT.print(F_STR(" bytes): "));
@@ -1200,6 +1357,8 @@ void benchmarkSRAM() {
     SERIAL_OUT.print(F_STR(" μs ("));
     SERIAL_OUT.print((totalBytes * 1.0) / memsetTime);
     SERIAL_OUT.println(F_STR(" MB/s)"));
+#endif
+    CSV_ROW("memset (MB/s)", (totalBytes * 1.0) / memsetTime);
 
     // --- Direct RAM bandwidth test (full buffer) ---
     volatile uint32_t *ramPtr = (volatile uint32_t *)buf;
@@ -1222,13 +1381,19 @@ void benchmarkSRAM() {
     }
     unsigned long bandwidthReadTime = endBenchmark();
 
+#if !CSV_OUTPUT
     SERIAL_OUT.print(F_STR("RAM Write Bandwidth: "));
     SERIAL_OUT.print((totalBytes * 1.0) / bandwidthWriteTime);
     SERIAL_OUT.println(F_STR(" MB/s"));
+#endif
+    CSV_ROW("RAM Write Bandwidth (MB/s)", (totalBytes * 1.0) / bandwidthWriteTime);
 
+#if !CSV_OUTPUT
     SERIAL_OUT.print(F_STR("RAM Read Bandwidth: "));
     SERIAL_OUT.print((totalBytes * 1.0) / bandwidthReadTime);
     SERIAL_OUT.println(F_STR(" MB/s"));
+#endif
+    CSV_ROW("RAM Read Bandwidth (MB/s)", (totalBytes * 1.0) / bandwidthReadTime);
 
     // Clean up
     free(buf);
@@ -1251,9 +1416,12 @@ void benchmarkEEPROM() {
 #endif
 
   if (eepromSize > 0) {
+#if !CSV_OUTPUT
     SERIAL_OUT.print(F_STR("EEPROM Size: "));
     SERIAL_OUT.print(eepromSize);
     SERIAL_OUT.println(F_STR(" bytes"));
+#endif
+    CSV_ROW("EEPROM Size (bytes)", eepromSize);
 
     // Write test (smaller sample)
     int testSize = min(64, eepromSize);
@@ -1266,6 +1434,7 @@ void benchmarkEEPROM() {
     }
     unsigned long ramWriteTime = endBenchmark();
 
+#if !CSV_OUTPUT
     SERIAL_OUT.print(F_STR("RAM Buffer Write ("));
     SERIAL_OUT.print(testSize);
     SERIAL_OUT.print(F_STR(" bytes): "));
@@ -1273,9 +1442,14 @@ void benchmarkEEPROM() {
     SERIAL_OUT.print(F_STR(" μs ("));
     SERIAL_OUT.print((float)testSize / ramWriteTime * 1000);
     SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+    CSV_ROW("EEPROM RAM Write (ops/ms)", (float)testSize / ramWriteTime * 1000);
+    CSV_BLANK("EEPROM Write (ops/ms)");
 
     // Commit multiple times to measure min/median/max (captures erase events)
+#if !CSV_OUTPUT
     SERIAL_OUT.println(F_STR("Flash Commit Test (10 commits):"));
+#endif
     unsigned long commitTimes[10];
 
     for (int trial = 0; trial < 10; trial++) {
@@ -1305,6 +1479,7 @@ void benchmarkEEPROM() {
     unsigned long medianCommit = commitTimes[5];
     unsigned long maxCommit = commitTimes[9];
 
+#if !CSV_OUTPUT
     SERIAL_OUT.print(F_STR("  Min: "));
     SERIAL_OUT.print(minCommit);
     SERIAL_OUT.print(F_STR(" μs ("));
@@ -1322,6 +1497,7 @@ void benchmarkEEPROM() {
     SERIAL_OUT.print(F_STR(" μs ("));
     SERIAL_OUT.print(maxCommit / 1000.0);
     SERIAL_OUT.println(F_STR(" ms) ← Includes erase"));
+#endif
 #else
     // AVR/native EEPROM: each write goes to hardware
     startBenchmark();
@@ -1330,6 +1506,7 @@ void benchmarkEEPROM() {
     }
     unsigned long writeTime = endBenchmark();
 
+#if !CSV_OUTPUT
     SERIAL_OUT.print(F_STR("Hardware Write ("));
     SERIAL_OUT.print(testSize);
     SERIAL_OUT.print(F_STR(" bytes): "));
@@ -1337,6 +1514,9 @@ void benchmarkEEPROM() {
     SERIAL_OUT.print(F_STR(" μs ("));
     SERIAL_OUT.print((float)testSize / writeTime * 1000);
     SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+    CSV_BLANK("EEPROM RAM Write (ops/ms)");
+    CSV_ROW("EEPROM Write (ops/ms)", (float)testSize / writeTime * 1000);
 #endif
 
     // Read test - measure actual reads with checksum
@@ -1348,6 +1528,7 @@ void benchmarkEEPROM() {
     }
     unsigned long readTime = endBenchmark();
 
+#if !CSV_OUTPUT
     SERIAL_OUT.print(F_STR("Read ("));
     SERIAL_OUT.print(testSize);
     SERIAL_OUT.print(F_STR(" bytes): "));
@@ -1357,8 +1538,16 @@ void benchmarkEEPROM() {
     SERIAL_OUT.println(F_STR(" ops/ms)"));
     SERIAL_OUT.print(F_STR("Read checksum: "));
     SERIAL_OUT.println((uint32_t)checksum);
+#endif
+    CSV_ROW("EEPROM Read (ops/ms)", (float)testSize / readTime * 1000);
   } else {
+#if !CSV_OUTPUT
     SERIAL_OUT.println(F_STR("EEPROM not available"));
+#endif
+    CSV_ROW("EEPROM Size (bytes)", 0);
+    CSV_BLANK("EEPROM RAM Write (ops/ms)");
+    CSV_BLANK("EEPROM Write (ops/ms)");
+    CSV_BLANK("EEPROM Read (ops/ms)");
   }
 
 #if defined(ESP32) || defined(ESP8266)
@@ -1372,6 +1561,7 @@ void benchmarkPSRAM() {
   printHeader("MEMORY: PSRAM");
 
   if (psramFound()) {
+#if !CSV_OUTPUT
     SERIAL_OUT.print(F_STR("PSRAM Size: "));
     SERIAL_OUT.print(ESP.getPsramSize() / 1024);
     SERIAL_OUT.println(F_STR(" KB"));
@@ -1379,6 +1569,7 @@ void benchmarkPSRAM() {
     SERIAL_OUT.print(F_STR("Free PSRAM: "));
     SERIAL_OUT.print(ESP.getFreePsram() / 1024);
     SERIAL_OUT.println(F_STR(" KB"));
+#endif
 
     // Allocate test buffer in PSRAM
     uint8_t *psramBuffer = (uint8_t *)ps_malloc(4096);
@@ -1398,6 +1589,7 @@ void benchmarkPSRAM() {
       }
       unsigned long readTime = endBenchmark();
 
+#if !CSV_OUTPUT
       SERIAL_OUT.print(F_STR("Write (4096 bytes): "));
       SERIAL_OUT.print(writeTime);
       SERIAL_OUT.print(F_STR(" μs ("));
@@ -1412,13 +1604,18 @@ void benchmarkPSRAM() {
 
       SERIAL_OUT.print(F_STR("Read checksum: "));
       SERIAL_OUT.println((uint32_t)checksum);
+#endif
 
       free(psramBuffer);
     } else {
+#if !CSV_OUTPUT
       SERIAL_OUT.println(F_STR("Failed to allocate PSRAM"));
+#endif
     }
   } else {
+#if !CSV_OUTPUT
     SERIAL_OUT.println(F_STR("PSRAM not found"));
+#endif
   }
 }
 #endif
@@ -1581,6 +1778,7 @@ void benchmarkDigitalIO() {
   uint32_t regTotalOps = regTotalOpsMedian.median();
 #endif
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("digitalWrite() ("));
   SERIAL_OUT.print(dwOpsPerTrial);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -1590,8 +1788,11 @@ void benchmarkDigitalIO() {
   SERIAL_OUT.print(F_STR(" ops/ms, "));
   SERIAL_OUT.print(kJitterTrials);
   SERIAL_OUT.println(F_STR(" trials)"));
+#endif
+  CSV_ROW("digitalWrite (ops/ms)", writeOpsPerMs);
 
 #ifdef HAS_DIGITAL_WRITE_FAST
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("digitalWriteFast() ("));
   SERIAL_OUT.print(dwfOpsPerTrial);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -1605,8 +1806,10 @@ void benchmarkDigitalIO() {
   SERIAL_OUT.print(dwfOpsPerMs / writeOpsPerMs);
   SERIAL_OUT.println(F_STR("x faster"));
 #endif
+#endif
 
 #ifdef __AVR__
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Direct Port ("));
   SERIAL_OUT.print(portTotalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -1620,8 +1823,12 @@ void benchmarkDigitalIO() {
   SERIAL_OUT.print(portOpsPerMs / writeOpsPerMs);
   SERIAL_OUT.println(F_STR("x faster"));
 #endif
+  CSV_ROW("Direct Port (ops/ms)", portOpsPerMs);
+  CSV_ROW("Digital Speedup (x)", portOpsPerMs / writeOpsPerMs);
+#endif
 
 #if defined(ESP32) || defined(ARDUINO_ARCH_RP2040)
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Direct Register ("));
   SERIAL_OUT.print(regTotalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -1634,6 +1841,14 @@ void benchmarkDigitalIO() {
   SERIAL_OUT.print(F_STR("Speedup: "));
   SERIAL_OUT.print(regOpsPerMs / writeOpsPerMs);
   SERIAL_OUT.println(F_STR("x faster"));
+#endif
+  CSV_ROW("Direct Port (ops/ms)", regOpsPerMs);
+  CSV_ROW("Digital Speedup (x)", regOpsPerMs / writeOpsPerMs);
+#endif
+
+#if !defined(__AVR__) && !defined(ESP32) && !defined(ARDUINO_ARCH_RP2040)
+  CSV_BLANK("Direct Port (ops/ms)");
+  CSV_BLANK("Digital Speedup (x)");
 #endif
 }
 
@@ -1710,6 +1925,7 @@ void benchmarkAnalogIO() {
       if (value != 0) allZero = false;
     });
 
+#if !CSV_OUTPUT
     SERIAL_OUT.print(F_STR("analogRead() ("));
     SERIAL_OUT.print(readResult.totalOps);
     SERIAL_OUT.print(F_STR(" ops): "));
@@ -1724,6 +1940,8 @@ void benchmarkAnalogIO() {
     if (allZero) {
       SERIAL_OUT.println(F_STR("Warning: ADC all zero"));
     }
+#endif
+    CSV_ROW("analogRead (ops/ms)", readResult.opsPerMs);
   }
 
   // ------------------------------
@@ -1754,6 +1972,7 @@ void benchmarkAnalogIO() {
       pwmValue++;
     });
 
+#if !CSV_OUTPUT
     SERIAL_OUT.print(F_STR("PWM setup: "));
     SERIAL_OUT.print(setupTime);
     SERIAL_OUT.print(F_STR(" μs ("));
@@ -1767,6 +1986,8 @@ void benchmarkAnalogIO() {
     SERIAL_OUT.print(F_STR(" μs ("));
     SERIAL_OUT.print(updateResult.opsPerMs);
     SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+    CSV_ROW("analogWrite (ops/ms)", updateResult.opsPerMs);
 #else
     pinMode(analogOutPin, OUTPUT);
 
@@ -1776,6 +1997,7 @@ void benchmarkAnalogIO() {
       pwmValue++;
     });
 
+#if !CSV_OUTPUT
     SERIAL_OUT.print(F_STR("analogWrite() ("));
     SERIAL_OUT.print(writeResult.totalOps);
     SERIAL_OUT.print(F_STR(" ops): "));
@@ -1784,6 +2006,10 @@ void benchmarkAnalogIO() {
     SERIAL_OUT.print(writeResult.opsPerMs);
     SERIAL_OUT.println(F_STR(" ops/ms)"));
 #endif
+    CSV_ROW("analogWrite (ops/ms)", writeResult.opsPerMs);
+#endif
+  } else {
+    CSV_BLANK("analogWrite (ops/ms)");
   }
 }
 
@@ -1791,6 +2017,7 @@ void benchmarkFlash() {
   printHeader("STORAGE: Flash Information");
 
 #if defined(ESP32)
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Flash Size: "));
   SERIAL_OUT.print(ESP.getFlashChipSize() / 1024);
   SERIAL_OUT.println(F_STR(" KB"));
@@ -1806,7 +2033,10 @@ void benchmarkFlash() {
   SERIAL_OUT.print(F_STR("Free Sketch Space: "));
   SERIAL_OUT.print(ESP.getFreeSketchSpace() / 1024);
   SERIAL_OUT.println(F_STR(" KB"));
+#endif
+  CSV_ROW("Flash Size (KB)", ESP.getFlashChipSize() / 1024);
 #elif defined(ESP8266)
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Flash Size: "));
   SERIAL_OUT.print(ESP.getFlashChipSize() / 1024);
   SERIAL_OUT.println(F_STR(" KB"));
@@ -1822,18 +2052,24 @@ void benchmarkFlash() {
   SERIAL_OUT.print(F_STR("Free Sketch Space: "));
   SERIAL_OUT.print(ESP.getFreeSketchSpace() / 1024);
   SERIAL_OUT.println(F_STR(" KB"));
+#endif
+  CSV_ROW("Flash Size (KB)", ESP.getFlashChipSize() / 1024);
 #elif defined(ARDUINO_UNO_Q)
   // STM32U585 flash size register at 0x0BFA07A0 (value in KB)
   uint16_t flashSizeKB = *((volatile uint16_t *)0x0BFA07A0);
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Flash Size (register): "));
   SERIAL_OUT.print(flashSizeKB);
   SERIAL_OUT.println(F_STR(" KB"));
+#endif
+  CSV_ROW("Flash Size (KB)", flashSizeKB);
 
 #if defined(CONFIG_FLASH)
   // Also try Zephyr flash API for page geometry
   const struct device *flashDev = DEVICE_DT_GET(DT_CHOSEN(zephyr_flash_controller));
   if (device_is_ready(flashDev)) {
     const struct flash_parameters *fp = flash_get_parameters(flashDev);
+#if !CSV_OUTPUT
     if (fp) {
       SERIAL_OUT.print(F_STR("Write block size: "));
       SERIAL_OUT.print((unsigned long)fp->write_block_size);
@@ -1845,16 +2081,27 @@ void benchmarkFlash() {
     SERIAL_OUT.print(F_STR("Flash write-block: "));
     SERIAL_OUT.print((unsigned long)totalSize);
     SERIAL_OUT.println(F_STR(" bytes"));
+#else
+    (void)fp;
+#endif
   } else {
+#if !CSV_OUTPUT
     SERIAL_OUT.println(F_STR("Zephyr flash device not ready"));
+#endif
   }
 #endif
 
 #elif defined(BOARD_ARC32)
+#if !CSV_OUTPUT
   SERIAL_OUT.println(F_STR("Flash: 196 KB (Intel Curie — sketch region)"));
   SERIAL_OUT.println(F_STR("Total: 384 KB Flash (196 KB sketch + OTA region)"));
+#endif
+  CSV_ROW("Flash Size (KB)", 196);
 #else
+#if !CSV_OUTPUT
   SERIAL_OUT.println(F_STR("Flash info not available on this platform"));
+#endif
+  CSV_BLANK("Flash Size (KB)");
 #endif
 }
 
@@ -1880,8 +2127,10 @@ void benchmarkPWM() {
 
   pinMode(pwmPin, OUTPUT);
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Testing PWM on pin "));
   SERIAL_OUT.println(pwmPin);
+#endif
 
   // PWM update benchmark
 #if defined(ESP32)
@@ -1912,6 +2161,7 @@ void benchmarkPWM() {
   }
   unsigned long pwmTime = endBenchmark();
 
+#if !CSV_OUTPUT
 #if defined(ESP32)
   SERIAL_OUT.print(F_STR("LEDC duty update (10000 ops): "));
 #else
@@ -1921,6 +2171,8 @@ void benchmarkPWM() {
   SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(10000.0 / pwmTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("PWM analogWrite (ops/ms)", 10000.0 / pwmTime * 1000);
 
   // PWM ramp timing
   startBenchmark();
@@ -1939,16 +2191,22 @@ void benchmarkPWM() {
   }
   unsigned long rampTime = endBenchmark();
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("PWM ramp (100 cycles): "));
   SERIAL_OUT.print(rampTime);
   SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(25600.0 / rampTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("PWM ramp (ops/ms)", 25600.0 / rampTime * 1000);
 
   // Time per update
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Time per update: "));
   SERIAL_OUT.print(rampTime / 25600.0, 3);
   SERIAL_OUT.println(F_STR(" us"));
+#endif
+  CSV_ROW("PWM time per update (us)", rampTime / 25600.0);
 
 #if defined(ESP32)
 #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
@@ -1994,6 +2252,7 @@ void benchmarkInterruptLatency() {
   interruptPin = 2;
 #endif
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Jumper "));
   SERIAL_OUT.print(triggerPin);
   SERIAL_OUT.print(F_STR(" -> "));
@@ -2001,12 +2260,18 @@ void benchmarkInterruptLatency() {
 
   SERIAL_OUT.print(F_STR("Using pin "));
   SERIAL_OUT.println(interruptPin);
+#endif
 
   int interruptNumber = digitalPinToInterrupt(interruptPin);
   if (interruptNumber == NOT_AN_INTERRUPT) {
+#if !CSV_OUTPUT
     SERIAL_OUT.println(F_STR("Interrupt measurement skipped"));
     SERIAL_OUT.println(F_STR("(digitalPinToInterrupt returned NOT_AN_INTERRUPT)"));
     SERIAL_OUT.println(F_STR("Check board core/variant selection or pin choice logic."));
+#endif
+    CSV_BLANK("Interrupt digitalWrite latency (us)");
+    CSV_BLANK("Interrupt direct port latency (us)");
+    CSV_BLANK("Interrupt digitalWrite overhead (us)");
     return;
   }
 
@@ -2128,10 +2393,16 @@ void benchmarkInterruptLatency() {
 #undef DIRECT_RESET
 
   // ====== Report ======
+  float avgDW = 0.0f;
+  float avgDirect = 0.0f;
+
+#if !CSV_OUTPUT
   SERIAL_OUT.println();
+#endif
 
   if (successDW > 0) {
-    float avgDW = (float)totalLatencyDW / successDW;
+    avgDW = (float)totalLatencyDW / successDW;
+#if !CSV_OUTPUT
     SERIAL_OUT.print(F_STR("Pass 1 – digitalWrite trigger ("));
     SERIAL_OUT.print(successDW);
     SERIAL_OUT.print(F_STR("/"));
@@ -2140,12 +2411,18 @@ void benchmarkInterruptLatency() {
     SERIAL_OUT.print(F_STR("  Avg latency: "));
     SERIAL_OUT.print(avgDW, 2);
     SERIAL_OUT.println(F_STR(" us (includes digitalWrite overhead)"));
+#endif
+    CSV_ROW("Interrupt digitalWrite latency (us)", avgDW);
   } else {
+#if !CSV_OUTPUT
     SERIAL_OUT.println(F_STR("Pass 1 – digitalWrite trigger: FAILED"));
+#endif
+    CSV_BLANK("Interrupt digitalWrite latency (us)");
   }
 
   if (successDirect > 0) {
-    float avgDirect = (float)totalLatencyDirect / successDirect;
+    avgDirect = (float)totalLatencyDirect / successDirect;
+#if !CSV_OUTPUT
     SERIAL_OUT.print(F_STR("Pass 2 – direct port trigger ("));
     SERIAL_OUT.print(successDirect);
     SERIAL_OUT.print(F_STR("/"));
@@ -2154,23 +2431,33 @@ void benchmarkInterruptLatency() {
     SERIAL_OUT.print(F_STR("  Avg latency: "));
     SERIAL_OUT.print(avgDirect, 2);
     SERIAL_OUT.println(F_STR(" us (pure ISR entry latency)"));
+#endif
+    CSV_ROW("Interrupt direct port latency (us)", avgDirect);
   } else {
+#if !CSV_OUTPUT
     SERIAL_OUT.println(F_STR("Pass 2 – direct port trigger: FAILED"));
+#endif
+    CSV_BLANK("Interrupt direct port latency (us)");
   }
 
   if (successDW > 0 && successDirect > 0) {
-    float avgDW = (float)totalLatencyDW / successDW;
-    float avgDirect = (float)totalLatencyDirect / successDirect;
     float overhead = avgDW - avgDirect;
+#if !CSV_OUTPUT
     SERIAL_OUT.println();
     SERIAL_OUT.print(F_STR("digitalWrite overhead: ~"));
     SERIAL_OUT.print(overhead, 2);
     SERIAL_OUT.println(F_STR(" us"));
+#endif
+    CSV_ROW("Interrupt digitalWrite overhead (us)", overhead);
+  } else {
+    CSV_BLANK("Interrupt digitalWrite overhead (us)");
   }
 
   if (successDW == 0 && successDirect == 0) {
+#if !CSV_OUTPUT
     SERIAL_OUT.println(F_STR("Interrupt measurement failed"));
     SERIAL_OUT.println(F_STR("(Pin may not support interrupts)"));
+#endif
   }
 }
 
@@ -2178,9 +2465,11 @@ void benchmarkInterruptLatency() {
 void benchmarkSPI() {
   printHeader("I/O: SPI PERFORMANCE");
 
+#if !CSV_OUTPUT
   SERIAL_OUT.println(F_STR("Testing SPI transaction speed"));
   SERIAL_OUT.println(F_STR("(No loopback - measuring CPU overhead)"));
   SERIAL_OUT.println();
+#endif
 
   SPI.begin();
 
@@ -2203,6 +2492,9 @@ void benchmarkSPI() {
   int numSpeeds = 4;
 #endif
 
+  // Store per-speed throughputs for CSV output
+  float spiKBs[5] = { 0.0f, 0.0f, 0.0f, 0.0f, 0.0f };  // indexed 0..numSpeeds-1
+
   for (int s = 0; s < numSpeeds; s++) {
     SPISettings settings(speeds[s], MSBFIRST, SPI_MODE0);
 
@@ -2214,18 +2506,44 @@ void benchmarkSPI() {
       SPI.endTransaction();
     }
     unsigned long xferTime = endBenchmark();
+    spiKBs[s] = 1000.0f / xferTime * 1000.0f;
 
+#if !CSV_OUTPUT
     SERIAL_OUT.print(speedNames[s]);
     SERIAL_OUT.print(F_STR(": "));
     SERIAL_OUT.print(xferTime);
     SERIAL_OUT.print(F_STR(" us for 1000 bytes ("));
-    SERIAL_OUT.print(1000.0 / xferTime * 1000);
+    SERIAL_OUT.print(spiKBs[s]);
     SERIAL_OUT.println(F_STR(" KB/s effective)"));
+#endif
   }
 
+  // Emit CSV rows for the four canonical speeds (blank if not tested on this board)
+#if defined(ESP32) || defined(ARDUINO_ARCH_RP2040)
+  // speeds: 1, 4, 10, 20, [40 or 62.5] MHz — no 2 MHz or 8 MHz
+  CSV_ROW("SPI 1MHz (KB/s)", spiKBs[0]);
+  CSV_BLANK("SPI 2MHz (KB/s)");
+  CSV_ROW("SPI 4MHz (KB/s)", spiKBs[1]);
+  CSV_BLANK("SPI 8MHz (KB/s)");
+#elif defined(__AVR__)
+  // speeds: 1, 2, 4, 8 MHz
+  CSV_ROW("SPI 1MHz (KB/s)", spiKBs[0]);
+  CSV_ROW("SPI 2MHz (KB/s)", spiKBs[1]);
+  CSV_ROW("SPI 4MHz (KB/s)", spiKBs[2]);
+  CSV_ROW("SPI 8MHz (KB/s)", spiKBs[3]);
+#else
+  // speeds: 1, 4, 8, 16 MHz — no 2 MHz
+  CSV_ROW("SPI 1MHz (KB/s)", spiKBs[0]);
+  CSV_BLANK("SPI 2MHz (KB/s)");
+  CSV_ROW("SPI 4MHz (KB/s)", spiKBs[1]);
+  CSV_ROW("SPI 8MHz (KB/s)", spiKBs[2]);
+#endif
+
   // Bulk transfer benchmark
+#if !CSV_OUTPUT
   SERIAL_OUT.println();
   SERIAL_OUT.println(F_STR("Bulk transfer (256 bytes):"));
+#endif
 
   uint8_t txBuffer[256];
   for (int i = 0; i < 256; i++) txBuffer[i] = i;
@@ -2247,9 +2565,12 @@ void benchmarkSPI() {
   unsigned long bulkTime = endBenchmark();
 
   float throughput = (256.0 * 100) / (bulkTime / 1000000.0) / 1024;
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Throughput: "));
   SERIAL_OUT.print(throughput, 1);
   SERIAL_OUT.println(F_STR(" KB/s"));
+#endif
+  CSV_ROW("SPI Bulk 256B (KB/s)", throughput);
 
   SPI.end();
 }
@@ -2258,9 +2579,13 @@ void benchmarkSPI() {
 void printSystemInfo() {
   printHeader("SYSTEM INFORMATION");
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Board: "));
   SERIAL_OUT.println(BOARD_NAME);
+#endif
+  CSV_ROW("Board", BOARD_NAME);
 
+#if !CSV_OUTPUT
 #if defined(ESP32)
   SERIAL_OUT.print(F_STR("Chip Model: "));
   SERIAL_OUT.println(ESP.getChipModel());
@@ -2384,19 +2709,37 @@ void printSystemInfo() {
   SERIAL_OUT.println(F_STR("Unknown"));
 #endif
 #endif
+#endif  // !CSV_OUTPUT
 
 #if defined(ARDUINO_AVR_MULTIDUINO)
+#if !CSV_OUTPUT
   SERIAL_OUT.println(F_STR("Features: RTC (DS1307)"));
+#endif
 #endif
 
 #if defined(ARDUINO_AVR_YUN)
+#if !CSV_OUTPUT
   SERIAL_OUT.println(F_STR("Linux: AR9331 400MHz, 64MB RAM, 16MB Flash"));
   SERIAL_OUT.println(F_STR("WiFi + USB Host (OpenWrt)"));
 #endif
+#endif
 
-  // RAM Info
-  SERIAL_OUT.print(F_STR("Free RAM: "));
+#if defined(F_CPU)
+  CSV_ROW("CPU (MHz)", F_CPU / 1000000);
+#elif defined(CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC)
+  CSV_ROW("CPU (MHz)", CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC / 1000000);
+#else
+  CSV_BLANK("CPU (MHz)");
+#endif
+
+  // RAM Info — compute freeRamBytes for CSV output across all platforms
+  unsigned long freeRamBytes = 0;
+  const char *totalRamStr = "";
 #if defined(ESP32)
+  freeRamBytes = ESP.getFreeHeap();
+  totalRamStr = "Heap";
+#if !CSV_OUTPUT
+  SERIAL_OUT.print(F_STR("Free RAM: "));
   SERIAL_OUT.print(ESP.getFreeHeap() / 1024);
   SERIAL_OUT.println(F_STR(" KB"));
   SERIAL_OUT.print(F_STR("Total Heap: "));
@@ -2405,60 +2748,127 @@ void printSystemInfo() {
   SERIAL_OUT.print(F_STR("Min Free Heap: "));
   SERIAL_OUT.print(ESP.getMinFreeHeap() / 1024);
   SERIAL_OUT.println(F_STR(" KB"));
+#endif
 #elif defined(ESP8266)
+  freeRamBytes = ESP.getFreeHeap();
+  totalRamStr = "Heap";
+#if !CSV_OUTPUT
+  SERIAL_OUT.print(F_STR("Free RAM: "));
   SERIAL_OUT.print(ESP.getFreeHeap() / 1024);
   SERIAL_OUT.println(F_STR(" KB"));
+#endif
 #elif defined(__AVR__)
-  extern int __heap_start, *__brkval;
-  int v;
-  int freeRam = (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
-  SERIAL_OUT.print(freeRam);
-  SERIAL_OUT.println(F_STR(" bytes"));
+  {
+    extern int __heap_start, *__brkval;
+    int v;
+    int fr = (int)&v - (__brkval == 0 ? (int)&__heap_start : (int)__brkval);
+    freeRamBytes = (unsigned long)fr;
+#if defined(__AVR_ATmega328P__)
+    totalRamStr = "2048";
+#elif defined(__AVR_ATmega2560__)
+    totalRamStr = "8192";
+#elif defined(__AVR_ATmega32U4__)
+    totalRamStr = "2560";
+#else
+    totalRamStr = "AVR";
+#endif
+#if !CSV_OUTPUT
+    SERIAL_OUT.print(F_STR("Free RAM: "));
+    SERIAL_OUT.print(fr);
+    SERIAL_OUT.println(F_STR(" bytes"));
 // Show total RAM for common AVR boards
 #if defined(__AVR_ATmega328P__)
-  SERIAL_OUT.println(F_STR("Total RAM: 2 KB"));
+    SERIAL_OUT.println(F_STR("Total RAM: 2 KB"));
 #elif defined(__AVR_ATmega2560__)
-  SERIAL_OUT.println(F_STR("Total RAM: 8 KB"));
+    SERIAL_OUT.println(F_STR("Total RAM: 8 KB"));
 #elif defined(__AVR_ATmega32U4__)
-  SERIAL_OUT.println(F_STR("Total RAM: 2.5 KB"));
+    SERIAL_OUT.println(F_STR("Total RAM: 2.5 KB"));
 #endif
+#endif
+  }
 #elif defined(ARDUINO_SAM_DUE)
-  extern char _end;
-  extern "C" char *sbrk(int i);
-  char *ramstart = (char *)0x20070000;
-  char *ramend = (char *)0x20088000;
-  int freeRam = ramend - sbrk(0);
-  SERIAL_OUT.print(freeRam / 1024);
-  SERIAL_OUT.println(F_STR(" KB"));
-  SERIAL_OUT.println(F_STR("Total RAM: 96 KB"));
+  {
+    extern "C" char *sbrk(int i);
+    char *ramend2 = (char *)0x20088000;
+    int fr = (int)(ramend2 - sbrk(0));
+    freeRamBytes = (unsigned long)fr;
+    totalRamStr = "98304";
+#if !CSV_OUTPUT
+    SERIAL_OUT.print(F_STR("Free RAM: "));
+    SERIAL_OUT.print(fr / 1024);
+    SERIAL_OUT.println(F_STR(" KB"));
+    SERIAL_OUT.println(F_STR("Total RAM: 96 KB"));
+#endif
+  }
 #elif defined(ARDUINO_ARCH_RP2040)
   // RP2040 has 264KB RAM
+  freeRamBytes = 0;
+  totalRamStr = "270336";
+#if !CSV_OUTPUT
+  SERIAL_OUT.print(F_STR("Free RAM: "));
   SERIAL_OUT.println(F_STR("~264 KB (RP2040)"));
+#endif
 #elif defined(BOARD_NRF52)
+  freeRamBytes = 0;
+  totalRamStr = "262144";
+#if !CSV_OUTPUT
+  SERIAL_OUT.print(F_STR("Free RAM: "));
   SERIAL_OUT.println(F_STR("~256 KB (nRF52840)"));
+#endif
 #elif defined(ARDUINO_UNOR4_WIFI) || defined(ARDUINO_UNOR4_MINIMA)
+  freeRamBytes = 0;
+  totalRamStr = "32768";
+#if !CSV_OUTPUT
+  SERIAL_OUT.print(F_STR("Free RAM: "));
   SERIAL_OUT.println(F_STR("32 KB (RA4M1)"));
+#endif
 #elif defined(BOARD_ARC32)
+  freeRamBytes = 0;
+  totalRamStr = "24576";
+#if !CSV_OUTPUT
+  SERIAL_OUT.print(F_STR("Free RAM: "));
   SERIAL_OUT.println(F_STR("24 KB (ARC sketch SRAM)"));
   SERIAL_OUT.println(F_STR("Total RAM: 80 KB (24 KB ARC + 8 KB ARC DRAM + 48 KB shared)"));
+#endif
 #elif defined(TEENSYDUINO) && defined(__IMXRT1062__)
   // Teensy 4.0/4.1: measure free RAM as stack-to-heap gap
   {
     extern char *__brkval;
     char stackTop;
-    uint32_t freeBytes = (uint32_t)&stackTop - (uint32_t)__brkval;
-    SERIAL_OUT.print(freeBytes / 1024);
+    uint32_t freeBytes2 = (uint32_t)&stackTop - (uint32_t)__brkval;
+    freeRamBytes = freeBytes2;
+    totalRamStr = "1048576";
+#if !CSV_OUTPUT
+    SERIAL_OUT.print(F_STR("Free RAM: "));
+    SERIAL_OUT.print(freeBytes2 / 1024);
     SERIAL_OUT.println(F_STR(" KB"));
+    SERIAL_OUT.println(F_STR("Total RAM: 1024 KB (512 KB DTCM + 512 KB ITCM)"));
+#endif
   }
-  SERIAL_OUT.println(F_STR("Total RAM: 1024 KB (512 KB DTCM + 512 KB ITCM)"));
 #elif defined(BOARD_SRAM_KB)
-  SERIAL_OUT.print(F_STR("Total RAM: "));
+  freeRamBytes = 0;
+  totalRamStr = "";  // will emit separately
+#if !CSV_OUTPUT
+  SERIAL_OUT.print(F_STR("Free RAM: Total RAM: "));
   SERIAL_OUT.print(BOARD_SRAM_KB);
   SERIAL_OUT.println(F_STR(" KB"));
+#endif
 #else
+  freeRamBytes = 0;
+  totalRamStr = "Unknown";
+#if !CSV_OUTPUT
+  SERIAL_OUT.print(F_STR("Free RAM: "));
   SERIAL_OUT.println(F_STR("Unknown"));
 #endif
+#endif
+  CSV_ROW("Free RAM (bytes)", freeRamBytes);
+#if defined(BOARD_SRAM_KB)
+  CSV_ROW("Total RAM", (long)(BOARD_SRAM_KB) * 1024);
+#else
+  CSV_ROW("Total RAM", totalRamStr);
+#endif
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Compile Date: "));
   SERIAL_OUT.print(__DATE__);
   SERIAL_OUT.print(F_STR(" "));
@@ -2466,6 +2876,8 @@ void printSystemInfo() {
 
   SERIAL_OUT.print(F_STR("Benchmark Version: "));
   SERIAL_OUT.println(F_STR(BENCHMARK_VERSION));
+#endif
+  CSV_ROW("Benchmark Version", BENCHMARK_VERSION);
 }
 
 // ==================== MAIN FUNCTIONS ====================
@@ -2492,6 +2904,9 @@ void setup() {
 
   calibrateBenchmarkTime();
 
+#if CSV_OUTPUT
+  SERIAL_OUT.println(F_STR("Part,1"));
+#else
   SERIAL_OUT.println();
   SERIAL_OUT.println();
   printDivider();
@@ -2499,6 +2914,7 @@ void setup() {
   SERIAL_OUT.println(F_STR("  Part 1: Core Performance"));
   printDivider();
   SERIAL_OUT.println();
+#endif
 
   // System info
   printSystemInfo();
@@ -2512,6 +2928,11 @@ void setup() {
   benchmarkSRAM();
 #if defined(EEPROM_h) || defined(ESP32) || defined(ESP8266)
   benchmarkEEPROM();
+#else
+  CSV_BLANK("EEPROM Size (bytes)");
+  CSV_BLANK("EEPROM RAM Write (ops/ms)");
+  CSV_BLANK("EEPROM Write (ops/ms)");
+  CSV_BLANK("EEPROM Read (ops/ms)");
 #endif
 #ifdef HAS_PSRAM
   benchmarkPSRAM();
@@ -2531,12 +2952,14 @@ void setup() {
 
   // Final summary
   printHeader("PART 1 BENCHMARK COMPLETE!");
+#if !CSV_OUTPUT
   SERIAL_OUT.println(F_STR("Core benchmarks finished."));
   SERIAL_OUT.println(F_STR("Upload Part 2 for remaining benchmarks."));
   SERIAL_OUT.println();
   SERIAL_OUT.println(F_STR("To run again, press the RESET button or"));
   SERIAL_OUT.println(F_STR("re-upload the sketch."));
   printDivider();
+#endif
 }
 
 void loop() {

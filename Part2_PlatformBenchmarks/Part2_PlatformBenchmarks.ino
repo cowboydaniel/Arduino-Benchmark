@@ -495,6 +495,17 @@
 // Serial baud rate
 #define SERIAL_BAUD 115200
 
+// ==================== CSV OUTPUT MACROS ====================
+// CSV_ROW(label, value) — emits "label,value\n" in CSV mode; compiles away otherwise
+// CSV_BLANK(label)      — emits "label,\n" in CSV mode (metric N/A on this board)
+#if CSV_OUTPUT
+#define CSV_ROW(label, value) do { SERIAL_OUT.print(F_STR(label)); SERIAL_OUT.print(F_STR(",")); SERIAL_OUT.println(value); } while(0)
+#define CSV_BLANK(label)      SERIAL_OUT.println(F_STR(label ","))
+#else
+#define CSV_ROW(label, value) do {} while(0)
+#define CSV_BLANK(label)      do {} while(0)
+#endif
+
 // ==================== GLOBAL VARIABLES ====================
 uint8_t testBuffer[256];
 unsigned long gMinBenchUs = 20000;
@@ -508,14 +519,20 @@ RTC_DS1307 rtc;
 // ==================== HELPER FUNCTIONS ====================
 
 void printDivider() {
+#if !CSV_OUTPUT
   SERIAL_OUT.println(F_STR("========================================"));
+#endif
 }
 
 void printHeader(const char *title) {
+#if !CSV_OUTPUT
   SERIAL_OUT.println();
   printDivider();
   SERIAL_OUT.println(title);
   printDivider();
+#else
+  (void)title;
+#endif
 }
 
 unsigned long benchmarkStart;
@@ -771,6 +788,7 @@ void benchmarkCPUStress() {
   unsigned long stressDuration = millis() - stressStart;
 
   SERIAL_OUT.println();
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Done: "));
   SERIAL_OUT.print(iterations);
   SERIAL_OUT.print(F_STR(" iters in "));
@@ -780,6 +798,8 @@ void benchmarkCPUStress() {
   SERIAL_OUT.print(F_STR("Rate: "));
   SERIAL_OUT.print((float)iterations / stressDuration);
   SERIAL_OUT.println(F_STR(" iters/ms"));
+#endif
+  CSV_ROW("Stress Rate (iters/ms)", (float)iterations / stressDuration);
 
   // Final temperature reading
   if (hasTempSensor) {
@@ -804,6 +824,7 @@ void benchmarkCPUStress() {
     endTemp = readAVRTemperature();
 #endif
 
+#if !CSV_OUTPUT
     SERIAL_OUT.println();
     SERIAL_OUT.print(F_STR("Final Temperature: "));
     SERIAL_OUT.print(endTemp);
@@ -820,12 +841,17 @@ void benchmarkCPUStress() {
     } else {
       SERIAL_OUT.println(F_STR("Good thermal performance"));
     }
+#endif
+    CSV_ROW("Temp Gain (C)", endTemp - startTemp);
+  } else {
+    CSV_BLANK("Temp Gain (C)");
   }
 }
 
 void benchmarkSerial() {
   printHeader("I/O: SERIAL COMMUNICATION");
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Baud rate: "));
   SERIAL_OUT.println(SERIAL_BAUD);
 
@@ -851,6 +877,22 @@ void benchmarkSerial() {
   SERIAL_OUT.println(F_STR("unknown"));
 #endif
   SERIAL_OUT.println();
+#endif
+  CSV_ROW("Serial Baud Rate", SERIAL_BAUD);
+#if defined(SERIAL_TX_BUFFER_SIZE)
+  CSV_ROW("Serial TX Buffer (bytes)", SERIAL_TX_BUFFER_SIZE);
+#elif defined(SERIAL_BUFFER_SIZE)
+  CSV_ROW("Serial TX Buffer (bytes)", SERIAL_BUFFER_SIZE);
+#else
+  CSV_BLANK("Serial TX Buffer (bytes)");
+#endif
+#if defined(SERIAL_RX_BUFFER_SIZE)
+  CSV_ROW("Serial RX Buffer (bytes)", SERIAL_RX_BUFFER_SIZE);
+#elif defined(SERIAL_BUFFER_SIZE)
+  CSV_ROW("Serial RX Buffer (bytes)", SERIAL_BUFFER_SIZE);
+#else
+  CSV_BLANK("Serial RX Buffer (bytes)");
+#endif
 
   // Calculate expected bytes
   int expectedBytes = 0;
@@ -885,6 +927,7 @@ void benchmarkSerial() {
   // Each byte = 10 bits = 86.8 μs
   unsigned long theoreticalWireTime = (unsigned long)(expectedBytes * 10 * 1000000.0 / SERIAL_BAUD);
 
+#if !CSV_OUTPUT
   SERIAL_OUT.println();
   SERIAL_OUT.print(F_STR("Enqueue ("));
   SERIAL_OUT.print(expectedBytes);
@@ -916,6 +959,10 @@ void benchmarkSerial() {
   } else {
     SERIAL_OUT.println(F_STR("CPU-bound)"));
   }
+#endif
+  CSV_ROW("Serial Enqueue (B/ms)", enqueueRate);
+  CSV_ROW("Serial Wire Time (us)", theoreticalWireTime);
+  CSV_ROW("Serial Throughput (B/ms)", expectedBytes * 1000.0 / theoreticalWireTime);
 }
 // ==================== BOARD-SPECIFIC BENCHMARKS ====================
 
@@ -992,17 +1039,23 @@ void benchmarkLEDMatrix() {
   SERIAL_OUT.print(blinkTime);
   SERIAL_OUT.println(F_STR(" ms"));
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Pattern switching (100 frames): "));
   SERIAL_OUT.print(patternTime);
   SERIAL_OUT.print(F_STR(" μs ("));
   SERIAL_OUT.print(100.0 / patternTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("LED Matrix Pattern (ops/ms)", 100.0 / patternTime * 1000);
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Bitmap rendering (50 frames): "));
   SERIAL_OUT.print(bitmapTime);
   SERIAL_OUT.print(F_STR(" μs ("));
   SERIAL_OUT.print(50.0 / bitmapTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("LED Matrix Bitmap (ops/ms)", 50.0 / bitmapTime * 1000);
 }
 #endif
 
@@ -1060,7 +1113,9 @@ void benchmarkWiFi() {
 
   // Scan networks
   SERIAL_OUT.print(F_STR("Scanning networks... "));
+  unsigned long wifiScanStart = millis();
   int n = WiFi.scanNetworks();
+  unsigned long wifiScanMs = millis() - wifiScanStart;
   SERIAL_OUT.print(n);
   SERIAL_OUT.println(F_STR(" networks found"));
 
@@ -1088,6 +1143,9 @@ void benchmarkWiFi() {
   // WiFiNINA/WiFi101 - end() to clean up
   WiFi.end();
 #endif
+  CSV_ROW("WiFi Scan (ms)", wifiScanMs);
+  CSV_BLANK("WiFi Connect (ms)");
+  CSV_BLANK("WiFi TX (KB/s)");
 }
 #endif
 
@@ -1159,6 +1217,8 @@ void benchmarkBLE() {
 #else
   SERIAL_OUT.println(F_STR("BLE hardware detected but scan not implemented"));
 #endif
+  CSV_BLANK("BLE Advertise Start (ms)");
+  CSV_BLANK("BLE Scan Found (ms)");
 }
 #endif
 // ==================== ADVANCED MATH BENCHMARKS ====================
@@ -1171,6 +1231,15 @@ void benchmarkAdvancedMath() {
 #if defined(ARDUINO_UNO_Q) || defined(ARDUINO_UNO_Q_MCU)
   // Uno Q (Zephyr) lacks standard libm; skip transcendentals
   SERIAL_OUT.println(F_STR("Skipped (no libm on this platform)"));
+  CSV_BLANK("exp() (ops/ms)");
+  CSV_BLANK("log() (ops/ms)");
+  CSV_BLANK("log10() (ops/ms)");
+  CSV_BLANK("pow() (ops/ms)");
+  CSV_BLANK("atan2() (ops/ms)");
+  CSV_BLANK("asin() (ops/ms)");
+  CSV_BLANK("acos() (ops/ms)");
+  CSV_BLANK("tan() (ops/ms)");
+  CSV_BLANK("fmod() (ops/ms)");
   return;
 #endif
 
@@ -1243,6 +1312,7 @@ void benchmarkAdvancedMath() {
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println(checksum);
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("exp() (100 ops): "));
   SERIAL_OUT.print(expTime);
   SERIAL_OUT.print(F_STR(" us ("));
@@ -1296,6 +1366,16 @@ void benchmarkAdvancedMath() {
   SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(1000.0 / fmodTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("exp() (ops/ms)", 100.0 / expTime * 1000);
+  CSV_ROW("log() (ops/ms)", 100.0 / logTime * 1000);
+  CSV_ROW("log10() (ops/ms)", 100.0 / log10Time * 1000);
+  CSV_ROW("pow() (ops/ms)", 100.0 / powTime * 1000);
+  CSV_ROW("atan2() (ops/ms)", 100.0 / atan2Time * 1000);
+  CSV_ROW("asin() (ops/ms)", 100.0 / asinTime * 1000);
+  CSV_ROW("acos() (ops/ms)", 100.0 / acosTime * 1000);
+  CSV_ROW("tan() (ops/ms)", 100.0 / tanTime * 1000);
+  CSV_ROW("fmod() (ops/ms)", 1000.0 / fmodTime * 1000);
 }
 #if defined(ARDUINO_ARCH_RP2040)
 void benchmarkSHA1() {
@@ -1333,6 +1413,7 @@ void benchmarkSHA1() {
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println(checksum);
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("SHA1 String ("));
   SERIAL_OUT.print(stringResult.totalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -1348,6 +1429,8 @@ void benchmarkSHA1() {
   SERIAL_OUT.print(F_STR(" μs ("));
   SERIAL_OUT.print(bufferResult.opsPerMs);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("SHA1 (ops/ms)", bufferResult.opsPerMs);
 }
 #endif
 
@@ -1661,6 +1744,7 @@ void benchmarkESP32Crypto() {
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println(checksum);
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("HEX encode ("));
   SERIAL_OUT.print(hexResult.totalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -1700,8 +1784,12 @@ void benchmarkESP32Crypto() {
   SERIAL_OUT.print(F_STR(" μs ("));
   SERIAL_OUT.print(sha512Result.opsPerMs);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("SHA1 (ops/ms)", sha1Result.opsPerMs);
+  CSV_ROW("MD5 (ops/ms)", md5Result.opsPerMs);
+  CSV_ROW("SHA256 (ops/ms)", sha256Result.opsPerMs);
 
-#if defined(MBEDTLS_SHA3_C)
+#if !CSV_OUTPUT && defined(MBEDTLS_SHA3_C)
   SERIAL_OUT.print(F_STR("SHA3-256 ("));
   SERIAL_OUT.print(sha3Result.totalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -1711,6 +1799,7 @@ void benchmarkESP32Crypto() {
   SERIAL_OUT.println(F_STR(" ops/ms)"));
 #endif
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("PBKDF2-HMAC-SHA256 ("));
   SERIAL_OUT.print(pbkdf2Result.totalOps);
   SERIAL_OUT.print(F_STR(" ops): "));
@@ -1720,6 +1809,7 @@ void benchmarkESP32Crypto() {
   SERIAL_OUT.println(F_STR(" ops/ms)"));
   SERIAL_OUT.print(F_STR("  Iterations per op: "));
   SERIAL_OUT.println(pbkdf2Iterations);
+#endif
 }
 #endif
 // ==================== TIMING PRECISION BENCHMARKS ====================
@@ -1891,9 +1981,12 @@ void benchmarkDelayTiming() {
   // Measure call overhead via delay(0)
   long delayOverhead = measureDelayMs(0);
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("delay(0) call overhead: "));
   SERIAL_OUT.print(delayOverhead / 1000.0f, 3);
   SERIAL_OUT.println(F_STR(" ms"));
+#endif
+  CSV_ROW("delay(0) overhead (us)", delayOverhead);
 
   // Measure delay(1..50), subtract the call overhead
   long delayErrorSum = 0;
@@ -1914,20 +2007,25 @@ void benchmarkDelayTiming() {
 #endif
   }
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("delay(1..50) avg deviation: "));
   SERIAL_OUT.print(delayErrorSum / (float)delaySteps / 1000.0f, 3);
   SERIAL_OUT.println(F_STR(" ms"));
   SERIAL_OUT.print(F_STR("delay(1..50) max deviation: "));
   SERIAL_OUT.print(delayMaxError / 1000.0f, 3);
   SERIAL_OUT.println(F_STR(" ms"));
+#endif
+  CSV_ROW("delay() avg deviation (us)", delayErrorSum / (float)delaySteps);
 
   // --- delayMicroseconds() ---
   // Measure call overhead via delayMicroseconds(0)
   long dusOverhead = measureDelayUs(0);
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("delayMicroseconds(0) call overhead: "));
   SERIAL_OUT.print(dusOverhead);
   SERIAL_OUT.println(F_STR(" us"));
+#endif
 
   // Measure delayMicroseconds(1..50), subtract the call overhead
   long dusErrorSum = 0;
@@ -1947,12 +2045,15 @@ void benchmarkDelayTiming() {
 #endif
   }
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("delayMicroseconds(1..50) avg deviation: "));
   SERIAL_OUT.print(dusErrorSum / (float)dusSteps, 1);
   SERIAL_OUT.println(F_STR(" us"));
   SERIAL_OUT.print(F_STR("delayMicroseconds(1..50) max deviation: "));
   SERIAL_OUT.print(dusMaxError);
   SERIAL_OUT.println(F_STR(" us"));
+#endif
+  CSV_ROW("delayMicroseconds() avg deviation (us)", dusErrorSum / (float)dusSteps);
 }
 
 // ==================== STACK DEPTH BENCHMARK ====================
@@ -2115,6 +2216,7 @@ void benchmarkStackDepth() {
   size_t frameBytes  = (size_t)probeFrameBytes;
   size_t totalUsed   = (size_t)probeTotalUsed;
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Max safe depth: "));
   SERIAL_OUT.println(maxDepth);
   SERIAL_OUT.print(F_STR("Per-frame cost: "));
@@ -2125,6 +2227,7 @@ void benchmarkStackDepth() {
   SERIAL_OUT.print(F_STR(" / "));
   SERIAL_OUT.print((unsigned long)stackBudget);
   SERIAL_OUT.println(F_STR(" bytes"));
+#endif
 
   if (maxDepth < 2) {
     SERIAL_OUT.println(F_STR("Stack too small to time - skipping"));
@@ -2164,6 +2267,7 @@ void benchmarkStackDepth() {
   }
 
   float medianUs = usMedian.median();
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Recursion ("));
   SERIAL_OUT.print(timedDepth);
   SERIAL_OUT.print(F_STR(" deep): "));
@@ -2176,6 +2280,8 @@ void benchmarkStackDepth() {
     SERIAL_OUT.print(usPerLevel, 2);
     SERIAL_OUT.println(F_STR(" us"));
   }
+#endif
+  CSV_ROW("Stack Depth (bytes)", (unsigned long)totalUsed);
 }
 // ==================== MULTI-CORE BENCHMARKS ====================
 
@@ -2263,6 +2369,8 @@ void benchmarkMultiCore() {
     SERIAL_OUT.print(F_STR("Iterations in 1 second: "));
     SERIAL_OUT.println(count);
     SERIAL_OUT.println(F_STR("Note: This variant has only one core"));
+    CSV_ROW("Core 0 (iters/ms)", count / 1000.0f);
+    CSV_BLANK("Core 1 (iters/ms)");
   } else {
     SERIAL_OUT.println(F_STR("ESP32 Dual-Core Test"));
 
@@ -2294,6 +2402,7 @@ void benchmarkMultiCore() {
     delay(1000);
     testRunning = false;
 
+#if !CSV_OUTPUT
     SERIAL_OUT.print(F_STR("Core 0 iterations: "));
     SERIAL_OUT.println(core0Count);
     SERIAL_OUT.print(F_STR("Core 1 iterations: "));
@@ -2304,6 +2413,9 @@ void benchmarkMultiCore() {
     float balance = (float)min(core0Count, core1Count) / (float)max(core0Count, core1Count) * 100.0f;
     SERIAL_OUT.print(balance);
     SERIAL_OUT.println(F_STR("%"));
+#endif
+    CSV_ROW("Core 0 (iters/ms)", core0Count / 1000.0f);
+    CSV_ROW("Core 1 (iters/ms)", core1Count / 1000.0f);
 
     // Clean up
     vTaskDelete(Task1);
@@ -2342,6 +2454,7 @@ void benchmarkMultiCore() {
   unsigned long dominant = max(rp2040Core0Count, rp2040Core1Count);
   float scaling = dominant > 0 ? (float)total / (float)dominant : 0.0f;
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Core 0 iterations: "));
   SERIAL_OUT.println(rp2040Core0Count);
   SERIAL_OUT.print(F_STR("Core 1 iterations: "));
@@ -2351,6 +2464,9 @@ void benchmarkMultiCore() {
   SERIAL_OUT.print(F_STR("Scaling efficiency: "));
   SERIAL_OUT.print(scaling, 2);
   SERIAL_OUT.println(F_STR("x"));
+#endif
+  CSV_ROW("Core 0 (iters/ms)", rp2040Core0Count / 1000.0f);
+  CSV_ROW("Core 1 (iters/ms)", rp2040Core1Count / 1000.0f);
 #else
   SERIAL_OUT.println(F_STR("Single core performance:"));
 
@@ -2363,6 +2479,8 @@ void benchmarkMultiCore() {
   SERIAL_OUT.print(F_STR("Iterations in 1 second: "));
   SERIAL_OUT.println(count);
   SERIAL_OUT.println(F_STR("Note: Full dual-core requires multicore library"));
+  CSV_ROW("Core 0 (iters/ms)", count / 1000.0f);
+  CSV_BLANK("Core 1 (iters/ms)");
 #endif
 #endif
 }
@@ -2456,11 +2574,15 @@ void benchmarkHardwareRNG() {
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println(rngSum);
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Hardware RNG (1000 values): "));
   SERIAL_OUT.print(rngTime);
   SERIAL_OUT.print(F_STR(" μs ("));
   SERIAL_OUT.print(1000.0f / rngTime * 1000, 2);
   SERIAL_OUT.println(F_STR(" values/ms)"));
+#endif
+  // 1000 values * 4 bytes each = 4000 bytes; convert to bytes/sec
+  CSV_ROW("RNG (bytes/sec)", (rngTime > 0) ? (4000000.0f / rngTime) : 0.0f);
 
   // Test randomness distribution
   uint32_t bins[4] = { 0, 0, 0, 0 };
@@ -2568,6 +2690,7 @@ void benchmarkSoftwareATSE() {
     SERIAL_OUT.print(F_STR("  (ms): "));
     SERIAL_OUT.println(writeTime / 1000.0f, 3);
 
+#if !CSV_OUTPUT
     SERIAL_OUT.print(F_STR("  Write speed: "));
     if (writeTime > 0) {
       SERIAL_OUT.print(256.0f * 1000000.0f / writeTime, 2);
@@ -2575,6 +2698,8 @@ void benchmarkSoftwareATSE() {
     } else {
       SERIAL_OUT.println(F_STR("N/A (too fast)"));
     }
+#endif
+    CSV_ROW("Secure Storage Write (bytes/sec)", writeTime > 0 ? 256.0f * 1000000.0f / writeTime : 0.0f);
   } else {
     SERIAL_OUT.println(F_STR("Config write - not supported"));
   }
@@ -2662,9 +2787,12 @@ void benchmarkSoftwareATSE() {
       unsigned long totalBytes = successfulReads * RNG_BUFFER_SIZE;
       float bytesPerSec = (totalBytes * 1000000.0f) / rngTime;
 
+#if !CSV_OUTPUT
       SERIAL_OUT.print(F_STR("Secure RNG throughput: "));
       SERIAL_OUT.print(bytesPerSec, 2);
       SERIAL_OUT.println(F_STR(" bytes/sec"));
+#endif
+      CSV_ROW("RNG (bytes/sec)", bytesPerSec);
 
       SERIAL_OUT.print(F_STR("  Total bytes generated: "));
       SERIAL_OUT.println(totalBytes);
@@ -3040,9 +3168,12 @@ void benchmarkYunBridge() {
   SERIAL_OUT.print(F_STR("  Total time: "));
   SERIAL_OUT.print(throughputTime / 1000.0f, 2);
   SERIAL_OUT.println(F_STR(" ms"));
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("  Throughput: "));
   SERIAL_OUT.print(bytesPerSecond, 1);
   SERIAL_OUT.println(F_STR(" bytes/sec"));
+#endif
+  CSV_ROW("Yun Bridge Throughput (bytes/sec)", bytesPerSecond);
 
   SERIAL_OUT.println();
   SERIAL_OUT.println(F_STR("Yun Bridge killer test complete."));
@@ -3245,11 +3376,14 @@ void benchmarkESP32DAC() {
   }
   unsigned long dacTime = endBenchmark();
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("dacWrite() (10000 ops): "));
   SERIAL_OUT.print(dacTime);
   SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(10000.0 / dacTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("DAC (ops/ms)", 10000.0 / dacTime * 1000);
 
   // DAC ramp test - measure update rate
   startBenchmark();
@@ -3260,11 +3394,14 @@ void benchmarkESP32DAC() {
   }
   unsigned long rampTime = endBenchmark();
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("DAC ramp (100 cycles, 25600 writes): "));
   SERIAL_OUT.print(rampTime);
   SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(25600.0 / rampTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("DAC Ramp (ops/ms)", 25600.0 / rampTime * 1000);
 
   // Calculate effective sample rate
   float sampleRate = 25600.0 / (rampTime / 1000000.0);
@@ -3282,6 +3419,7 @@ void benchmarkESP32Touch() {
 
 #if defined(CONFIG_IDF_TARGET_ESP32C6) || defined(CONFIG_IDF_TARGET_ESP32C5) || defined(CONFIG_IDF_TARGET_ESP32H2) || defined(CONFIG_IDF_TARGET_ESP32C3)
   SERIAL_OUT.println(F_STR("Touch sensors not available on this ESP32 variant"));
+  CSV_BLANK("Touch (values/ms)");
   return;
 #else
   // Touch pins vary by ESP32 variant
@@ -3308,11 +3446,14 @@ void benchmarkESP32Touch() {
   }
   unsigned long touchTime = endBenchmark();
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("touchRead() (1000 ops): "));
   SERIAL_OUT.print(touchTime);
   SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(1000.0 / touchTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("Touch (values/ms)", 1000.0 / touchTime * 1000);
 
   SERIAL_OUT.print(F_STR("Average touch value: "));
   SERIAL_OUT.println(touchSum / 1000);
@@ -3444,11 +3585,14 @@ void benchmarkESP32AES() {
   }
   unsigned long encTime = endBenchmark();
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("AES-128 Encrypt (1000 blocks): "));
   SERIAL_OUT.print(encTime);
   SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(1000.0 / encTime * 1000);
   SERIAL_OUT.println(F_STR(" blocks/ms)"));
+#endif
+  CSV_ROW("AES (ops/ms)", 1000.0 / encTime * 1000);
 
   // AES-128 Decryption benchmark
   mbedtls_aes_setkey_dec(&aes, key, 128);
@@ -3460,16 +3604,20 @@ void benchmarkESP32AES() {
   }
   unsigned long decTime = endBenchmark();
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("AES-128 Decrypt (1000 blocks): "));
   SERIAL_OUT.print(decTime);
   SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(1000.0 / decTime * 1000);
   SERIAL_OUT.println(F_STR(" blocks/ms)"));
+#endif
+  CSV_ROW("AES Decrypt (ops/ms)", 1000.0 / decTime * 1000);
 
   // Throughput calculation (16 bytes per block)
   float encThroughput = (1000 * 16) / (encTime / 1000000.0) / 1024;
   float decThroughput = (1000 * 16) / (decTime / 1000000.0) / 1024;
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Encrypt throughput: "));
   SERIAL_OUT.print(encThroughput, 1);
   SERIAL_OUT.println(F_STR(" KB/s"));
@@ -3477,6 +3625,9 @@ void benchmarkESP32AES() {
   SERIAL_OUT.print(F_STR("Decrypt throughput: "));
   SERIAL_OUT.print(decThroughput, 1);
   SERIAL_OUT.println(F_STR(" KB/s"));
+#endif
+  CSV_ROW("AES Encrypt (KB/s)", encThroughput);
+  CSV_ROW("AES Decrypt (KB/s)", decThroughput);
 
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println(checksum);
@@ -3516,6 +3667,7 @@ void benchmarkRP2040DMA() {
   }
   unsigned long cpuTime = endBenchmark();
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("CPU memcpy ("));
   SERIAL_OUT.print(bufSize * 100);
   SERIAL_OUT.print(F_STR(" bytes): "));
@@ -3523,6 +3675,8 @@ void benchmarkRP2040DMA() {
   SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print((bufSize * 100.0) / cpuTime);
   SERIAL_OUT.println(F_STR(" MB/s)"));
+#endif
+  CSV_ROW("CPU memcpy (MB/s)", (bufSize * 100.0) / cpuTime);
 
   // DMA benchmark
   int dma_chan = dma_claim_unused_channel(true);
@@ -3539,6 +3693,7 @@ void benchmarkRP2040DMA() {
   }
   unsigned long dmaTime = endBenchmark();
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("DMA transfer ("));
   SERIAL_OUT.print(bufSize * 100);
   SERIAL_OUT.print(F_STR(" bytes): "));
@@ -3551,6 +3706,8 @@ void benchmarkRP2040DMA() {
   SERIAL_OUT.print(F_STR("DMA speedup: "));
   SERIAL_OUT.print((float)cpuTime / dmaTime, 2);
   SERIAL_OUT.println(F_STR("x"));
+#endif
+  CSV_ROW("DMA (MB/s)", (bufSize * 100.0) / dmaTime);
 
   // Verify correctness
   bool match = true;
@@ -3618,6 +3775,7 @@ void benchmarkRP2040PIO() {
 
   float regFreq = 100000.0 / (regTime / 1000000.0) / 1000000;
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("  Direct register toggle: "));
   SERIAL_OUT.print(regFreq, 2);
   SERIAL_OUT.println(F_STR(" MHz"));
@@ -3626,6 +3784,9 @@ void benchmarkRP2040PIO() {
   SERIAL_OUT.print(F_STR("PIO speedup potential: "));
   SERIAL_OUT.print(maxPioFreq / 2 / (regFreq), 0);
   SERIAL_OUT.println(F_STR("x over direct register"));
+#endif
+  // regTime is for 100000 toggles; convert to cycles/ms
+  CSV_ROW("PIO (cycles/ms)", 100000.0f / (regTime / 1000.0f));
 }
 
 // RP2040 Interpolator Benchmark
@@ -3656,11 +3817,14 @@ void benchmarkRP2040Interpolator() {
   }
   unsigned long interpTime = endBenchmark();
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Interpolator ops (10000): "));
   SERIAL_OUT.print(interpTime);
   SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(10000.0 / interpTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("Interpolator (ops/ms)", 10000.0 / interpTime * 1000);
 
   // Compare with software interpolation
   volatile int32_t softResult = 0;
@@ -3673,11 +3837,14 @@ void benchmarkRP2040Interpolator() {
   }
   unsigned long softTime = endBenchmark();
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Software lerp (10000): "));
   SERIAL_OUT.print(softTime);
   SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(10000.0 / softTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("Interpolator Lerp (ops/ms)", 10000.0 / softTime * 1000);
 
   SERIAL_OUT.print(F_STR("Interpolator speedup: "));
   SERIAL_OUT.print((float)softTime / interpTime, 2);
@@ -3733,11 +3900,14 @@ void benchmarkRP2040PWM() {
   }
   unsigned long updateTime = endBenchmark();
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Duty cycle updates (10000): "));
   SERIAL_OUT.print(updateTime);
   SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(10000.0 / updateTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("RP2040 PWM Updates (ops/ms)", 10000.0 / updateTime * 1000);
 
   // Test different resolutions
   SERIAL_OUT.println();
@@ -3812,11 +3982,14 @@ void benchmarkUnoR4DAC() {
   }
   unsigned long dacTime = endBenchmark();
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("analogWrite() 12-bit (10000 ops): "));
   SERIAL_OUT.print(dacTime);
   SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(10000.0 / dacTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("Uno R4 DAC (ops/ms)", 10000.0 / dacTime * 1000);
 
   // DAC ramp test
   startBenchmark();
@@ -3828,6 +4001,7 @@ void benchmarkUnoR4DAC() {
   unsigned long rampTime = endBenchmark();
 
   uint32_t rampOps = 10 * (4096 / 16);
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("DAC ramp (10 cycles, "));
   SERIAL_OUT.print(rampOps);
   SERIAL_OUT.print(F_STR(" writes): "));
@@ -3835,6 +4009,8 @@ void benchmarkUnoR4DAC() {
   SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print((float)rampOps / rampTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("Uno R4 DAC Ramp (ops/ms)", (float)rampOps / rampTime * 1000);
 
   // Calculate effective sample rate
   float sampleRate = rampOps / (rampTime / 1000000.0);
@@ -3871,11 +4047,14 @@ void benchmarkUnoR4RTC() {
   }
   unsigned long readTime = endBenchmark();
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("RTC.getTime() (1000 ops): "));
   SERIAL_OUT.print(readTime);
   SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(1000.0 / readTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("RTC getTime (ops/ms)", 1000.0 / readTime * 1000);
 
   // RTC write speed benchmark
   startBenchmark();
@@ -3885,11 +4064,14 @@ void benchmarkUnoR4RTC() {
   }
   unsigned long writeTime = endBenchmark();
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("RTC.setTime() (100 ops): "));
   SERIAL_OUT.print(writeTime);
   SERIAL_OUT.print(F_STR(" us ("));
   SERIAL_OUT.print(100.0 / writeTime * 1000);
   SERIAL_OUT.println(F_STR(" ops/ms)"));
+#endif
+  CSV_ROW("RTC setTime (ops/ms)", 100.0 / writeTime * 1000);
 
   // RTC tick accuracy test
   SERIAL_OUT.println();
@@ -3984,7 +4166,7 @@ void benchmarkUnoR4BLE() {
 // ==================== I2C WIRE COMMUNICATION ====================
 
 #if !defined(ARDUINO_UNO_Q)
-static void runI2CWriteBenchmark(const __FlashStringHelper* label, uint32_t clockHz, int iterations, int progressStep) {
+static unsigned long runI2CWriteBenchmark(const __FlashStringHelper* label, uint32_t clockHz, int iterations, int progressStep) {
   uint16_t statusCounts[6] = {0, 0, 0, 0, 0, 0};
 
   Wire.setClock(clockHz);
@@ -4042,6 +4224,7 @@ static void runI2CWriteBenchmark(const __FlashStringHelper* label, uint32_t cloc
   if (completed < iterations) {
     SERIAL_OUT.println(F_STR("  Early stop: repeated bus errors/timeouts"));
   }
+  return elapsed;
 }
 
 void benchmarkWireI2C() {
@@ -4095,8 +4278,10 @@ void benchmarkWireI2C() {
   const int i2cIterations = 1000;
   const int i2cProgressStep = 0;
 
-  runI2CWriteBenchmark(F_STR("100 kHz"), 100000, i2cIterations, i2cProgressStep);
-  runI2CWriteBenchmark(F_STR("400 kHz"), 400000, i2cIterations, i2cProgressStep);
+  unsigned long i2c100Time = runI2CWriteBenchmark(F_STR("100 kHz"), 100000, i2cIterations, i2cProgressStep);
+  unsigned long i2c400Time = runI2CWriteBenchmark(F_STR("400 kHz"), 400000, i2cIterations, i2cProgressStep);
+  CSV_ROW("I2C 100kHz (us)", i2c100Time);
+  CSV_ROW("I2C 400kHz (us)", i2c400Time);
 
 #if defined(ESP32) || defined(ARDUINO_ARCH_RP2040) || defined(BOARD_STM32H7)
   runI2CWriteBenchmark(F_STR("1 MHz"), 1000000, i2cIterations, i2cProgressStep);
@@ -4244,6 +4429,7 @@ void benchmarkWatchdog() {
 #else
   SERIAL_OUT.println(F_STR("Watchdog information not available for this board"));
 #endif
+  CSV_BLANK("WDT Reset Latency (ms)");
 }
 
 // Sleep Mode Benchmark
@@ -4691,8 +4877,11 @@ void benchmarkSleepModes() {
 void printSystemInfo() {
   printHeader("SYSTEM INFORMATION");
 
+#if !CSV_OUTPUT
   SERIAL_OUT.print(F_STR("Board: "));
   SERIAL_OUT.println(BOARD_NAME);
+#endif
+  CSV_ROW("Board", F_STR(BOARD_NAME));
 
 #if defined(ESP32)
   SERIAL_OUT.print(F_STR("Chip Model: "));
@@ -4902,6 +5091,25 @@ void printSystemInfo() {
 
   SERIAL_OUT.print(F_STR("Benchmark Version: "));
   SERIAL_OUT.println(F_STR(BENCHMARK_VERSION));
+  CSV_ROW("Benchmark Version", F_STR(BENCHMARK_VERSION));
+
+  // CSV rows for system info (CPU freq + free RAM)
+#if defined(ESP32)
+  CSV_ROW("CPU (MHz)", ESP.getCpuFreqMHz());
+  CSV_ROW("Free RAM (bytes)", ESP.getFreeHeap());
+#elif defined(ESP8266)
+  CSV_ROW("CPU (MHz)", ESP.getCpuFreqMHz());
+  CSV_ROW("Free RAM (bytes)", ESP.getFreeHeap());
+#elif defined(BOARD_STM32H7)
+  CSV_ROW("CPU (MHz)", SystemCoreClock / 1000000);
+  CSV_BLANK("Free RAM (bytes)");
+#elif defined(F_CPU)
+  CSV_ROW("CPU (MHz)", F_CPU / 1000000);
+  CSV_BLANK("Free RAM (bytes)");
+#else
+  CSV_BLANK("CPU (MHz)");
+  CSV_BLANK("Free RAM (bytes)");
+#endif
 }
 
 
@@ -4929,6 +5137,9 @@ void setup() {
 
   calibrateBenchmarkTime();
 
+#if CSV_OUTPUT
+  SERIAL_OUT.println(F_STR("Part,2"));
+#else
   SERIAL_OUT.println();
   SERIAL_OUT.println();
   printDivider();
@@ -4936,6 +5147,7 @@ void setup() {
   SERIAL_OUT.println(F_STR("  Part 2: Connectivity, Platform & Power"));
   printDivider();
   SERIAL_OUT.println();
+#endif
 
   // System info
   printSystemInfo();
@@ -4950,24 +5162,47 @@ void setup() {
   // Board-specific connectivity
 #ifdef HAS_LED_MATRIX
   benchmarkLEDMatrix();
+#else
+  CSV_BLANK("LED Matrix Pattern (ops/ms)");
+  CSV_BLANK("LED Matrix Bitmap (ops/ms)");
 #endif
 #ifdef HAS_WIFI
   benchmarkWiFi();
+#else
+  CSV_BLANK("WiFi Scan (ms)");
+  CSV_BLANK("WiFi Connect (ms)");
+  CSV_BLANK("WiFi TX (KB/s)");
 #endif
 #ifdef HAS_BLE
   benchmarkBLE();
+#else
+  CSV_BLANK("BLE Advertise Start (ms)");
+  CSV_BLANK("BLE Scan Found (ms)");
 #endif
 
   // Crypto & security benchmarks
 #if defined(ARDUINO_ARCH_RP2040)
   benchmarkSHA1();
-#endif
-#if defined(ESP32)
+  CSV_BLANK("MD5 (ops/ms)");
+  CSV_BLANK("SHA256 (ops/ms)");
+  CSV_BLANK("AES (ops/ms)");
+  CSV_BLANK("RNG (bytes/sec)");
+#elif defined(ESP32)
   benchmarkESP32Crypto();
+  benchmarkESP32AES();   // also emits CSV_ROW("AES (ops/ms)", ...)
   benchmarkHardwareRNG();
-#endif
-#if defined(BOARD_STM32U5)
+#elif defined(BOARD_STM32U5)
+  CSV_BLANK("SHA1 (ops/ms)");
+  CSV_BLANK("MD5 (ops/ms)");
+  CSV_BLANK("SHA256 (ops/ms)");
+  CSV_BLANK("AES (ops/ms)");
   benchmarkHardwareRNG();
+#else
+  CSV_BLANK("SHA1 (ops/ms)");
+  CSV_BLANK("MD5 (ops/ms)");
+  CSV_BLANK("SHA256 (ops/ms)");
+  CSV_BLANK("AES (ops/ms)");
+  CSV_BLANK("RNG (bytes/sec)");
 #endif
 #if defined(ARDUINO_UNOR4_WIFI)
   benchmarkSoftwareATSE();
@@ -4981,6 +5216,9 @@ void setup() {
   // Multi-core benchmarks
 #if defined(ESP32) || defined(ARDUINO_ARCH_RP2040)
   benchmarkMultiCore();
+#else
+  CSV_BLANK("Core 0 (iters/ms)");
+  CSV_BLANK("Core 1 (iters/ms)");
 #endif
 
 #if defined(BOARD_STM32U5) && defined(HAS_DUAL_PROCESSOR)
@@ -4989,6 +5227,8 @@ void setup() {
 
 #if defined(HAS_YUN_BRIDGE)
   benchmarkYunBridge();
+#else
+  CSV_BLANK("Yun Bridge Throughput (bytes/sec)");
 #endif
 
   // Multiduino-specific benchmarks
@@ -4996,18 +5236,20 @@ void setup() {
   benchmarkRTC();
 #endif
 
-  // ESP32 Additional Benchmarks
+  // ESP32 Additional Benchmarks (AES already benchmarked in crypto section above)
 #if defined(ESP32)
 #if defined(CONFIG_IDF_TARGET_ESP32)
   benchmarkESP32DAC();
+#else
+  CSV_BLANK("DAC (ops/ms)");
 #endif
   benchmarkESP32Touch();
   benchmarkESP32Sleep();
-  benchmarkESP32AES();
-#endif
-
+  CSV_BLANK("DMA (MB/s)");
+  CSV_BLANK("PIO (cycles/ms)");
+  CSV_BLANK("Interpolator (ops/ms)");
+#elif defined(ARDUINO_ARCH_RP2040)
   // RP2040 Additional Benchmarks
-#if defined(ARDUINO_ARCH_RP2040)
   benchmarkRP2040DMA();
   benchmarkRP2040PIO();
   benchmarkRP2040Interpolator();
@@ -5015,6 +5257,14 @@ void setup() {
 #if defined(ARDUINO_RASPBERRY_PI_PICO_W)
   benchmarkPicoWBLE();
 #endif
+  CSV_BLANK("DAC (ops/ms)");
+  CSV_BLANK("Touch (values/ms)");
+#else
+  CSV_BLANK("DAC (ops/ms)");
+  CSV_BLANK("Touch (values/ms)");
+  CSV_BLANK("DMA (MB/s)");
+  CSV_BLANK("PIO (cycles/ms)");
+  CSV_BLANK("Interpolator (ops/ms)");
 #endif
 
   // Uno R4 Additional Benchmarks
@@ -5023,12 +5273,23 @@ void setup() {
   benchmarkUnoR4RTC();
 #if defined(ARDUINO_UNOR4_WIFI)
   benchmarkUnoR4BLE();
+#else
+  CSV_BLANK("Uno R4 BLE Advertise (ms)");
 #endif
+#else
+  CSV_BLANK("Uno R4 DAC (ops/ms)");
+  CSV_BLANK("Uno R4 DAC Ramp (ops/ms)");
+  CSV_BLANK("RTC getTime (ops/ms)");
+  CSV_BLANK("RTC setTime (ops/ms)");
+  CSV_BLANK("Uno R4 BLE Advertise (ms)");
 #endif
 
   // I2C Wire communication
 #if !defined(ARDUINO_UNO_Q)
   benchmarkWireI2C();
+#else
+  CSV_BLANK("I2C 100kHz (us)");
+  CSV_BLANK("I2C 400kHz (us)");
 #endif
 
   // Power management

@@ -25,46 +25,12 @@ template<typename A>
 struct is_same<A, A> : true_type {};
 }  // namespace benchmark_detail
 
-struct MinDurationResult {
-  uint32_t ops;
-  unsigned long elapsedUs;
-};
-
-template<typename Func>
-MinDurationResult runForAtLeastUs(unsigned long minUs, Func fn) {
-  MinDurationResult result = {};
-  unsigned long start = micros();
-  unsigned long elapsed = 0;
-  do {
-    result.ops += fn();
-#if defined(ESP32) || defined(ESP8266) || defined(ARDUINO_ARCH_RP2040)
-    yield();
-#endif
-    elapsed = micros() - start;
-  } while (elapsed < minUs);
-  result.elapsedUs = elapsed;
-  return result;
-}
-
 struct TimedLoopResult {
   unsigned long elapsedMicros;
   uint32_t iterations;
   uint32_t totalOps;
   float opsPerMs;
 };
-
-// Helper function for void return type
-template<typename Func>
-void runFuncVoid(Func& func, bool& shouldBreak) {
-  func();
-  shouldBreak = false;
-}
-
-// Helper function for non-void return type
-template<typename Func>
-void runFuncNonVoid(Func& func, bool& shouldBreak) {
-  shouldBreak = !func();
-}
 
 template<typename Func>
 bool runFuncAndCheck(Func& func, benchmark_detail::true_type) {

@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [1.0.0] - 2026-02-16
 
-First official release on the `dual-benchmark` branch.
+First official release on the `v1.0.0` branch.
 
 ### Added
 - Split benchmark into two parts: Part 1 (Core Benchmarks) and Part 2 (Platform Benchmarks)
@@ -34,11 +34,13 @@ First official release on the `dual-benchmark` branch.
 ### Changed
 - Optimized flash usage for AVR boards (itoa over snprintf, trimmed strings)
 - Scoped `BOARD_SMALL_FLASH` to Yun only, not all AVR boards
-- Replaced repeated print patterns with `printOpsResult` helper
+
+### Removed
+- SD card functionality tests (present in v0.0.0, dropped during the Part 1/Part 2 split)
 
 ## [0.0.0] - 2025-01-29
 
-Initial version on the `main` branch.
+Initial version on the `v0.0.0` branch.
 
 ### Added
 - Single-file universal Arduino benchmark sketch

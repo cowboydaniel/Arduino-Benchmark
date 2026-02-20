@@ -13,7 +13,7 @@
  * - Results are checksummed and printed to ensure actual execution
  * - Integer operations use uint64_t to prevent silent overflow
  * - Checksums are consumed outside timed blocks for accuracy
- * - GPIO benchmarks include direct register writes alongside digitalWrite() to measure overhead
+ * - GPIO benchmarks include digitalWriteFast() and direct register writes alongside digitalWrite() to measure overhead
  * - Serial timing includes flush() to measure actual transmission time
  * - ESP32: CPU cycle counter used to cross-check micros() jitter
  * - EEPROM timing includes flash commit separately (ESP32/ESP8266)

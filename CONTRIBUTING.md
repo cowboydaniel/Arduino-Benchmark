@@ -41,7 +41,7 @@ If you notice incorrect or missing data in the results spreadsheets:
 
 ### General Guidelines
 
-- All benchmark code must compile in the Arduino IDE with no external dependencies beyond board-specific platform libraries
+- All benchmark code must compile in the Arduino IDE with no external dependencies beyond board-specific platform libraries (exception: the Multiduino board detection block requires the Adafruit RTClib library)
 - Use `volatile` accumulators to prevent compiler optimization of benchmark loops
 - Use the timing helpers in `BenchmarkHelpers.h` (`runForAtLeastUs`, `runTimedLoop`) for consistent measurements
 - Call `yield()` on RTOS-based platforms (ESP32, ESP8266, RP2040) inside long-running loops to avoid watchdog resets
@@ -57,7 +57,7 @@ If you notice incorrect or missing data in the results spreadsheets:
    ```
    [Category] Test Name: <value> <unit>
    ```
-5. Call your function from `loop()` in the appropriate sketch (after the existing benchmarks)
+5. Call your function from `setup()` in the appropriate sketch (after the existing benchmarks)
 6. Guard any hardware-specific code with preprocessor conditionals:
    ```cpp
    #if defined(ESP32)
@@ -79,7 +79,7 @@ If you notice incorrect or missing data in the results spreadsheets:
 
 ### Pull Request Process
 
-1. Fork the repository and create a branch from `main`
+1. Fork the repository and create a branch from `v1.0.0`
 2. Make your changes
 3. Test on physical hardware — simulator results are not accepted
 4. Include Serial Monitor output in the PR description showing your changes work
@@ -107,11 +107,11 @@ You do **not** need to bump the version for:
 
 ### How to Bump
 
-1. **Create a new branch** from `main` for your changes — do **not** work directly on the `dual-benchmark` branch or any existing results branch
+1. **Create a new branch** from `v1.0.0` for your changes — do **not** work directly on the `v1.0.0` branch or any existing results branch
 2. **Update `BENCHMARK_VERSION`** in both `Part1_CoreBenchmarks/BenchmarkHelpers.h` and `Part2_PlatformBenchmarks/BenchmarkHelpers.h` (e.g. `"1.0.0"` → `"1.1.0"`)
 3. **Copy the previous spreadsheets as-is**: Copy `Part1_CoreBenchmarks_Results_v<OLD_VERSION>.xlsx` to `Part1_CoreBenchmarks_Results_v<NEW_VERSION>.xlsx` and similarly for Part 2 — keep all existing board columns and result data intact. Do **not** modify or delete the previous version's spreadsheets. In each new spreadsheet, add a **"Version"** row immediately below the board name row; enter the benchmark version that produced each board's data (previous boards keep their old version number until they are re-tested under the new version)
 4. **Copy `BOARD_STATUS.md`** as-is — keep the board list and all existing results. When boards are re-tested under the new version, their rows will be overwritten with the new results
-5. **Do not overwrite the `dual-benchmark` branch** — previous benchmark versions and their results must be preserved
+5. **Do not overwrite the `v1.0.0` branch** — previous benchmark versions and their results must be preserved
 
 ### Version Numbering
 

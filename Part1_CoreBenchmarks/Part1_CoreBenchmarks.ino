@@ -1,26 +1,23 @@
 /*
- * Universal Arduino Benchmark Suite
+ * Universal Arduino Benchmark Suite — Part 1: Core Benchmarks
  * Compatible with: Arduino (AVR, ARM, SAMD), ESP32, ESP8266, RP2040 (Pico), STM32, and more!
- * 
+ *
  * This benchmark tests:
- * - CPU: Integer, Float, String operations
- * - Memory: SRAM, EEPROM, PSRAM (if available)
- * - I/O: Digital/Analog pins, Serial speed
- * - Board-specific: WiFi, BLE, Flash, etc.
- * 
+ * - CPU: Integer, Float, String operations; DSP-enhanced ops (Uno Q, Cortex-M33/M7, Teensy 4.x)
+ * - Memory: SRAM read/write, EEPROM, PSRAM (if available)
+ * - I/O: Digital/Analog pins, SPI
+ * - Hardware: Flash info, PWM, interrupt latency
+ *
  * METHODOLOGY:
  * - All computation benchmarks use volatile accumulators to prevent compiler optimization
  * - Results are checksummed and printed to ensure actual execution
  * - Integer operations use uint64_t to prevent silent overflow
  * - Checksums are consumed outside timed blocks for accuracy
  * - GPIO benchmarks include digitalWriteFast() and direct register writes alongside digitalWrite() to measure overhead
- * - Serial timing includes flush() to measure actual transmission time
- * - ESP32: CPU cycle counter used to cross-check micros() jitter
  * - EEPROM timing includes flash commit separately (ESP32/ESP8266)
  * - Memory benchmarks accumulate values to prevent dead code elimination
  * - All performance metrics reported as operations per millisecond (ops/ms)
- * - Temperature tracking (CPU stress test only) shows start temp and total gain
- * 
+ *
  * Upload to ANY Arduino-compatible board and view results in Serial Monitor (115200 baud)
  */
 

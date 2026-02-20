@@ -64,7 +64,7 @@ TimedLoopResult runTimedLoop(uint32_t minDurationMs, uint32_t opsPerIteration, F
     elapsed = micros() - start;
   } while (elapsed < (minDurationMs * 1000UL));
   result.elapsedMicros = elapsed;
-  result.opsPerMs = (result.totalOps * 1000.0f) / result.elapsedMicros;
+  result.opsPerMs = (elapsed > 0) ? (result.totalOps * 1000.0f) / elapsed : 0.0f;
   return result;
 }
 

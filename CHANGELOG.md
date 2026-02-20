@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-02-20
+
+### Fixed
+- BLE scan now runs on ArduinoBLE-capable boards (Nano 33 BLE, RP2040 Connect,
+  SAMD Nano 33 IoT, Portenta H7/C33, Giga R1, Wio Terminal) instead of printing
+  a placeholder message
+
 ## [1.0.0] - 2026-02-16
 
 First official release on the `v1.0.0` branch.

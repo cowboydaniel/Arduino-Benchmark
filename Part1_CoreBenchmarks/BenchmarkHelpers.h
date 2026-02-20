@@ -4,7 +4,7 @@
 // Benchmark helper functions compatible with older C++ standards
 // Works with Arduino Uno (AVR), Uno Q (Zephyr/STM32U585), and other boards
 
-#define BENCHMARK_VERSION "1.0.0"
+#define BENCHMARK_VERSION "1.0.1"
 
 #include <Arduino.h>
 

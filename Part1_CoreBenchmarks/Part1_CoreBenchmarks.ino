@@ -650,9 +650,11 @@ void benchmarkIntegerOps() {
   SERIAL_OUT.println(F_STR(" ops/ms)"));
 
 #if defined(BOARD_STM32U5) || defined(HAS_DSP)
-  // Enhanced tests for Cortex-M33 with DSP extensions
+  // Enhanced tests for boards with DSP extensions
   SERIAL_OUT.println();
-  SERIAL_OUT.println(F_STR("--- DSP-Enhanced Integer Tests (Cortex-M33) ---"));
+  SERIAL_OUT.print(F_STR("--- DSP-Enhanced Integer Tests ("));
+  SERIAL_OUT.print(BOARD_NAME);
+  SERIAL_OUT.println(F_STR(") ---"));
 
   // 64-bit integer operations (emulated on 32-bit MCU)
   volatile uint64_t acc64 = 0x123456789ABCDEFULL;

@@ -2,7 +2,7 @@
 
 Tracks which boards have been benchmarked. Pick a board, run both sketches, save the Serial Monitor output to `reports/<board>-<version>.txt`, and update this file.
 
-Report path convention: `reports/<board_slug>-<core_version>.txt` (e.g. `reports/uno-1.8.19.txt`).
+Report path convention: `reports/<board_slug>-<core_version>.txt` (e.g. `reports/unor3-1.8.7.txt`). For boards with no versioned core, omit the version suffix (e.g. `reports/multiduino.txt`).
 
 The **Benchmark Version** column records which version of the benchmark suite was used. When the benchmark version changes (defined in `BenchmarkHelpers.h`), boards may need to be re-tested to have comparable results under the new version. Results from different benchmark versions should not be compared directly.
 
@@ -21,7 +21,7 @@ The **Benchmark Version** column records which version of the benchmark suite wa
 | Arduino Nano 33 BLE | - | - | - | - |
 | Arduino Nano 33 BLE Sense | - | - | - | - |
 | Arduino Nano 33 BLE Sense Rev2 | - | - | - | - |
-| Arduino Nano ESP32 | Core: 3.3.7/IDE: 2.3.7 | 1.0.0 | passed | reports/nanoesp32-3.3.7 |
+| Arduino Nano ESP32 | Core: 3.3.7/IDE: 2.3.7 | 1.0.0 | passed | reports/nanoesp32-3.3.7.txt |
 | Arduino Nano RP2040 Connect | - | - | - | - |
 | Arduino Nano Matter | - | - | - | - |
 | Arduino Mega 2560 | - | - | - | - |

@@ -27,7 +27,8 @@ Boards are detected automatically at compile time using preprocessor macros — 
 ├── BOARD_STATUS.md                   # Board testing tracker (status + benchmark version)
 ├── CHANGELOG.md                      # Version history and notable changes
 ├── COMPILE_LIST.md                   # Arduino AVR board compile identifiers reference
-└── CONTRIBUTING.md                   # Guide for contributors
+├── CONTRIBUTING.md                   # Guide for contributors
+└── CONTRIBUTORS.md                   # List of contributors
 ```
 
 ## What Gets Benchmarked
@@ -85,7 +86,7 @@ See [BOARD_STATUS.md](BOARD_STATUS.md) for which boards have been tested and whi
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on creating issues, submitting code, and adding new boards to the spreadsheet.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on creating issues, submitting code, and adding new boards to the spreadsheet. See [CONTRIBUTORS.md](CONTRIBUTORS.md) for a list of contributors.
 
 ## License
 

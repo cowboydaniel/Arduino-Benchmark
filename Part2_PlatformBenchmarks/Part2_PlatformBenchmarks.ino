@@ -1193,11 +1193,37 @@ void benchmarkBLE() {
   BLEDevice::deinit(false);
 
 #elif defined(BOARD_NRF52) || defined(ARDUINO_NANO_RP2040_CONNECT) || defined(ARDUINO_SAMD_NANO_33_IOT)
-  // For boards using ArduinoBLE library
-  SERIAL_OUT.println(F_STR("BLE scan requires ArduinoBLE library"));
-  SERIAL_OUT.println(F_STR("Install via Library Manager: 'ArduinoBLE'"));
-  SERIAL_OUT.println(F_STR("Scan example:"));
-  SERIAL_OUT.println(F_STR("  BLE.begin() → BLE.scan() → check BLE.available()"));
+  // Boards using ArduinoBLE library (nRF52840, RP2040 Connect, SAMD Nano 33 IoT)
+  SERIAL_OUT.println(F_STR("BLE: ArduinoBLE scan"));
+  if (!BLE.begin()) {
+    SERIAL_OUT.println(F_STR("BLE.begin() failed"));
+  } else {
+    SERIAL_OUT.println(F_STR("Scanning for BLE devices (2 sec)..."));
+    BLE.scan();
+    int bleCount = 0;
+    unsigned long scanStart = millis();
+    while (millis() - scanStart < 2000) {
+      BLEDevice peripheral = BLE.available();
+      if (peripheral) {
+        bleCount++;
+        SERIAL_OUT.print(F_STR("  Found: "));
+        if (peripheral.localName().length()) {
+          SERIAL_OUT.print(peripheral.localName());
+        } else {
+          SERIAL_OUT.print(F_STR("(unnamed)"));
+        }
+        SERIAL_OUT.print(F_STR(" ["));
+        SERIAL_OUT.print(peripheral.address());
+        SERIAL_OUT.print(F_STR("] RSSI: "));
+        SERIAL_OUT.print(peripheral.rssi());
+        SERIAL_OUT.println(F_STR(" dBm"));
+      }
+    }
+    BLE.stopScan();
+    BLE.end();
+    SERIAL_OUT.print(F_STR("Devices found in 2s: "));
+    SERIAL_OUT.println(bleCount);
+  }
 #elif defined(BOARD_ARC32)
   // Intel Curie / Arduino 101 — CurieBLE library (Nordic nRF51822 co-processor)
   SERIAL_OUT.println(F_STR("BLE: Intel Curie (CurieBLE / nRF51822 co-processor)"));
@@ -1215,7 +1241,38 @@ void benchmarkBLE() {
   SERIAL_OUT.println(bleCount);
   BLE.end();
 #else
-  SERIAL_OUT.println(F_STR("BLE hardware detected but scan not implemented"));
+  // Generic ArduinoBLE fallback for boards with BLE hardware
+  // Covers: Portenta H7, Portenta C33, Giga R1, Wio Terminal, and others
+  SERIAL_OUT.println(F_STR("BLE: Generic ArduinoBLE scan"));
+  if (!BLE.begin()) {
+    SERIAL_OUT.println(F_STR("BLE.begin() failed"));
+  } else {
+    SERIAL_OUT.println(F_STR("Scanning for BLE devices (2 sec)..."));
+    BLE.scan();
+    int bleCount = 0;
+    unsigned long scanStart = millis();
+    while (millis() - scanStart < 2000) {
+      BLEDevice peripheral = BLE.available();
+      if (peripheral) {
+        bleCount++;
+        SERIAL_OUT.print(F_STR("  Found: "));
+        if (peripheral.localName().length()) {
+          SERIAL_OUT.print(peripheral.localName());
+        } else {
+          SERIAL_OUT.print(F_STR("(unnamed)"));
+        }
+        SERIAL_OUT.print(F_STR(" ["));
+        SERIAL_OUT.print(peripheral.address());
+        SERIAL_OUT.print(F_STR("] RSSI: "));
+        SERIAL_OUT.print(peripheral.rssi());
+        SERIAL_OUT.println(F_STR(" dBm"));
+      }
+    }
+    BLE.stopScan();
+    BLE.end();
+    SERIAL_OUT.print(F_STR("Devices found in 2s: "));
+    SERIAL_OUT.println(bleCount);
+  }
 #endif
   CSV_BLANK("BLE Advertise Start (ms)");
   CSV_BLANK("BLE Scan Found (ms)");

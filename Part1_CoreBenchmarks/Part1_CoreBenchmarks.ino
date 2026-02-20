@@ -601,6 +601,7 @@ void benchmarkIntegerOps() {
     acc += i;
   }
   unsigned long addTime = endBenchmark();
+  if (addTime == 0) addTime = 1;
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println(acc);
 
@@ -695,6 +696,7 @@ void benchmarkIntegerOps() {
     macResult[i % 4] += macAcc;
   }
   unsigned long macTime = endBenchmark();
+  if (macTime == 0) macTime = 1;
   SERIAL_OUT.print(F_STR("MAC Operations (1000 ops): "));
   SERIAL_OUT.print(macTime);
   SERIAL_OUT.print(F_STR(" μs ("));
@@ -716,6 +718,7 @@ void benchmarkIntegerOps() {
     }
   }
   unsigned long satTime = endBenchmark();
+  if (satTime == 0) satTime = 1;
   SERIAL_OUT.print(F_STR("Saturating Add (1000 ops): "));
   SERIAL_OUT.print(satTime);
   SERIAL_OUT.print(F_STR(" μs ("));
@@ -736,6 +739,7 @@ void benchmarkFloatOps() {
     fresult += 3.14159f;
   }
   unsigned long faddTime = endBenchmark();
+  if (faddTime == 0) faddTime = 1;
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println(fresult);
 
@@ -746,6 +750,7 @@ void benchmarkFloatOps() {
     fresult *= 1.0001f;
   }
   unsigned long fmulTime = endBenchmark();
+  if (fmulTime == 0) fmulTime = 1;
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println(fresult);
 
@@ -756,6 +761,7 @@ void benchmarkFloatOps() {
     fresult /= 1.0001f;
   }
   unsigned long fdivTime = endBenchmark();
+  if (fdivTime == 0) fdivTime = 1;
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println(fresult);
 
@@ -842,6 +848,7 @@ void benchmarkFloatOps() {
     dresult *= 1.0001;
   }
   unsigned long dmulTime = endBenchmark();
+  if (dmulTime == 0) dmulTime = 1;
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println((float)dresult);
 
@@ -852,6 +859,7 @@ void benchmarkFloatOps() {
     dresult /= 1.0001;
   }
   unsigned long ddivTime = endBenchmark();
+  if (ddivTime == 0) ddivTime = 1;
   SERIAL_OUT.print(F_STR("Checksum: "));
   SERIAL_OUT.println((float)dresult);
 
@@ -1302,7 +1310,7 @@ void benchmarkEEPROM() {
     }
 
     unsigned long minCommit = commitTimes[0];
-    unsigned long medianCommit = commitTimes[5];
+    unsigned long medianCommit = (commitTimes[4] + commitTimes[5]) / 2;
     unsigned long maxCommit = commitTimes[9];
 
     SERIAL_OUT.print(F_STR("  Min: "));
@@ -1747,9 +1755,9 @@ void benchmarkAnalogIO() {
     uint32_t pwmValue = 0;
     TimedLoopResult updateResult = runTimedLoop(minDurationMs, 1, [&]() {
 #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
-      ledcWrite(pwmChannel, pwmValue % 256);
+      ledcWrite(analogOutPin, pwmValue % 256);
 #else
-        ledcWrite(pwmChannel, pwmValue % 256);
+      ledcWrite(pwmChannel, pwmValue % 256);
 #endif
       pwmValue++;
     });
@@ -1901,7 +1909,7 @@ void benchmarkPWM() {
   for (int i = 0; i < 10000; i++) {
 #if defined(ESP32)
 #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
-    ledcWrite(pwmChannel, duty);
+    ledcWrite(pwmPin, duty);
 #else
     ledcWrite(pwmChannel, duty);
 #endif
@@ -1911,6 +1919,7 @@ void benchmarkPWM() {
     duty++;
   }
   unsigned long pwmTime = endBenchmark();
+  if (pwmTime == 0) pwmTime = 1;
 
 #if defined(ESP32)
   SERIAL_OUT.print(F_STR("LEDC duty update (10000 ops): "));
@@ -1928,7 +1937,7 @@ void benchmarkPWM() {
     for (int val = 0; val < 256; val++) {
 #if defined(ESP32)
 #if defined(ESP_ARDUINO_VERSION_MAJOR) && ESP_ARDUINO_VERSION_MAJOR >= 3
-      ledcWrite(pwmChannel, val);
+      ledcWrite(pwmPin, val);
 #else
       ledcWrite(pwmChannel, val);
 #endif
@@ -1938,6 +1947,7 @@ void benchmarkPWM() {
     }
   }
   unsigned long rampTime = endBenchmark();
+  if (rampTime == 0) rampTime = 1;
 
   SERIAL_OUT.print(F_STR("PWM ramp (100 cycles): "));
   SERIAL_OUT.print(rampTime);
@@ -2013,8 +2023,8 @@ void benchmarkInterruptLatency() {
   pinMode(triggerPin, OUTPUT);
   digitalWrite(triggerPin, LOW);
 
-  // INPUT_PULLDOWN not available on AVR or Genuino 101 (ARC32) - use INPUT_PULLUP with FALLING edge instead
-#if defined(__AVR__) || defined(ARDUINO_ARCH_ARC32)
+  // INPUT_PULLDOWN not available on AVR, SAMD, or Genuino 101 (ARC32) - use INPUT_PULLUP with FALLING edge instead
+#if defined(__AVR__) || defined(ARDUINO_ARCH_ARC32) || defined(ARDUINO_ARCH_SAMD)
   pinMode(interruptPin, INPUT_PULLUP);
   digitalWrite(triggerPin, HIGH);  // Start high for FALLING edge test
   attachInterrupt(interruptNumber, latencyISR, FALLING);

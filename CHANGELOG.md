@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-02-20
+
+### Fixed
+- BLE scan now runs on ArduinoBLE-capable boards (Nano 33 BLE, RP2040 Connect,
+  SAMD Nano 33 IoT, Portenta H7/C33, Giga R1, Wio Terminal) instead of printing
+  a placeholder message
+- `runTimedLoop` no longer divides by zero when `elapsedMicros` is 0; affected
+  boards where the callback completed before `micros()` advanced (coarse timer
+  resolution); `opsPerMs` now reports 0 instead of crashing or printing `inf`
+- Fixed divide-by-zero on ten fixed-iteration timing variables (`addTime`,
+  `faddTime`, `fmulTime`, `fdivTime`, `dmulTime`, `ddivTime`, `macTime`,
+  `satTime`, `pwmTime`, `rampTime`); fast boards (ESP32 at 240 MHz, Teensy 4.1
+  at 600 MHz) can complete these loops in under 1 µs, producing a 0 µs result
+- Fixed ESP32 Arduino core v3 `ledcWrite()` calls using channel number instead
+  of pin number; the v3 API changed the first argument from channel to pin, so
+  PWM and analog-out benchmarks were driving GPIO0 instead of the correct pin
+- Fixed EEPROM commit median calculation: was incorrectly reporting the upper
+  middle value (`commitTimes[5]`) instead of the true median (average of
+  `commitTimes[4]` and `commitTimes[5]`) from the sorted 10-sample array
+- Fixed interrupt latency test using `INPUT_PULLDOWN` on SAMD boards (Zero,
+  MKR series); SAMD does not support `INPUT_PULLDOWN` — added `ARDUINO_ARCH_SAMD`
+  to the `INPUT_PULLUP` guard alongside AVR and ARC32
+
 ## [1.0.0] - 2026-02-16
 
 First official release on the `v1.0.0` branch.

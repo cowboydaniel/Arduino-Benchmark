@@ -4,7 +4,7 @@
 // Benchmark helper functions compatible with older C++ standards
 // Works with Arduino Uno (AVR), Uno Q (Zephyr/STM32U585), and other boards
 
-#define BENCHMARK_VERSION "1.0.0"
+#define BENCHMARK_VERSION "1.0.1"
 
 // CSV output mode: 0 = human-readable (default), 1 = CSV column output
 // In CSV mode, only label,value pairs are printed — no decorative output.
@@ -72,7 +72,7 @@ TimedLoopResult runTimedLoop(uint32_t minDurationMs, uint32_t opsPerIteration, F
     elapsed = micros() - start;
   } while (elapsed < (minDurationMs * 1000UL));
   result.elapsedMicros = elapsed;
-  result.opsPerMs = (result.totalOps * 1000.0f) / result.elapsedMicros;
+  result.opsPerMs = (elapsed > 0) ? (result.totalOps * 1000.0f) / elapsed : 0.0f;
   return result;
 }
 
